@@ -1,0 +1,15 @@
+package com.example.Camp.enums;
+
+public enum Position {
+    UNION_ADMINISTRATOR,
+    DEPARTMENT_LEADER,
+    FIELD_LEADER,
+    PASTOR,
+    LOCAL_CHURCH_LEADER,
+    FINANCE_OFFICER,
+    CAMP_DIRECTOR,
+    CAMP_SECRETARY,
+    SPEAKER,
+    PA_TEAM,
+    ACCOMMODATION_OFFICER
+}
