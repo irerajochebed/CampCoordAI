@@ -11,17 +11,13 @@ import {
   DollarSign,
   QrCode,
   Package,
-  Bell,
-  Settings,
-  Briefcase,
-  Brain,
-  BarChart3
+  Brain
 } from 'lucide-react';
 
 import { useTranslation } from '../../contexts/LanguageContext';
 
 export default function Sidebar() {
-  const { user, isAdmin, isCoordinator } = useAuth();
+  const { user } = useAuth();
   const { t } = useTranslation();
 
   const navigation = [
@@ -43,17 +39,17 @@ export default function Sidebar() {
   );
 
   return (
-    <aside className="fixed left-0 top-16 bottom-0 w-64 bg-white border-r border-gray-200 flex flex-col justify-between z-20">
+    <aside className="fixed left-0 top-16 bottom-0 w-64 bg-white dark:bg-slate-950 border-r border-gray-200 dark:border-slate-800 flex flex-col justify-between z-20 transition-colors duration-200">
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
         {filteredNavigation.map((item) => (
           <NavLink
             key={item.href}
             to={item.href}
             className={({ isActive }) =>
-              `flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
+              `flex items-center px-4 py-3 text-sm rounded-lg transition-colors ${
                 isActive
-                  ? 'bg-primary-50 text-primary-700'
-                  : 'text-gray-700 hover:bg-gray-100'
+                  ? 'bg-blue-600 dark:bg-blue-600 text-white font-bold shadow-sm'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800/80 hover:text-gray-900 dark:hover:text-white font-medium'
               }`
             }
           >
@@ -64,17 +60,17 @@ export default function Sidebar() {
       </nav>
 
       {/* Bottom Section */}
-      <div className="shrink-0 p-4 border-t border-gray-200 bg-gray-50">
-        <div className="text-xs text-gray-500 space-y-1">
-          <p className="text-xs text-gray-500 font-medium">{t('common.loggedInAs', 'Logged in as:')}</p>
+      <div className="shrink-0 p-4 border-t border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900/90">
+        <div className="text-xs space-y-1">
+          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">{t('common.loggedInAs', 'Logged in as:')}</p>
           <p 
-            className="text-xs font-semibold text-gray-900 break-all leading-tight cursor-default" 
+            className="text-xs font-bold text-gray-900 dark:text-white break-all leading-tight cursor-default" 
             title={user?.email}
           >
             {user?.email || 'N/A'}
           </p>
           <p 
-            className="text-xs text-primary-600 font-medium truncate" 
+            className="text-xs text-blue-600 dark:text-blue-400 font-semibold truncate" 
             title={user?.organizationUnitName || user?.organization || 'Rwanda Union Mission'}
           >
             {user?.organizationUnitName || user?.organization || 'Rwanda Union Mission'}

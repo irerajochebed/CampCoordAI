@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -40,6 +41,26 @@ public class ProposalResponse {
     private String reviewComments;
     private Long reviewedById;
     private String reviewedByName;
+
+    // Level 1 Leader Review
+    private Long leaderReviewedById;
+    private String leaderReviewedByName;
+    private String leaderReviewComments;
+    private LocalDateTime leaderReviewedAt;
+
+    // Level 2 Admin Final Approval
+    private Long adminApprovedById;
+    private String adminApprovedByName;
+    private String adminReviewComments;
+    private LocalDateTime adminApprovedAt;
+
+    // Associated Event Info (when approved)
+    private Long createdEventId;
+    private String createdEventCode;
+
+    // Detailed Review History
+    private List<ProposalReviewResponse> reviewHistory;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

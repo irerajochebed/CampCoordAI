@@ -35,7 +35,7 @@ public interface ProposalRepository extends JpaRepository<Proposal, Long> {
                                    @Param("endDate") LocalDate endDate);
     
     @Query("SELECT p FROM Proposal p WHERE p.deleted = false AND " +
-           "p.status IN ('SUBMITTED', 'UNDER_REVIEW') ORDER BY p.createdAt ASC")
+           "p.status IN ('SUBMITTED', 'PENDING_LEADER_REVIEW', 'UNDER_REVIEW', 'RECOMMENDED_BY_LEADER') ORDER BY p.createdAt ASC")
     List<Proposal> findPendingReview();
     
     @Query("SELECT COUNT(p) FROM Proposal p WHERE p.deleted = false AND p.status = :status")
@@ -48,26 +48,26 @@ public interface ProposalRepository extends JpaRepository<Proposal, Long> {
     // Organizational Hierarchy Queries
     @Query("SELECT p FROM Proposal p WHERE p.deleted = false AND " +
            "p.proposedBy.organizationUnit.id = :orgUnitId AND " +
-           "p.status IN ('SUBMITTED', 'UNDER_REVIEW') ORDER BY p.createdAt ASC")
+           "p.status IN ('SUBMITTED', 'PENDING_LEADER_REVIEW', 'UNDER_REVIEW', 'RECOMMENDED_BY_LEADER') ORDER BY p.createdAt ASC")
     List<Proposal> findPendingReviewByOrgUnit(@Param("orgUnitId") Long orgUnitId);
     
     @Query("SELECT p FROM Proposal p WHERE p.deleted = false AND " +
            "p.proposedBy.organizationUnit.id IN :orgUnitIds AND " +
-           "p.status IN ('SUBMITTED', 'UNDER_REVIEW') ORDER BY p.createdAt ASC")
+           "p.status IN ('SUBMITTED', 'PENDING_LEADER_REVIEW', 'UNDER_REVIEW', 'RECOMMENDED_BY_LEADER') ORDER BY p.createdAt ASC")
     List<Proposal> findPendingReviewByOrgUnits(@Param("orgUnitIds") List<Long> orgUnitIds);
     
     @Query("SELECT p FROM Proposal p WHERE p.deleted = false AND " +
            "p.department.id = :departmentId AND " +
-           "p.status IN ('SUBMITTED', 'UNDER_REVIEW') ORDER BY p.createdAt ASC")
+           "p.status IN ('SUBMITTED', 'PENDING_LEADER_REVIEW', 'UNDER_REVIEW', 'RECOMMENDED_BY_LEADER') ORDER BY p.createdAt ASC")
     List<Proposal> findPendingReviewByDepartment(@Param("departmentId") Long departmentId);
     
     @Query("SELECT COUNT(p) FROM Proposal p WHERE p.deleted = false AND " +
-           "p.status IN ('SUBMITTED', 'UNDER_REVIEW')")
+           "p.status IN ('SUBMITTED', 'PENDING_LEADER_REVIEW', 'UNDER_REVIEW', 'RECOMMENDED_BY_LEADER')")
     Long countPendingReview();
     
     @Query("SELECT COUNT(p) FROM Proposal p WHERE p.deleted = false AND " +
            "p.proposedBy.organizationUnit.id IN :orgUnitIds AND " +
-           "p.status IN ('SUBMITTED', 'UNDER_REVIEW')")
+           "p.status IN ('SUBMITTED', 'PENDING_LEADER_REVIEW', 'UNDER_REVIEW', 'RECOMMENDED_BY_LEADER')")
     Long countPendingReviewByOrgUnits(@Param("orgUnitIds") List<Long> orgUnitIds);
 
     // ── Scope-based routing queries ──────────────────────────────────────────
@@ -76,7 +76,7 @@ public interface ProposalRepository extends JpaRepository<Proposal, Long> {
     @Query("SELECT p FROM Proposal p WHERE p.deleted = false " +
            "AND p.scope = 'FIELD' " +
            "AND p.targetOrganizationUnit.id = :fieldUnitId " +
-           "AND p.status IN ('SUBMITTED', 'UNDER_REVIEW') " +
+           "AND p.status IN ('SUBMITTED', 'PENDING_LEADER_REVIEW', 'UNDER_REVIEW') " +
            "ORDER BY p.createdAt ASC")
     List<Proposal> findPendingForFieldLeader(@Param("fieldUnitId") Long fieldUnitId);
 
@@ -85,15 +85,13 @@ public interface ProposalRepository extends JpaRepository<Proposal, Long> {
            "AND p.scope = 'UNION' " +
            "AND p.department.id = :departmentId " +
            "AND p.deptLeaderEndorsed = false " +
-           "AND p.status = 'SUBMITTED' " +
+           "AND p.status IN ('SUBMITTED', 'PENDING_LEADER_REVIEW') " +
            "ORDER BY p.createdAt ASC")
     List<Proposal> findPendingEndorsementForDeptLeader(@Param("departmentId") Long departmentId);
 
-    // UNION scope step-2: endorsed by Dept Leader, awaiting Union Admin final approval
+    // Proposals awaiting Union Admin final approval (recommended by leader or under review)
     @Query("SELECT p FROM Proposal p WHERE p.deleted = false " +
-           "AND p.scope = 'UNION' " +
-           "AND p.deptLeaderEndorsed = true " +
-           "AND p.status = 'UNDER_REVIEW' " +
+           "AND p.status IN ('RECOMMENDED_BY_LEADER', 'UNDER_REVIEW') " +
            "ORDER BY p.createdAt ASC")
     List<Proposal> findPendingFinalApprovalForUnionAdmin();
 
@@ -101,21 +99,33 @@ public interface ProposalRepository extends JpaRepository<Proposal, Long> {
     @Query("SELECT COUNT(p) FROM Proposal p WHERE p.deleted = false " +
            "AND p.scope = 'FIELD' " +
            "AND p.targetOrganizationUnit.id = :fieldUnitId " +
-           "AND p.status IN ('SUBMITTED', 'UNDER_REVIEW')")
+           "AND p.status IN ('SUBMITTED', 'PENDING_LEADER_REVIEW', 'UNDER_REVIEW')")
     Long countPendingForFieldLeader(@Param("fieldUnitId") Long fieldUnitId);
 
     @Query("SELECT COUNT(p) FROM Proposal p WHERE p.deleted = false " +
            "AND p.scope = 'UNION' " +
            "AND p.department.id = :departmentId " +
            "AND p.deptLeaderEndorsed = false " +
-           "AND p.status = 'SUBMITTED'")
+           "AND p.status IN ('SUBMITTED', 'PENDING_LEADER_REVIEW')")
     Long countPendingEndorsementForDeptLeader(@Param("departmentId") Long departmentId);
 
     @Query("SELECT COUNT(p) FROM Proposal p WHERE p.deleted = false " +
-           "AND p.scope = 'UNION' " +
-           "AND p.deptLeaderEndorsed = true " +
-           "AND p.status = 'UNDER_REVIEW'")
+           "AND p.status IN ('RECOMMENDED_BY_LEADER', 'UNDER_REVIEW')")
     Long countPendingFinalApprovalForUnionAdmin();
+
+    // Position and Scope-based combined routing query
+    @Query("SELECT p FROM Proposal p WHERE p.deleted = false " +
+           "AND p.status IN ('SUBMITTED', 'PENDING_LEADER_REVIEW', 'UNDER_REVIEW', 'RECOMMENDED_BY_LEADER') " +
+           "AND (" +
+           "   (:position = 'DISTRICT_PASTOR' AND p.scope = 'DISTRICT' AND p.targetOrganizationUnit.id = :userOrgUnitId) " +
+           "   OR (:position = 'FIELD_LEADER' AND p.scope = 'FIELD' AND (p.targetOrganizationUnit.id = :userOrgUnitId OR (p.targetOrganizationUnit.parent IS NOT NULL AND p.targetOrganizationUnit.parent.id = :userOrgUnitId))) " +
+           "   OR ((:position IN ('ADMINISTRATOR', 'UNION_LEADER', 'UNION_ADMINISTRATOR'))) " +
+           ") " +
+           "ORDER BY p.createdAt ASC")
+    List<Proposal> findPendingReviewsForUser(
+            @Param("userId") Long userId,
+            @Param("position") String position,
+            @Param("userOrgUnitId") Long userOrgUnitId);
 
     @Query("SELECT p FROM Proposal p WHERE p.deleted = false AND " +
            "p.proposedBy.id = :userId AND p.status = :status")

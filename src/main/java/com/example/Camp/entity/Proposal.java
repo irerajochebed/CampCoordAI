@@ -8,6 +8,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -81,6 +82,26 @@ public class Proposal extends BaseEntity {
     @Column(nullable = false)
     @Builder.Default
     private Boolean deptLeaderEndorsed = false;
+
+    // Level 1 Review Tracking (Field Leader / Union Leader)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "leader_reviewed_by_id")
+    private User leaderReviewedBy;
+
+    @Column(length = 1000)
+    private String leaderReviewComments;
+
+    private LocalDateTime leaderReviewedAt;
+
+    // Level 2 Final Approval Tracking (Union Administrator)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "admin_approved_by_id")
+    private User adminApprovedBy;
+
+    @Column(length = 1000)
+    private String adminReviewComments;
+
+    private LocalDateTime adminApprovedAt;
 
     @OneToMany(mappedBy = "proposal", cascade = CascadeType.ALL)
     @Builder.Default

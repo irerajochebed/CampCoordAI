@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { Mail, Lock, User, Phone } from 'lucide-react';
+import { Mail, Lock, User, Phone, CheckCircle2 } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
@@ -25,7 +25,6 @@ export default function Register() {
     phoneNumber: '',
     password: '',
     confirmPassword: '',
-    role: 'PARTICIPANT',
     organizationUnitId: '',
     districtId: '',
     customChurchName: '',
@@ -63,10 +62,10 @@ export default function Register() {
     if (!formData.email.trim()) newErrors.email = 'Email is required';
     else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Email is invalid';
     if (!formData.phoneNumber.trim()) newErrors.phoneNumber = 'Phone number is required';
+    if (!formData.gender) newErrors.gender = 'Gender is required';
     if (!formData.password) newErrors.password = 'Password is required';
     else if (formData.password.length < 8) newErrors.password = 'Password must be at least 8 characters';
     if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = 'Passwords do not match';
-    if (!formData.gender) newErrors.gender = 'Gender is required';
     if (!formData.organizationUnitId && (!formData.districtId || !formData.customChurchName.trim())) {
       newErrors.organizationUnitId = 'Please select your District and Church, or enter your Church Name';
     }
@@ -89,6 +88,8 @@ export default function Register() {
       const { confirmPassword, ...rawRegisterData } = formData;
       const registerData = {
         ...rawRegisterData,
+        role: 'PARTICIPANT', // Strict church member role
+        position: null,
         organizationUnitId: rawRegisterData.organizationUnitId ? parseInt(rawRegisterData.organizationUnitId, 10) : null,
         districtId: rawRegisterData.districtId ? parseInt(rawRegisterData.districtId, 10) : null,
         customChurchName: rawRegisterData.customChurchName ? rawRegisterData.customChurchName.trim() : null,
@@ -101,7 +102,6 @@ export default function Register() {
         setAlert({ type: 'success', message: 'Registration successful! Redirecting to login...' });
         setTimeout(() => navigate('/login'), 2000);
       } else {
-        // Show field-level validation errors if present
         if (result.validationErrors) {
           const fieldErrors = {};
           result.validationErrors.forEach(({ field, message }) => {
@@ -119,11 +119,6 @@ export default function Register() {
     }
   };
 
-  const roleOptions = [
-    { value: 'PARTICIPANT', label: 'Participant' },
-    { value: 'COORDINATOR', label: 'Coordinator' },
-  ];
-
   const genderOptions = [
     { value: 'MALE', label: 'Male' },
     { value: 'FEMALE', label: 'Female' },
@@ -133,7 +128,7 @@ export default function Register() {
     <div 
       className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 relative"
       style={{
-        backgroundImage: `linear-gradient(to right, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.5)), url(${heroImage})`,
+        backgroundImage: `linear-gradient(to right, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.6)), url(${heroImage})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundAttachment: 'fixed'
@@ -157,9 +152,9 @@ export default function Register() {
         {/* Header */}
         <div className="text-center">
           <Link to="/" className="inline-flex justify-center mb-4">
-            <img src={sdaLogo} alt="SDA Logo" className="w-20 h-20 object-contain bg-white rounded-full p-2" />
+            <img src={sdaLogo} alt="SDA Logo" className="w-20 h-20 object-contain bg-white rounded-full p-2 shadow-lg" />
           </Link>
-          <h2 className="text-3xl font-bold text-white">
+          <h2 className="text-3xl font-bold text-white tracking-tight">
             CampCoordAI
           </h2>
           <p className="mt-2 text-sm text-gray-200">
@@ -168,12 +163,19 @@ export default function Register() {
         </div>
 
         {/* Form Container */}
-        <div className="bg-white/95 backdrop-blur-md rounded-lg shadow-2xl p-8">
-          <div className="mb-6">
-            <h3 className="text-xl font-semibold text-gray-900">{t('auth.createAccount', 'Create an Account')}</h3>
-            <p className="mt-1 text-sm text-gray-600">
-              {t('auth.registerSubtitle', 'Register your SDA membership & join your local church network')}
-            </p>
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl p-8 border border-white/20">
+          <div className="mb-6 pb-4 border-b border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">{t('auth.createAccount', 'Church Member Registration')}</h3>
+                <p className="mt-1 text-sm text-gray-600">
+                  {t('auth.registerSubtitle', 'Register your SDA membership to participate in camps and events')}
+                </p>
+              </div>
+              <span className="hidden sm:inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-primary-100 text-primary-800">
+                Participant Account
+              </span>
+            </div>
           </div>
 
           {alert && (
@@ -240,18 +242,8 @@ export default function Register() {
               />
             </div>
 
-            {/* Role and Gender */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Select
-                label="Role"
-                name="role"
-                value={formData.role}
-                onChange={handleChange}
-                error={errors.role}
-                options={roleOptions}
-                required
-              />
-
+            {/* Gender Selection */}
+            <div>
               <Select
                 label="Gender"
                 name="gender"
@@ -329,24 +321,29 @@ export default function Register() {
               type="submit"
               variant="primary"
               size="lg"
-              className="w-full"
+              className="w-full shadow-lg"
               loading={loading}
               disabled={loading}
             >
-              Create Account
+              Create Member Account
             </Button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-gray-600">
+          <div className="mt-6 pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between text-xs text-gray-500 gap-2">
+            <span>Need Coordinator or Pastor access?</span>
+            <span className="text-gray-600 font-medium">Contact your Conference Administrator</span>
+          </div>
+
+          <p className="mt-4 text-center text-sm text-gray-600">
             Already have an account?{' '}
-            <Link to="/login" className="font-medium text-primary-600 hover:text-primary-500">
+            <Link to="/login" className="font-semibold text-primary-600 hover:text-primary-500">
               Sign in here
             </Link>
           </p>
         </div>
 
         {/* Footer */}
-        <p className="text-center text-xs text-gray-500">
+        <p className="text-center text-xs text-gray-300">
           &copy; 2026 Rwanda Union Mission. All rights reserved.
         </p>
       </div>

@@ -4,11 +4,14 @@ import com.example.Camp.dto.event.EventResponse;
 import com.example.Camp.dto.notification.NotificationResponse;
 import com.example.Camp.dto.payment.PaymentResponse;
 import com.example.Camp.dto.proposal.ProposalResponse;
+import com.example.Camp.dto.proposal.ProposalReviewResponse;
 import com.example.Camp.dto.registration.RegistrationResponse;
 import com.example.Camp.dto.session.SessionResponse;
 import com.example.Camp.dto.user.UserResponse;
 import com.example.Camp.entity.*;
 import org.springframework.stereotype.Component;
+
+import java.util.stream.Collectors;
 
 @Component
 public class DtoMapper {
@@ -26,8 +29,8 @@ public class DtoMapper {
                 .position(user.getPosition())
                 .gender(user.getGender())
                 .dateOfBirth(user.getDateOfBirth())
-                .organizationUnitId(user.getOrganizationUnit().getId())
-                .organizationUnitName(user.getOrganizationUnit().getName())
+                .organizationUnitId(user.getOrganizationUnit() != null ? user.getOrganizationUnit().getId() : null)
+                .organizationUnitName(user.getOrganizationUnit() != null ? user.getOrganizationUnit().getName() : null)
                 .active(user.getActive())
                 .profileImageUrl(user.getProfileImageUrl())
                 .preferredLanguage(user.getPreferredLanguage() != null ? user.getPreferredLanguage() : "en")
@@ -61,8 +64,45 @@ public class DtoMapper {
                 .reviewedById(proposal.getReviewedBy() != null ? proposal.getReviewedBy().getId() : null)
                 .reviewedByName(proposal.getReviewedBy() != null ?
                         proposal.getReviewedBy().getFirstName() + " " + proposal.getReviewedBy().getLastName() : null)
+                // Level 1 Leader Review
+                .leaderReviewedById(proposal.getLeaderReviewedBy() != null ? proposal.getLeaderReviewedBy().getId() : null)
+                .leaderReviewedByName(proposal.getLeaderReviewedBy() != null ?
+                        proposal.getLeaderReviewedBy().getFirstName() + " " + proposal.getLeaderReviewedBy().getLastName() : null)
+                .leaderReviewComments(proposal.getLeaderReviewComments())
+                .leaderReviewedAt(proposal.getLeaderReviewedAt())
+                // Level 2 Admin Final Approval
+                .adminApprovedById(proposal.getAdminApprovedBy() != null ? proposal.getAdminApprovedBy().getId() : null)
+                .adminApprovedByName(proposal.getAdminApprovedBy() != null ?
+                        proposal.getAdminApprovedBy().getFirstName() + " " + proposal.getAdminApprovedBy().getLastName() : null)
+                .adminReviewComments(proposal.getAdminReviewComments())
+                .adminApprovedAt(proposal.getAdminApprovedAt())
+                // Event Link
+                .createdEventId(proposal.getEvent() != null ? proposal.getEvent().getId() : null)
+                .createdEventCode(proposal.getEvent() != null ? proposal.getEvent().getEventCode() : null)
+                // Review History
+                .reviewHistory(proposal.getReviews() != null ?
+                        proposal.getReviews().stream().map(this::toProposalReviewResponse).collect(Collectors.toList()) : null)
                 .createdAt(proposal.getCreatedAt())
                 .updatedAt(proposal.getUpdatedAt())
+                .build();
+    }
+
+    public ProposalReviewResponse toProposalReviewResponse(ProposalReview review) {
+        if (review == null) return null;
+
+        return ProposalReviewResponse.builder()
+                .id(review.getId())
+                .reviewerId(review.getReviewer() != null ? review.getReviewer().getId() : null)
+                .reviewerName(review.getReviewer() != null ?
+                        review.getReviewer().getFirstName() + " " + review.getReviewer().getLastName() : null)
+                .reviewerRole(review.getReviewer() != null && review.getReviewer().getRole() != null ?
+                        review.getReviewer().getRole().name() : null)
+                .reviewerPosition(review.getReviewer() != null && review.getReviewer().getPosition() != null ?
+                        review.getReviewer().getPosition().name() : null)
+                .decision(review.getDecision())
+                .reviewStage(review.getReviewStage())
+                .comments(review.getComments())
+                .createdAt(review.getCreatedAt())
                 .build();
     }
     

@@ -1,10 +1,14 @@
 package com.example.Camp.controller;
 
 import com.example.Camp.dto.common.ApiResponse;
+import com.example.Camp.dto.user.ProvisionCoordinatorRequest;
 import com.example.Camp.dto.user.UserResponse;
+import com.example.Camp.dto.user.UserRolePositionRequest;
 import com.example.Camp.dto.user.UserUpdateRequest;
+import com.example.Camp.enums.Position;
 import com.example.Camp.enums.Role;
 import com.example.Camp.service.UserService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -36,8 +40,13 @@ public class UserController {
     
     @GetMapping
     @PreAuthorize("hasRole('ADMINISTRATOR')")
-    public ResponseEntity<ApiResponse<List<UserResponse>>> getAllUsers() {
-        List<UserResponse> response = userService.getAllUsers();
+    public ResponseEntity<ApiResponse<List<UserResponse>>> getAllUsers(
+            @RequestParam(required = false) Role role,
+            @RequestParam(required = false) Position position,
+            @RequestParam(required = false) Long organizationUnitId,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String keyword) {
+        List<UserResponse> response = userService.getAllUsersFiltered(role, position, organizationUnitId, active, keyword);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
     
@@ -67,6 +76,23 @@ public class UserController {
             @RequestBody UserUpdateRequest request) {
         UserResponse response = userService.updateUser(id, request);
         return ResponseEntity.ok(ApiResponse.success("User updated successfully", response));
+    }
+
+    @PutMapping("/{id}/role-position")
+    @PreAuthorize("hasRole('ADMINISTRATOR')")
+    public ResponseEntity<ApiResponse<UserResponse>> updateUserRolePosition(
+            @PathVariable Long id,
+            @RequestBody UserRolePositionRequest request) {
+        UserResponse response = userService.updateUserRolePosition(id, request);
+        return ResponseEntity.ok(ApiResponse.success("User role and position updated successfully", response));
+    }
+    
+    @PostMapping("/provision-coordinator")
+    @PreAuthorize("hasRole('ADMINISTRATOR')")
+    public ResponseEntity<ApiResponse<UserResponse>> provisionCoordinator(
+            @Valid @RequestBody ProvisionCoordinatorRequest request) {
+        UserResponse response = userService.provisionCoordinator(request);
+        return ResponseEntity.ok(ApiResponse.success("Coordinator provisioned successfully", response));
     }
     
     @PatchMapping("/{id}/deactivate")

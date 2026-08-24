@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   Calendar, FileText, Users, CheckCircle2,
   Clock, AlertCircle, PlusCircle, Eye,
-  CheckCircle, XCircle, ArrowRight
+  CheckCircle, XCircle, ArrowRight, Filter
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
@@ -12,6 +12,7 @@ import { PageSpinner } from '../../components/ui/Spinner';
 import Alert from '../../components/ui/Alert';
 import Modal from '../../components/ui/Modal';
 import Textarea from '../../components/ui/Textarea';
+import OrganizationUnitSelector from '../../components/ui/OrganizationUnitSelector';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProposals } from '../../hooks';
 import { eventApi, proposalApi } from '../../api';
@@ -20,6 +21,7 @@ import { useTranslation } from '../../contexts/LanguageContext';
 export default function CoordinatorDashboard() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const [filterUnit, setFilterUnit] = useState({ fieldId: '', districtId: '' });
   const {
     pendingProposals,
     pendingCount,
@@ -46,7 +48,10 @@ export default function CoordinatorDashboard() {
   const [actionError, setActionError] = useState(null);
 
   const isFieldLeader = user?.position === 'FIELD_LEADER';
+  const isDistrictPastor = user?.position === 'DISTRICT_PASTOR';
   const isDeptLeader = user?.position === 'DEPARTMENT_LEADER';
+  const isUnionLeader = user?.position === 'UNION_LEADER' || user?.position === 'UNION_ADMINISTRATOR';
+  const isReviewer = isFieldLeader || isDistrictPastor || isUnionLeader;
 
   const fetchDashboardData = useCallback(async () => {
     setLoading(true);
@@ -85,9 +90,9 @@ export default function CoordinatorDashboard() {
     setStats(prev => ({ ...prev, pendingReviews: pendingCount }));
   }, [pendingCount]);
 
-  const openReviewModal = (proposal) => {
+  const openReviewModal = (proposal, defaultAction = null) => {
     setSelectedProposal(proposal);
-    setReviewAction(null);
+    setReviewAction(defaultAction);
     setComments('');
     setActionError(null);
   };
@@ -101,7 +106,7 @@ export default function CoordinatorDashboard() {
 
   const handleAction = async () => {
     if (!selectedProposal || !reviewAction) return;
-    if (reviewAction !== 'field-approve' && reviewAction !== 'endorse' && !comments.trim()) {
+    if (reviewAction !== 'approve' && reviewAction !== 'endorse' && !comments.trim()) {
       setActionError('Please provide comments');
       return;
     }
@@ -112,10 +117,10 @@ export default function CoordinatorDashboard() {
       if (reviewAction === 'endorse') {
         await endorseProposal(selectedProposal.id, comments || 'Endorsed');
         setSuccessMessage(`Proposal "${selectedProposal.eventName}" endorsed and escalated to Union Admin.`);
-      } else if (reviewAction === 'field-approve') {
+      } else if (reviewAction === 'approve' || reviewAction === 'field-approve') {
         await fieldReviewProposal(selectedProposal.id, 'APPROVED', comments);
         setSuccessMessage(`Proposal "${selectedProposal.eventName}" approved. Event auto-created.`);
-      } else if (reviewAction === 'field-reject') {
+      } else if (reviewAction === 'reject' || reviewAction === 'field-reject') {
         await fieldReviewProposal(selectedProposal.id, 'REJECTED', comments);
         setSuccessMessage(`Proposal "${selectedProposal.eventName}" rejected.`);
       } else if (reviewAction === 'revision') {
@@ -124,6 +129,8 @@ export default function CoordinatorDashboard() {
       }
       closeReviewModal();
       await fetchDashboardData();
+      await fetchPendingReview();
+      await fetchPendingCount();
       setTimeout(() => setSuccessMessage(null), 5000);
     } catch (err) {
       setActionError(err.response?.data?.message || 'Action failed. Please try again.');
@@ -132,13 +139,18 @@ export default function CoordinatorDashboard() {
     }
   };
 
-  const getScopeBadge = (scope) => (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-      scope === 'UNION' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
-    }`}>
-      {scope}
-    </span>
-  );
+  const getScopeBadge = (scope) => {
+    const colors = {
+      UNION: 'bg-purple-100 text-purple-700 border-purple-200',
+      FIELD: 'bg-blue-100 text-blue-700 border-blue-200',
+      DISTRICT: 'bg-emerald-100 text-emerald-700 border-emerald-200'
+    };
+    return (
+      <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium border ${colors[scope] || 'bg-gray-100 text-gray-700'}`}>
+        {scope}
+      </span>
+    );
+  };
 
   const getStatusBadge = (status) => {
     const map = {
@@ -151,23 +163,25 @@ export default function CoordinatorDashboard() {
 
   // What actions are available depends on position + proposal scope
   const getAvailableActions = (proposal) => {
-    if (isFieldLeader && proposal.scope === 'FIELD') {
+    if ((isFieldLeader && proposal.scope === 'FIELD') || (isDistrictPastor && proposal.scope === 'DISTRICT')) {
       return [
-        { key: 'field-approve', label: 'Approve', icon: <CheckCircle className="w-4 h-4" />, variant: 'success' },
-        { key: 'field-reject', label: 'Reject', icon: <XCircle className="w-4 h-4" />, variant: 'danger' },
-        { key: 'revision', label: 'Request Revision', icon: <AlertCircle className="w-4 h-4" />, variant: 'warning' },
+        { key: 'approve', label: 'Approve & Create Event', icon: <CheckCircle className="w-4 h-4" />, variant: 'success' },
+        { key: 'reject', label: 'Reject Proposal', icon: <XCircle className="w-4 h-4" />, variant: 'danger' },
+        { key: 'revision', label: 'Request Changes', icon: <AlertCircle className="w-4 h-4" />, variant: 'warning' },
       ];
     }
     if (isDeptLeader && proposal.scope === 'UNION' && !proposal.deptLeaderEndorsed) {
       return [
         { key: 'endorse', label: 'Endorse & Escalate', icon: <ArrowRight className="w-4 h-4" />, variant: 'primary' },
-        { key: 'revision', label: 'Request Revision', icon: <AlertCircle className="w-4 h-4" />, variant: 'warning' },
+        { key: 'revision', label: 'Request Changes', icon: <AlertCircle className="w-4 h-4" />, variant: 'warning' },
       ];
     }
     return [];
   };
 
-  const pendingLabel = isFieldLeader
+  const pendingLabel = isDistrictPastor
+    ? 'District Proposals Pending Your Review'
+    : isFieldLeader
     ? 'Field Proposals Pending Your Review'
     : isDeptLeader
     ? 'Union Proposals Pending Your Endorsement'
@@ -196,6 +210,32 @@ export default function CoordinatorDashboard() {
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {successMessage && <Alert type="success" message={successMessage} onClose={() => setSuccessMessage(null)} />}
+
+      {/* Report & Scope District Filter Bar */}
+      <Card className="bg-white border-primary-100 shadow-sm">
+        <CardBody className="p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2">
+              <Filter className="w-5 h-5 text-primary-600" />
+              <h2 className="text-sm font-semibold text-gray-800">
+                {t('dashboard.reportFilterTitle', 'Evangelical District & Field Report Filter')}
+              </h2>
+            </div>
+            {filterUnit.districtId && (
+              <span className="text-xs px-2.5 py-1 bg-primary-100 text-primary-800 rounded-full font-medium">
+                District Filter Active
+              </span>
+            )}
+          </div>
+          <OrganizationUnitSelector
+            showChurch={false}
+            value={filterUnit}
+            onChange={({ fieldId, districtId, organizationUnitId }) => {
+              setFilterUnit({ fieldId, districtId: districtId || organizationUnitId });
+            }}
+          />
+        </CardBody>
+      </Card>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -252,15 +292,18 @@ export default function CoordinatorDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Scope-aware pending proposals */}
-        {(isFieldLeader || isDeptLeader) && (
-          <Card>
+        {/* Scope-aware pending proposals to review */}
+        {(isFieldLeader || isDistrictPastor || isDeptLeader || isUnionLeader) && (
+          <Card className="lg:col-span-2 border-l-4 border-l-primary-500 shadow-sm">
             <CardHeader action={
               <Link to="/app/proposals">
                 <Button variant="ghost" size="sm">View All</Button>
               </Link>
             }>
-              <CardTitle>{pendingLabel} ({pendingProposals.length})</CardTitle>
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-primary-600" />
+                <CardTitle>{pendingLabel} ({pendingProposals.length})</CardTitle>
+              </div>
             </CardHeader>
             <CardBody>
               {proposalsLoading ? (
@@ -268,31 +311,66 @@ export default function CoordinatorDashboard() {
               ) : pendingProposals.length === 0 ? (
                 <div className="text-center text-gray-400 py-8">
                   <CheckCircle2 className="w-10 h-10 mx-auto mb-2 text-gray-300" />
-                  <p className="text-sm">No proposals pending your review</p>
+                  <p className="text-sm">No proposals currently pending your review</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {pendingProposals.slice(0, 5).map(proposal => (
-                    <div key={proposal.id} className="p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
-                      <div className="flex items-start justify-between gap-2">
+                    <div key={proposal.id} className="p-4 border border-gray-200 rounded-xl hover:border-primary-200 hover:bg-primary-50/20 transition-all">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-medium text-gray-900 text-sm truncate">{proposal.eventName}</p>
+                            <p className="font-semibold text-gray-900 text-base">{proposal.eventName}</p>
                             {getScopeBadge(proposal.scope)}
+                            {getStatusBadge(proposal.status)}
                           </div>
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            By {proposal.proposedByName} &bull; {proposal.departmentName}
+                          <p className="text-xs text-gray-600 mt-1">
+                            <strong>Proposed By:</strong> {proposal.proposedByName} &bull; <strong>Dept:</strong> {proposal.departmentName} &bull; <strong>Target Unit:</strong> {proposal.targetOrganizationUnitName || 'Union'}
                           </p>
-                          <div className="mt-1">{getStatusBadge(proposal.status)}</div>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            <strong>Dates:</strong> {proposal.startDate} to {proposal.endDate} &bull; <strong>Venue:</strong> {proposal.venue}
+                          </p>
                         </div>
-                        <Button
-                          size="sm"
-                          variant="primary"
-                          icon={<Eye className="w-3 h-3" />}
-                          onClick={() => openReviewModal(proposal)}
-                        >
-                          Review
-                        </Button>
+                        <div className="flex items-center gap-2 flex-wrap shrink-0">
+                          {(isFieldLeader || isDistrictPastor) && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="success"
+                                icon={<CheckCircle className="w-4 h-4" />}
+                                onClick={() => openReviewModal(proposal, 'approve')}
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="danger"
+                                icon={<XCircle className="w-4 h-4" />}
+                                onClick={() => openReviewModal(proposal, 'reject')}
+                              >
+                                Reject
+                              </Button>
+                            </>
+                          )}
+                          {isDeptLeader && proposal.scope === 'UNION' && (
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              icon={<ArrowRight className="w-4 h-4" />}
+                              onClick={() => openReviewModal(proposal, 'endorse')}
+                            >
+                              Endorse
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            icon={<Eye className="w-4 h-4" />}
+                            onClick={() => openReviewModal(proposal)}
+                          >
+                            Review / Changes
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ))}

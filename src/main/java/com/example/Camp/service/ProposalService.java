@@ -30,6 +30,13 @@ public interface ProposalService {
     List<ProposalResponse> getPendingReviewProposalsForUser(Long userId);
     Long countPendingReviewForUser(Long userId);
 
+    // Multi-Level Approval Workflow methods
+    // Level 1: Respective Leader Review (Field Leader / Union Leader)
+    ProposalResponse leaderReviewProposal(Long id, ProposalReviewRequest request, Long leaderId);
+
+    // Level 2: Union Administrator Final Approval (Auto-creates official event record)
+    ProposalResponse adminApproval(Long id, String comments, Long adminId);
+
     // Dept Leader endorses a UNION-scope proposal before it reaches Union Admin
     ProposalResponse endorseProposal(Long id, String comments, Long coordinatorId);
 

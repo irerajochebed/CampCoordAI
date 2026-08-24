@@ -6,6 +6,7 @@ import com.example.Camp.dto.auth.RegisterRequest;
 import com.example.Camp.dto.user.UserResponse;
 import com.example.Camp.enums.OrganizationLevel;
 import com.example.Camp.enums.Position;
+import com.example.Camp.enums.Role;
 import com.example.Camp.entity.OrganizationUnit;
 import com.example.Camp.entity.User;
 import com.example.Camp.exception.BadRequestException;
@@ -47,14 +48,32 @@ public class AuthServiceImpl implements AuthService {
                 new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
         );
         
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-        String jwt = jwtUtils.generateJwtToken(authentication);
-        
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
         User user = userRepository.findByEmail(userDetails.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", userDetails.getEmail()));
         
-        log.info("User logged in: {}", user.getEmail());
+        if (Boolean.FALSE.equals(user.getActive()) || Boolean.TRUE.equals(user.getDeleted())) {
+            throw new BadRequestException("Your account is inactive or disabled. Please contact the administrator.");
+        }
+
+        // Validate portal type against user role
+        if (request.getPortal() != null && !request.getPortal().trim().isEmpty()) {
+            String portal = request.getPortal().trim().toUpperCase();
+            if ("PARTICIPANT".equals(portal)) {
+                if (user.getRole() != Role.PARTICIPANT) {
+                    throw new BadRequestException("Access denied for Participant Portal. Coordinators & Administrators must sign in through the Coordinator & Administration Portal.");
+                }
+            } else if ("COORDINATOR_ADMIN".equals(portal) || "COORDINATOR".equals(portal) || "STAFF".equals(portal)) {
+                if (user.getRole() != Role.COORDINATOR && user.getRole() != Role.ADMINISTRATOR) {
+                    throw new BadRequestException("Access denied for Coordinator & Administration Portal. Church members must sign in through the Participant Portal.");
+                }
+            }
+        }
+
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        String jwt = jwtUtils.generateJwtToken(authentication);
+        
+        log.info("User logged in: {} [Role: {}, Portal: {}]", user.getEmail(), user.getRole(), request.getPortal());
         
         return LoginResponse.builder()
                 .token(jwt)
@@ -79,7 +98,7 @@ public class AuthServiceImpl implements AuthService {
         }
         
         // Validate phone number uniqueness
-        if (request.getPhoneNumber() != null && userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
+        if (request.getPhoneNumber() != null && !request.getPhoneNumber().trim().isEmpty() && userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
             throw new DuplicateResourceException("User", "phoneNumber", request.getPhoneNumber());
         }
         
@@ -117,15 +136,15 @@ public class AuthServiceImpl implements AuthService {
                     .orElseThrow(() -> new ResourceNotFoundException("OrganizationUnit", "id", request.getOrganizationUnitId()));
         }
 
-        // Create user
+        // Self-registration strictly enforces PARTICIPANT role (public users cannot register as Coordinator or Administrator)
         User user = User.builder()
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())
                 .email(request.getEmail())
                 .phoneNumber(request.getPhoneNumber())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .role(request.getRole())
-                .position(request.getPosition())
+                .role(Role.PARTICIPANT)
+                .position(null)
                 .gender(request.getGender())
                 .dateOfBirth(request.getDateOfBirth())
                 .organizationUnit(organizationUnit)
@@ -135,7 +154,7 @@ public class AuthServiceImpl implements AuthService {
                 .build();
 
         User savedUser = userRepository.save(user);
-        log.info("User registered: {}", savedUser.getEmail());
+        log.info("Participant user self-registered successfully: {}", savedUser.getEmail());
 
         return dtoMapper.toUserResponse(savedUser);
     }

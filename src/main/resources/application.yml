@@ -4,16 +4,25 @@ spring:
 
   # Database Configuration
   datasource:
-    url: jdbc:postgresql://localhost:5432/camp
-    username: postgres
-    password: 1234
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/camp}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:1234}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
 
+  # Database Initialization via data.sql
   sql:
     init:
       mode: always
+      data-locations: classpath:data.sql
+      continue-on-error: true
 
-  # JPA Configuration
+  # JPA & Hibernate Configuration
   jpa:
     defer-datasource-initialization: true
     hibernate:
@@ -38,26 +47,26 @@ spring:
 
   # Jackson Configuration
   jackson:
-    # serialization:
-    #   write-dates-as-timestamps: false
     time-zone: Africa/Kigali
 
 # Server Configuration
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
   error:
     include-message: always
     include-binding-errors: always
 
 # JWT Configuration
 jwt:
-  secret: CampCoordAI-Rwanda-Union-Mission-Secret-Key-2026-Very-Secure-Random-String-For-JWT
-  expiration: 86400000
+  secret: ${JWT_SECRET:CampCoordAI-Rwanda-Union-Mission-Secret-Key-2026-Very-Secure-Random-String-For-JWT}
+  expiration: ${JWT_EXPIRATION:86400000}
 
 # Logging Configuration
 logging:
   level:
+    root: INFO
     com.example.Camp: DEBUG
+    org.springframework.web: INFO
     org.springframework.security: DEBUG
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE

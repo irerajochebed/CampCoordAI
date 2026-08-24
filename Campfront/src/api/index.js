@@ -66,12 +66,14 @@ export const authApi = {
 // USER API
 // ============================================
 export const userApi = {
-  getAll: () => api.get('/users'),
+  getAll: (params) => api.get('/users', { params }),
   getById: (id) => api.get(`/users/${id}`),
   getByRole: (role) => api.get(`/users/role/${role}`),
   getByOrganization: (orgId) => api.get(`/users/organization/${orgId}`),
   search: (keyword) => api.get(`/users/search?keyword=${keyword}`),
   update: (id, data) => api.put(`/users/${id}`, data),
+  updateRolePosition: (id, data) => api.put(`/users/${id}/role-position`, data),
+  provisionCoordinator: (data) => api.post('/users/provision-coordinator', data),
   activate: (id) => api.patch(`/users/${id}/activate`),
   deactivate: (id) => api.patch(`/users/${id}/deactivate`),
   delete: (id) => api.delete(`/users/${id}`),
@@ -91,6 +93,8 @@ export const proposalApi = {
   create: (data) => api.post('/proposals', data),
   update: (id, data) => api.put(`/proposals/${id}`, data),
   submit: (id) => api.patch(`/proposals/${id}/submit`),
+  leaderReview: (id, data) => api.put(`/proposals/${id}/leader-review`, data),
+  adminApproval: (id, data) => api.put(`/proposals/${id}/admin-approval`, data),
   approve: (id) => api.patch(`/proposals/${id}/approve`),
   reject: (id, comments) => api.patch(`/proposals/${id}/reject?comments=${encodeURIComponent(comments)}`),
   endorse: (id, comments) => api.patch(`/proposals/${id}/endorse?comments=${encodeURIComponent(comments)}`),

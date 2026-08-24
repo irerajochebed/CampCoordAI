@@ -14,6 +14,9 @@ import ForgotPassword from './pages/auth/ForgotPassword';
 
 // Dashboard Pages
 import Dashboard from './pages/dashboard/Dashboard';
+import AdminDashboard from './pages/dashboard/AdminDashboard';
+import CoordinatorDashboard from './pages/dashboard/CoordinatorDashboard';
+import ParticipantDashboard from './pages/dashboard/ParticipantDashboard';
 
 // Proposal Pages
 import ProposalList from './pages/proposals/ProposalList';
@@ -125,6 +128,9 @@ function AppRoutes() {
       <Route path="/app" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<Navigate to="/app/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
+        <Route path="dashboard/participant" element={<ProtectedRoute allowedRoles={['PARTICIPANT', 'COORDINATOR', 'ADMINISTRATOR']}><ParticipantDashboard /></ProtectedRoute>} />
+        <Route path="dashboard/coordinator" element={<ProtectedRoute allowedRoles={['COORDINATOR', 'ADMINISTRATOR']}><CoordinatorDashboard /></ProtectedRoute>} />
+        <Route path="dashboard/admin" element={<ProtectedRoute allowedRoles={['ADMINISTRATOR']}><AdminDashboard /></ProtectedRoute>} />
         
         {/* Admin Routes */}
         <Route path="users" element={<ProtectedRoute allowedRoles={['ADMINISTRATOR']}><UserList /></ProtectedRoute>} />

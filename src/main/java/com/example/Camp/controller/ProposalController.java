@@ -139,6 +139,29 @@ public class ProposalController {
         return ResponseEntity.ok(ApiResponse.success("Proposal rejected", response));
     }
     
+    @RequestMapping(value = "/{id}/leader-review", method = {RequestMethod.PUT, RequestMethod.POST, RequestMethod.PATCH})
+    @PreAuthorize("hasRole('COORDINATOR') or hasRole('ADMINISTRATOR')")
+    public ResponseEntity<ApiResponse<ProposalResponse>> leaderReview(
+            @PathVariable Long id,
+            @Valid @RequestBody ProposalReviewRequest request,
+            Authentication authentication) {
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        ProposalResponse response = proposalService.leaderReviewProposal(id, request, userDetails.getId());
+        return ResponseEntity.ok(ApiResponse.success("Leader review submitted successfully", response));
+    }
+
+    @RequestMapping(value = "/{id}/admin-approval", method = {RequestMethod.PUT, RequestMethod.POST, RequestMethod.PATCH})
+    @PreAuthorize("hasRole('ADMINISTRATOR')")
+    public ResponseEntity<ApiResponse<ProposalResponse>> adminApproval(
+            @PathVariable Long id,
+            @RequestBody(required = false) ProposalReviewRequest request,
+            Authentication authentication) {
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        String comments = (request != null && request.getComments() != null) ? request.getComments() : "Approved by Union Administrator";
+        ProposalResponse response = proposalService.adminApproval(id, comments, userDetails.getId());
+        return ResponseEntity.ok(ApiResponse.success("Proposal approved and official event record created successfully", response));
+    }
+
     @PatchMapping("/{id}/field-review")
     @PreAuthorize("hasRole('COORDINATOR')")
     public ResponseEntity<ApiResponse<ProposalResponse>> fieldReviewProposal(

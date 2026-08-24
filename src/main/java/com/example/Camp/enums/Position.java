@@ -2,8 +2,10 @@ package com.example.Camp.enums;
 
 public enum Position {
     UNION_ADMINISTRATOR,
+    UNION_LEADER,
     DEPARTMENT_LEADER,
     FIELD_LEADER,
+    DISTRICT_PASTOR,
     PASTOR,
     LOCAL_CHURCH_LEADER,
     FINANCE_OFFICER,

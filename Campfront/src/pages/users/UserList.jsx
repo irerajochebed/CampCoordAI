@@ -7,7 +7,11 @@ import {
   Trash2,
   CheckCircle,
   XCircle,
-  Filter
+  Filter,
+  ShieldCheck,
+  ShieldAlert,
+  Building,
+  UserCog
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/Table';
@@ -15,11 +19,12 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Badge from '../../components/ui/Badge';
-import Modal from '../../components/ui/Modal';
 import Alert from '../../components/ui/Alert';
 import { PageSpinner } from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
 import { userApi } from '../../api';
+import CreateCoordinatorModal from './CreateCoordinatorModal';
+import EditUserModal from './EditUserModal';
 
 export default function UserList() {
   const [users, setUsers] = useState([]);
@@ -27,21 +32,28 @@ export default function UserList() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
-  const [statusFilter, setStatusFilter] = useState('ALL'); // New: filter by active status
+  const [positionFilter, setPositionFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ALL');
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showCreateCoordinatorModal, setShowCreateCoordinatorModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [alert, setAlert] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
 
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    role: 'PARTICIPANT',
-    position: '',
-    active: true
-  });
+  const handleCoordinatorCreated = (newCoordinator) => {
+    setAlert({
+      type: 'success',
+      message: `Coordinator account for ${newCoordinator.firstName} ${newCoordinator.lastName} (${newCoordinator.position?.replace(/_/g, ' ') || 'Coordinator'}) provisioned successfully!`
+    });
+    fetchUsers();
+  };
+
+  const handleUserUpdated = (updatedUser) => {
+    setAlert({
+      type: 'success',
+      message: `User ${updatedUser.firstName} ${updatedUser.lastName} updated successfully!`
+    });
+    fetchUsers();
+  };
 
   useEffect(() => {
     fetchUsers();
@@ -49,7 +61,7 @@ export default function UserList() {
 
   useEffect(() => {
     filterUsers();
-  }, [searchTerm, roleFilter, statusFilter, users]);
+  }, [searchTerm, roleFilter, positionFilter, statusFilter, users]);
 
   const fetchUsers = async () => {
     try {
@@ -79,7 +91,8 @@ export default function UserList() {
           u.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           u.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          u.phone?.includes(searchTerm)
+          u.phoneNumber?.includes(searchTerm) ||
+          u.organizationUnitName?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -88,49 +101,24 @@ export default function UserList() {
       filtered = filtered.filter((u) => u.role === roleFilter);
     }
 
+    // Filter by position
+    if (positionFilter !== 'ALL') {
+      filtered = filtered.filter((u) => u.position === positionFilter);
+    }
+
     // Filter by status (active/inactive)
     if (statusFilter === 'ACTIVE') {
       filtered = filtered.filter((u) => u.active === true);
     } else if (statusFilter === 'INACTIVE') {
       filtered = filtered.filter((u) => u.active === false);
     }
-    // If 'ALL', show both active and inactive
 
     setFilteredUsers(filtered);
   };
 
   const handleEdit = (user) => {
     setSelectedUser(user);
-    setFormData({
-      firstName: user.firstName,
-      lastName: user.lastName,
-      email: user.email,
-      phone: user.phone,
-      role: user.role,
-      position: user.position || '',
-      active: user.active
-    });
     setShowEditModal(true);
-  };
-
-  const handleUpdate = async () => {
-    try {
-      setSubmitting(true);
-      const response = await userApi.update(selectedUser.id, formData);
-      
-      if (response.data.success) {
-        setAlert({ type: 'success', message: 'User updated successfully' });
-        setShowEditModal(false);
-        fetchUsers();
-      }
-    } catch (error) {
-      setAlert({
-        type: 'error',
-        message: error.response?.data?.message || 'Failed to update user'
-      });
-    } finally {
-      setSubmitting(false);
-    }
   };
 
   const handleActivate = async (userId) => {
@@ -212,12 +200,13 @@ export default function UserList() {
     { value: 'INACTIVE', label: 'Inactive Only' },
   ];
 
-  const positionOptions = [
-    { value: '', label: 'No Position' },
+  const positionFilterOptions = [
+    { value: 'ALL', label: 'All Positions' },
     { value: 'UNION_ADMINISTRATOR', label: 'Union Administrator' },
     { value: 'DEPARTMENT_LEADER', label: 'Department Leader' },
     { value: 'FIELD_LEADER', label: 'Field Leader' },
-    { value: 'PASTOR', label: 'Pastor / Local Church Leader' },
+    { value: 'DISTRICT_PASTOR', label: 'District Pastor' },
+    { value: 'PASTOR', label: 'Local Pastor' },
     { value: 'FINANCE_OFFICER', label: 'Finance Officer' },
     { value: 'CAMP_DIRECTOR', label: 'Camp Director' },
     { value: 'CAMP_SECRETARY', label: 'Camp Secretary' },
@@ -232,14 +221,21 @@ export default function UserList() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-          <p className="text-gray-600 mt-1">Manage system users and permissions</p>
+          <h1 className="text-2xl font-bold text-gray-900">User Management & Governance</h1>
+          <p className="text-gray-600 mt-1">Manage system accounts, leadership positions, permissions, and organization units</p>
         </div>
-        <Button variant="primary" icon={<Plus className="w-4 h-4" />}>
-          Add New User
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button 
+            variant="primary" 
+            icon={<ShieldCheck className="w-4 h-4" />}
+            onClick={() => setShowCreateCoordinatorModal(true)}
+            className="shadow-sm"
+          >
+            Provision Coordinator
+          </Button>
+        </div>
       </div>
 
       {alert && (
@@ -253,19 +249,24 @@ export default function UserList() {
       {/* Filters */}
       <Card>
         <CardBody>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="md:col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
               <Input
-                placeholder="Search by name, email, or phone..."
+                placeholder="Search name, email, phone, unit..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                icon={<Search className="w-5 h-5" />}
+                icon={<Search className="w-4 h-4" />}
               />
             </div>
             <Select
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value)}
               options={roleOptions}
+            />
+            <Select
+              value={positionFilter}
+              onChange={(e) => setPositionFilter(e.target.value)}
+              options={positionFilterOptions}
             />
             <Select
               value={statusFilter}
@@ -279,9 +280,25 @@ export default function UserList() {
       {/* Users Table */}
       <Card>
         <CardHeader>
-          <CardTitle>
-            {filteredUsers.length} User{filteredUsers.length !== 1 ? 's' : ''}
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>
+              {filteredUsers.length} User{filteredUsers.length !== 1 ? 's' : ''} Listed
+            </CardTitle>
+            {(roleFilter !== 'ALL' || positionFilter !== 'ALL' || statusFilter !== 'ALL' || searchTerm) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setRoleFilter('ALL');
+                  setPositionFilter('ALL');
+                  setStatusFilter('ALL');
+                  setSearchTerm('');
+                }}
+              >
+                Reset Filters
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardBody>
           {filteredUsers.length === 0 ? (
@@ -289,50 +306,61 @@ export default function UserList() {
               icon={<Users className="w-12 h-12" />}
               title="No users found"
               description={
-                searchTerm || roleFilter !== 'ALL'
+                searchTerm || roleFilter !== 'ALL' || positionFilter !== 'ALL' || statusFilter !== 'ALL'
                   ? 'Try adjusting your filters'
-                  : 'No users have been added yet'
+                  : 'No users have been registered yet'
               }
             />
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Position</TableHead>
+                  <TableHead>User / Member</TableHead>
+                  <TableHead>Contact</TableHead>
+                  <TableHead>Role & Position</TableHead>
+                  <TableHead>Organization Unit</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead className="text-right">Governance Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredUsers.map((user) => (
                   <TableRow 
                     key={user.id}
-                    className={!user.active ? 'bg-gray-50 opacity-60' : ''}
+                    className={!user.active ? 'bg-gray-50/70 opacity-60' : ''}
                   >
                     <TableCell>
                       <div>
-                        <p className="font-medium text-gray-900">
+                        <p className="font-semibold text-gray-900">
                           {user.firstName} {user.lastName}
                         </p>
                         <p className="text-xs text-gray-500">
-                          ID: {user.id}
+                          UID: #{user.id}
                         </p>
                       </div>
                     </TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>{user.phone}</TableCell>
-                    <TableCell>{getRoleBadge(user.role)}</TableCell>
                     <TableCell>
-                      {user.position ? (
-                        <Badge variant="default">
-                          {user.position.replace(/_/g, ' ')}
-                        </Badge>
+                      <p className="text-sm text-gray-800">{user.email}</p>
+                      <p className="text-xs text-gray-500">{user.phoneNumber || user.phone || 'No phone'}</p>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1 items-start">
+                        {getRoleBadge(user.role)}
+                        {user.position && (
+                          <span className="text-xs font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
+                            {user.position.replace(/_/g, ' ')}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {user.organizationUnitName ? (
+                        <div className="flex items-center gap-1.5 text-xs text-gray-700 font-medium">
+                          <Building className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+                          <span>{user.organizationUnitName}</span>
+                        </div>
                       ) : (
-                        <span className="text-gray-400 text-sm">-</span>
+                        <span className="text-gray-400 text-xs italic">Unassigned</span>
                       )}
                     </TableCell>
                     <TableCell>
@@ -343,15 +371,15 @@ export default function UserList() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-end gap-1.5">
                         <Button
                           variant="ghost"
                           size="sm"
-                          icon={<Edit className="w-4 h-4" />}
+                          icon={<UserCog className="w-4 h-4 text-blue-600" />}
                           onClick={() => handleEdit(user)}
-                          title="Edit user"
+                          title="Manage User Role & Position"
                         >
-                          Edit
+                          Govern
                         </Button>
                         
                         {user.active ? (
@@ -361,9 +389,7 @@ export default function UserList() {
                             icon={<XCircle className="w-4 h-4 text-amber-600" />}
                             onClick={() => handleDeactivate(user.id)}
                             title="Deactivate user"
-                          >
-                            Deactivate
-                          </Button>
+                          />
                         ) : (
                           <Button
                             variant="ghost"
@@ -371,9 +397,7 @@ export default function UserList() {
                             icon={<CheckCircle className="w-4 h-4 text-green-600" />}
                             onClick={() => handleActivate(user.id)}
                             title="Activate user"
-                          >
-                            Activate
-                          </Button>
+                          />
                         )}
                         
                         <Button
@@ -381,7 +405,7 @@ export default function UserList() {
                           size="sm"
                           icon={<Trash2 className="w-4 h-4 text-red-600" />}
                           onClick={() => handleDelete(user.id)}
-                          title="Delete user permanently"
+                          title="Soft delete user account"
                         />
                       </div>
                     </TableCell>
@@ -393,75 +417,20 @@ export default function UserList() {
         </CardBody>
       </Card>
 
-      {/* Edit User Modal */}
-      <Modal
+      {/* Edit User Governance Modal */}
+      <EditUserModal
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
-        title="Edit User"
-        size="md"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setShowEditModal(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleUpdate}
-              loading={submitting}
-            >
-              Update User
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="First Name"
-              value={formData.firstName}
-              onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-              required
-            />
-            <Input
-              label="Last Name"
-              value={formData.lastName}
-              onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-              required
-            />
-          </div>
+        user={selectedUser}
+        onUserUpdated={handleUserUpdated}
+      />
 
-          <Input
-            label="Email"
-            type="email"
-            value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            required
-          />
-
-          <Input
-            label="Phone"
-            type="tel"
-            value={formData.phone}
-            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            required
-          />
-
-          <Select
-            label="Role"
-            value={formData.role}
-            onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-            options={roleOptions.filter(opt => opt.value !== 'ALL')}
-            required
-          />
-
-          <Select
-            label="Position"
-            value={formData.position}
-            onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-            options={positionOptions}
-          />
-        </div>
-      </Modal>
+      {/* Provision Coordinator Modal */}
+      <CreateCoordinatorModal
+        isOpen={showCreateCoordinatorModal}
+        onClose={() => setShowCreateCoordinatorModal(false)}
+        onSuccess={handleCoordinatorCreated}
+      />
     </div>
   );
 }

@@ -17,14 +17,18 @@ public interface OrganizationUnitRepository extends JpaRepository<OrganizationUn
     
     List<OrganizationUnit> findByLevel(OrganizationLevel level);
     
-    List<OrganizationUnit> findByParentId(Long parentId);
+    List<OrganizationUnit> findByParentIdOrderByNameAsc(Long parentId);
+    
+    default List<OrganizationUnit> findByParentId(Long parentId) {
+        return findByParentIdOrderByNameAsc(parentId);
+    }
     
     List<OrganizationUnit> findByParentIsNull();
     
-    @Query("SELECT o FROM OrganizationUnit o WHERE o.deleted = false AND o.level = :level")
+    @Query("SELECT o FROM OrganizationUnit o WHERE o.deleted = false AND o.level = :level ORDER BY o.name ASC")
     List<OrganizationUnit> findActiveByLevel(@Param("level") OrganizationLevel level);
     
-    @Query("SELECT o FROM OrganizationUnit o WHERE o.deleted = false AND o.parent.id = :parentId")
+    @Query("SELECT o FROM OrganizationUnit o WHERE o.deleted = false AND o.parent.id = :parentId ORDER BY o.name ASC")
     List<OrganizationUnit> findActiveChildren(@Param("parentId") Long parentId);
     
     @Query("SELECT o FROM OrganizationUnit o WHERE o.deleted = false AND " +

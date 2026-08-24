@@ -28,9 +28,13 @@ export function AuthProvider({ children }) {
     checkAuth();
   }, []);
 
-  const login = async (email, password) => {
+  const login = async (email, password, portal) => {
     try {
-      const response = await authApi.login({ email, password });
+      const payload = { email, password };
+      if (portal) {
+        payload.portal = portal;
+      }
+      const response = await authApi.login(payload);
       
       if (response.data.success) {
         const { token, ...userData } = response.data.data;
@@ -46,7 +50,7 @@ export function AuthProvider({ children }) {
 
         setUser(userData);
         
-        return { success: true };
+        return { success: true, user: userData };
       } else {
         return { success: false, message: response.data.message };
       }

@@ -11,6 +11,8 @@ import Textarea from '../../components/ui/Textarea';
 import Alert from '../../components/ui/Alert';
 import { PageSpinner } from '../../components/ui/Spinner';
 
+import OrganizationUnitSelector from '../../components/ui/OrganizationUnitSelector';
+
 export default function ProposalForm() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -49,7 +51,7 @@ export default function ProposalForm() {
 
   // Filter org units whenever scope changes
   useEffect(() => {
-    const level = formData.scope === 'UNION' ? 'UNION' : 'FIELD';
+    const level = formData.scope === 'UNION' ? 'UNION' : formData.scope === 'DISTRICT' ? 'DISTRICT' : 'FIELD';
     setFilteredUnits(orgUnits.filter(u => u.level === level));
     setFormData(prev => ({ ...prev, targetOrganizationUnitId: '' }));
   }, [formData.scope, orgUnits]);
@@ -214,6 +216,7 @@ export default function ProposalForm() {
   };
 
   const scopeOptions = [
+    { value: 'DISTRICT', label: 'District — reviewed by District Pastor' },
     { value: 'FIELD', label: 'Field — reviewed by Field Leader' },
     { value: 'UNION', label: 'Union — reviewed by Dept Leader then Union Admin' },
   ];
@@ -309,26 +312,54 @@ export default function ProposalForm() {
               </div>
 
               {/* Scope and Target Organization Unit */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Select
-                  label="Proposal Scope"
-                  name="scope"
-                  value={formData.scope}
-                  onChange={handleChange}
-                  options={scopeOptions}
-                  error={errors.scope}
-                  required
-                />
-                <Select
-                  label={formData.scope === 'UNION' ? 'Target Union' : 'Target Field'}
-                  name="targetOrganizationUnitId"
-                  value={formData.targetOrganizationUnitId}
-                  onChange={handleChange}
-                  options={filteredUnits.map(u => ({ value: u.id, label: u.name }))}
-                  error={errors.targetOrganizationUnitId}
-                  placeholder={`Select ${formData.scope === 'UNION' ? 'union' : 'field'}`}
-                  required
-                />
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Select
+                    label="Proposal Scope"
+                    name="scope"
+                    value={formData.scope}
+                    onChange={handleChange}
+                    options={scopeOptions}
+                    error={errors.scope}
+                    required
+                  />
+                  {formData.scope !== 'DISTRICT' && (
+                    <Select
+                      label={formData.scope === 'UNION' ? 'Target Union' : 'Target Field'}
+                      name="targetOrganizationUnitId"
+                      value={formData.targetOrganizationUnitId}
+                      onChange={handleChange}
+                      options={filteredUnits.map(u => ({ value: u.id, label: u.name }))}
+                      error={errors.targetOrganizationUnitId}
+                      placeholder={`Select ${formData.scope === 'UNION' ? 'union' : 'field'}`}
+                      required
+                    />
+                  )}
+                </div>
+
+                {formData.scope === 'DISTRICT' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Target District Location Scope <span className="text-red-500">*</span>
+                    </label>
+                    <OrganizationUnitSelector
+                      showChurch={false}
+                      value={{
+                        districtId: formData.targetOrganizationUnitId,
+                        organizationUnitId: formData.targetOrganizationUnitId
+                      }}
+                      onChange={({ districtId, organizationUnitId, fieldId }) => {
+                        const targetId = districtId || organizationUnitId || fieldId || '';
+                        setFormData(prev => ({ ...prev, targetOrganizationUnitId: targetId }));
+                        if (errors.targetOrganizationUnitId) {
+                          setErrors(prev => ({ ...prev, targetOrganizationUnitId: '' }));
+                        }
+                      }}
+                      error={errors.targetOrganizationUnitId}
+                      required
+                    />
+                  </div>
+                )}
               </div>
 
               <Textarea

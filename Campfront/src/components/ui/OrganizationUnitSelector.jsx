@@ -7,22 +7,23 @@ export default function OrganizationUnitSelector({
   value = {},
   onChange,
   error,
-  required = false
+  required = false,
+  showChurch = true
 }) {
   const { t } = useTranslation();
   const [unions, setUnions] = useState([]);
   const [selectedUnionId, setSelectedUnionId] = useState('');
 
   const [fields, setFields] = useState([]);
-  const [selectedFieldId, setSelectedFieldId] = useState('');
+  const [selectedFieldId, setSelectedFieldId] = useState(value.fieldId || '');
   const [loadingFields, setLoadingFields] = useState(false);
 
   const [districts, setDistricts] = useState([]);
-  const [selectedDistrictId, setSelectedDistrictId] = useState('');
+  const [selectedDistrictId, setSelectedDistrictId] = useState(value.districtId || '');
   const [loadingDistricts, setLoadingDistricts] = useState(false);
 
   const [churches, setChurches] = useState([]);
-  const [selectedChurchId, setSelectedChurchId] = useState('');
+  const [selectedChurchId, setSelectedChurchId] = useState(value.organizationUnitId || '');
   const [loadingChurches, setLoadingChurches] = useState(false);
 
   const [customChurchName, setCustomChurchName] = useState(value.customChurchName || '');
@@ -64,6 +65,9 @@ export default function OrganizationUnitSelector({
           fetchedFields = allData.filter(u => u.level === 'FIELD');
         }
 
+        // Sort fields alphabetically
+        fetchedFields.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
         if (isMounted) {
           setFields(fetchedFields);
         }
@@ -79,6 +83,16 @@ export default function OrganizationUnitSelector({
     return () => { isMounted = false; };
   }, []);
 
+  // Sync external value changes if provided
+  useEffect(() => {
+    if (value.fieldId !== undefined && value.fieldId !== selectedFieldId) {
+      setSelectedFieldId(value.fieldId);
+    }
+    if (value.districtId !== undefined && value.districtId !== selectedDistrictId) {
+      setSelectedDistrictId(value.districtId);
+    }
+  }, [value.fieldId, value.districtId]);
+
   // Fetch Districts when Field changes
   const handleFieldChange = async (e) => {
     const fieldId = e.target.value;
@@ -88,7 +102,7 @@ export default function OrganizationUnitSelector({
     setSelectedChurchId('');
     setChurches([]);
     setCustomChurchName('');
-    notifyParent('', '', '');
+    notifyParent('', '', '', fieldId);
 
     if (!fieldId) return;
 
@@ -108,6 +122,9 @@ export default function OrganizationUnitSelector({
         }
       }
 
+      // Sort all districts alphabetically
+      fetchedDistricts.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
       setDistricts(fetchedDistricts);
     } catch (err) {
       console.error('Failed to load Districts', err);
@@ -123,7 +140,13 @@ export default function OrganizationUnitSelector({
     setSelectedChurchId('');
     setChurches([]);
     setCustomChurchName('');
-    notifyParent('', districtId, '');
+    
+    if (!showChurch) {
+      notifyParent(districtId, districtId, '', selectedFieldId);
+      return;
+    }
+
+    notifyParent('', districtId, '', selectedFieldId);
 
     if (!districtId) return;
 
@@ -139,6 +162,7 @@ export default function OrganizationUnitSelector({
         fetchedChurches = levelData.filter(c => String(c.parentId) === String(districtId));
       }
 
+      fetchedChurches.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
       setChurches(fetchedChurches);
     } catch (err) {
       console.error('Failed to load Churches', err);
@@ -153,13 +177,13 @@ export default function OrganizationUnitSelector({
     setSelectedChurchId(churchId);
 
     if (churchId === 'OTHER') {
-      notifyParent('', selectedDistrictId, customChurchName);
+      notifyParent('', selectedDistrictId, customChurchName, selectedFieldId);
     } else if (churchId) {
       setCustomChurchName('');
-      notifyParent(churchId, selectedDistrictId, '');
+      notifyParent(churchId, selectedDistrictId, '', selectedFieldId);
     } else {
       setCustomChurchName('');
-      notifyParent('', selectedDistrictId, '');
+      notifyParent('', selectedDistrictId, '', selectedFieldId);
     }
   };
 
@@ -168,16 +192,17 @@ export default function OrganizationUnitSelector({
     const name = e.target.value;
     setCustomChurchName(name);
     if (selectedChurchId === 'OTHER') {
-      notifyParent('', selectedDistrictId, name);
+      notifyParent('', selectedDistrictId, name, selectedFieldId);
     }
   };
 
   // Notify parent form of value updates
-  const notifyParent = (orgUnitId, distId, customName) => {
+  const notifyParent = (orgUnitId, distId, customName, fldId) => {
     if (onChange) {
       onChange({
-        organizationUnitId: orgUnitId,
+        organizationUnitId: orgUnitId || (!showChurch ? distId : ''),
         districtId: distId,
+        fieldId: fldId || selectedFieldId,
         customChurchName: customName
       });
     }
@@ -271,41 +296,43 @@ export default function OrganizationUnitSelector({
       </div>
 
       {/* Step 4: Select Local Church */}
-      <div>
-        <label className="block text-xs font-semibold text-gray-700 mb-1">
-          {t('orgSelector.step4Church', 'Step 4: Local Church')} {required && <span className="text-red-500">*</span>}
-        </label>
-        <div className="relative">
-          <select
-            value={selectedChurchId}
-            onChange={handleChurchChange}
-            disabled={!selectedDistrictId || loadingChurches}
-            className="w-full pl-9 pr-8 py-2 text-sm bg-white border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:text-gray-400 shadow-sm font-medium"
-          >
-            <option value="">
-              {!selectedDistrictId
-                ? t('orgSelector.step4SelectDistrictFirst', '-- Select District First --')
-                : loadingChurches
-                ? t('common.loading', 'Loading Churches...')
-                : t('orgSelector.step4Placeholder', '-- Select Local Church --')}
-            </option>
-            {churches.map((church) => (
-              <option key={church.id} value={church.id}>
-                {church.name} {church.isCustom ? ' (Community Added)' : ''}
+      {showChurch && (
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1">
+            {t('orgSelector.step4Church', 'Step 4: Local Church')} {required && <span className="text-red-500">*</span>}
+          </label>
+          <div className="relative">
+            <select
+              value={selectedChurchId}
+              onChange={handleChurchChange}
+              disabled={!selectedDistrictId || loadingChurches}
+              className="w-full pl-9 pr-8 py-2 text-sm bg-white border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:text-gray-400 shadow-sm font-medium"
+            >
+              <option value="">
+                {!selectedDistrictId
+                  ? t('orgSelector.step4SelectDistrictFirst', '-- Select District First --')
+                  : loadingChurches
+                  ? t('common.loading', 'Loading Churches...')
+                  : t('orgSelector.step4Placeholder', '-- Select Local Church --')}
               </option>
-            ))}
-            {selectedDistrictId && (
-              <option value="OTHER" className="font-semibold text-primary-700 bg-primary-50">
-                {t('orgSelector.otherChurchOption', '+ Other (Type My Church Name)')}
-              </option>
-            )}
-          </select>
-          <Home className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+              {churches.map((church) => (
+                <option key={church.id} value={church.id}>
+                  {church.name} {church.isCustom ? ' (Community Added)' : ''}
+                </option>
+              ))}
+              {selectedDistrictId && (
+                <option value="OTHER" className="font-semibold text-primary-700 bg-primary-50">
+                  {t('orgSelector.otherChurchOption', '+ Other (Type My Church Name)')}
+                </option>
+              )}
+            </select>
+            <Home className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Step 5: Conditional Text Input when "OTHER" is selected */}
-      {selectedChurchId === 'OTHER' && (
+      {showChurch && selectedChurchId === 'OTHER' && (
         <div className="pt-2 animate-fadeIn">
           <label className="block text-xs font-semibold text-primary-700 mb-1 flex items-center gap-1">
             <PlusCircle className="w-4 h-4 text-primary-600" />
@@ -338,3 +365,4 @@ export default function OrganizationUnitSelector({
     </div>
   );
 }
+

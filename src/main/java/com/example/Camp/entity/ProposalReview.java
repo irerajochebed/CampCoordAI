@@ -25,6 +25,9 @@ public class ProposalReview extends BaseEntity {
     @Column(nullable = false)
     private ProposalStatus decision;
     
+    @Column(name = "review_stage", length = 50)
+    private String reviewStage;
+    
     @Column(length = 2000)
     private String comments;
 }

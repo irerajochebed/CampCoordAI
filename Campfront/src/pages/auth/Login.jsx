@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { Mail, Lock, AlertCircle } from 'lucide-react';
+import { Mail, Lock, Shield, User as UserIcon, CheckCircle2 } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
@@ -16,6 +16,9 @@ export default function Login() {
   const { login } = useAuth();
   const { t } = useTranslation();
   
+  // Portal Toggle State: 'PARTICIPANT' vs 'COORDINATOR_ADMIN'
+  const [portal, setPortal] = useState('PARTICIPANT');
+
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -28,10 +31,15 @@ export default function Login() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    // Clear field error on change
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
+  };
+
+  const handlePortalSwitch = (newPortal) => {
+    setPortal(newPortal);
+    setAlert(null);
+    setErrors({});
   };
 
   const validate = () => {
@@ -63,10 +71,20 @@ export default function Login() {
     setAlert(null);
 
     try {
-      const result = await login(formData.email, formData.password);
+      const result = await login(formData.email, formData.password, portal);
       
       if (result.success) {
-        navigate('/app/dashboard');
+        const userRole = result.user?.role;
+        // Role-tailored navigation
+        if (userRole === 'PARTICIPANT') {
+          navigate('/app/dashboard/participant');
+        } else if (userRole === 'COORDINATOR') {
+          navigate('/app/dashboard/coordinator');
+        } else if (userRole === 'ADMINISTRATOR') {
+          navigate('/app/dashboard/admin');
+        } else {
+          navigate('/app/dashboard');
+        }
       } else {
         setAlert({
           type: 'error',
@@ -76,7 +94,7 @@ export default function Login() {
     } catch (error) {
       setAlert({
         type: 'error',
-        message: 'An unexpected error occurred. Please try again later.'
+        message: error.response?.data?.message || 'An unexpected error occurred. Please try again later.'
       });
     } finally {
       setLoading(false);
@@ -87,7 +105,7 @@ export default function Login() {
     <div 
       className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 relative"
       style={{
-        backgroundImage: `linear-gradient(to right, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.5)), url(${heroImage})`,
+        backgroundImage: `linear-gradient(to right, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.55)), url(${heroImage})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundAttachment: 'fixed'
@@ -107,27 +125,70 @@ export default function Login() {
         <LanguageSwitcher />
       </div>
 
-      <div className="max-w-md w-full space-y-8">
+      <div className="max-w-md w-full space-y-8 my-6">
         {/* Header */}
         <div className="text-center">
           <Link to="/" className="inline-flex justify-center mb-4">
-            <img src={sdaLogo} alt="SDA Logo" className="w-20 h-20 object-contain bg-white rounded-full p-2" />
+            <img src={sdaLogo} alt="SDA Logo" className="w-20 h-20 object-contain bg-white rounded-full p-2 shadow-xl ring-2 ring-white/30" />
           </Link>
-          <h2 className="text-3xl font-bold text-white">
+          <h2 className="text-3xl font-extrabold text-white tracking-tight">
             CampCoordAI
           </h2>
-          <p className="mt-2 text-sm text-gray-200">
+          <p className="mt-1 text-sm text-gray-200">
             Adventist Camp and Conference Management System
           </p>
         </div>
 
-        {/* Login Form */}
-        <div className="bg-white/95 backdrop-blur-md rounded-lg shadow-2xl p-8">
+        {/* Login Card */}
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl p-6 sm:p-8 border border-white/30">
+          
+          {/* Multi-Portal Toggle Tabs */}
           <div className="mb-6">
-            <h3 className="text-xl font-semibold text-gray-900">{t('auth.welcomeBack', 'Welcome Back')}</h3>
-            <p className="mt-1 text-sm text-gray-600">
-              {t('auth.loginSubtitle', 'Sign in to access CampCoordAI Rwanda Network')}
-            </p>
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 text-center">
+              Select Portal
+            </label>
+            <div className="grid grid-cols-2 gap-2 p-1.5 bg-gray-100/90 rounded-xl border border-gray-200">
+              <button
+                type="button"
+                onClick={() => handlePortalSwitch('PARTICIPANT')}
+                className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 ${
+                  portal === 'PARTICIPANT'
+                    ? 'bg-white text-primary-700 shadow-md ring-1 ring-black/5'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                }`}
+              >
+                <UserIcon className="w-4 h-4 text-primary-600" />
+                <span>Participant</span>
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => handlePortalSwitch('COORDINATOR_ADMIN')}
+                className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 ${
+                  portal === 'COORDINATOR_ADMIN'
+                    ? 'bg-white text-primary-700 shadow-md ring-1 ring-black/5'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                }`}
+              >
+                <Shield className="w-4 h-4 text-amber-600" />
+                <span>Staff & Admin</span>
+              </button>
+            </div>
+            
+            {/* Portal Badge / Description */}
+            <div className="mt-3 text-center">
+              {portal === 'PARTICIPANT' ? (
+                <span className="inline-flex items-center text-xs text-primary-700 bg-primary-50 px-2.5 py-1 rounded-md font-medium border border-primary-100">
+                  <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 text-primary-600" />
+                  Church Members, Attendees & Campers
+                </span>
+              ) : (
+                <span className="inline-flex items-center text-xs text-amber-800 bg-amber-50 px-2.5 py-1 rounded-md font-medium border border-amber-200">
+                  <Shield className="w-3.5 h-3.5 mr-1.5 text-amber-600" />
+                  Pastors, Field Leaders, Officers & Admins
+                </span>
+              )}
+            </div>
           </div>
 
           {alert && (
@@ -135,7 +196,7 @@ export default function Login() {
               type={alert.type}
               message={alert.message}
               onClose={() => setAlert(null)}
-              className="mb-4"
+              className="mb-4 text-xs sm:text-sm"
             />
           )}
 
@@ -148,7 +209,7 @@ export default function Login() {
               onChange={handleChange}
               error={errors.email}
               icon={<Mail className="w-5 h-5" />}
-              placeholder="admin@campcoordai.rw"
+              placeholder={portal === 'PARTICIPANT' ? 'member@church.rw' : 'leader@rum.adventist.org'}
               required
               autoComplete="email"
             />
@@ -166,7 +227,7 @@ export default function Login() {
               autoComplete="current-password"
             />
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between text-sm">
               <div className="flex items-center">
                 <input
                   id="remember-me"
@@ -174,15 +235,15 @@ export default function Login() {
                   type="checkbox"
                   className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                 />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
+                <label htmlFor="remember-me" className="ml-2 block text-xs sm:text-sm text-gray-700">
                   Remember me
                 </label>
               </div>
 
-              <div className="text-sm">
+              <div>
                 <Link
                   to="/forgot-password"
-                  className="font-medium text-primary-600 hover:text-primary-500"
+                  className="font-medium text-xs sm:text-sm text-primary-600 hover:text-primary-500"
                 >
                   Forgot password?
                 </Link>
@@ -193,50 +254,31 @@ export default function Login() {
               type="submit"
               variant="primary"
               size="lg"
-              className="w-full"
+              className="w-full shadow-lg"
               loading={loading}
               disabled={loading}
             >
-              Sign in
+              Sign In to {portal === 'PARTICIPANT' ? 'Participant Portal' : 'Staff Portal'}
             </Button>
           </form>
 
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
-              </div>
-              {/* <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">Demo Credentials</span>
-              </div> */}
+          {/* Conditional Registration Footer */}
+          {portal === 'PARTICIPANT' ? (
+            <p className="mt-6 text-center text-sm text-gray-600 border-t border-gray-100 pt-4">
+              Don't have a member account?{' '}
+              <Link to="/register" className="font-semibold text-primary-600 hover:text-primary-500">
+                Register here
+              </Link>
+            </p>
+          ) : (
+            <div className="mt-6 text-center text-xs text-gray-500 border-t border-gray-100 pt-4">
+              <p>Staff & Coordinator accounts are provisioned by Conference Administrators.</p>
             </div>
-
-            {/* <div className="mt-4 space-y-2 text-xs text-gray-600">
-              <div className="flex justify-between p-2 bg-gray-50 rounded">
-                <span>Administrator:</span>
-                <span className="font-mono">admin@campcoordai.rw / Admin@2026</span>
-              </div>
-              <div className="flex justify-between p-2 bg-gray-50 rounded">
-                <span>Coordinator:</span>
-                <span className="font-mono">youth.leader@rum.adventist.org / Youth@2026</span>
-              </div>
-              <div className="flex justify-between p-2 bg-gray-50 rounded">
-                <span>Participant:</span>
-                <span className="font-mono">participant@campcoordai.rw / Part@2026</span>
-              </div>
-            </div> */}
-          </div>
-
-          <p className="mt-6 text-center text-sm text-gray-600">
-            Don't have an account?{' '}
-            <Link to="/register" className="font-medium text-primary-600 hover:text-primary-500">
-              Register here
-            </Link>
-          </p>
+          )}
         </div>
 
         {/* Footer */}
-        <p className="text-center text-xs text-gray-200">
+        <p className="text-center text-xs text-gray-300">
           &copy; 2026 Rwanda Union Mission. All rights reserved.
         </p>
       </div>

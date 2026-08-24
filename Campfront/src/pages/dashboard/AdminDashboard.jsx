@@ -11,7 +11,8 @@ import {
   Eye,
   CheckCircle,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  Filter
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
@@ -20,6 +21,7 @@ import { PageSpinner } from '../../components/ui/Spinner';
 import Alert from '../../components/ui/Alert';
 import Modal from '../../components/ui/Modal';
 import Textarea from '../../components/ui/Textarea';
+import OrganizationUnitSelector from '../../components/ui/OrganizationUnitSelector';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { useDashboard, useProposals } from '../../hooks';
 import { eventApi } from '../../api';
@@ -28,6 +30,7 @@ import { useTranslation } from '../../contexts/LanguageContext';
 
 export default function AdminDashboard() {
   const { t } = useTranslation();
+  const [filterUnit, setFilterUnit] = useState({ fieldId: '', districtId: '' });
   const { stats, loading: statsLoading, error: statsError, refreshStats } = useDashboard();
   const {
     pendingProposals,
@@ -185,6 +188,32 @@ export default function AdminDashboard() {
           onClose={() => setSuccessMessage(null)}
         />
       )}
+
+      {/* Report & Scope District Filter Bar */}
+      <Card className="bg-white border-primary-100 shadow-sm">
+        <CardBody className="p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2">
+              <Filter className="w-5 h-5 text-primary-600" />
+              <h2 className="text-sm font-semibold text-gray-800">
+                {t('dashboard.reportFilterTitle', 'Evangelical District & Field Report Filter')}
+              </h2>
+            </div>
+            {filterUnit.districtId && (
+              <span className="text-xs px-2.5 py-1 bg-primary-100 text-primary-800 rounded-full font-medium">
+                District Filter Active
+              </span>
+            )}
+          </div>
+          <OrganizationUnitSelector
+            showChurch={false}
+            value={filterUnit}
+            onChange={({ fieldId, districtId, organizationUnitId }) => {
+              setFilterUnit({ fieldId, districtId: districtId || organizationUnitId });
+            }}
+          />
+        </CardBody>
+      </Card>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

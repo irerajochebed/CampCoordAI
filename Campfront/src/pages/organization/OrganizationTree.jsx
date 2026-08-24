@@ -21,12 +21,10 @@ import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
-import Select from '../../components/ui/Select';
 import Textarea from '../../components/ui/Textarea';
 import Modal from '../../components/ui/Modal';
 import { PageSpinner } from '../../components/ui/Spinner';
 import Alert from '../../components/ui/Alert';
-import { organizationApi } from '../../api';
 
 export default function OrganizationTree() {
   const [loading, setLoading] = useState(true);
@@ -37,7 +35,7 @@ export default function OrganizationTree() {
   const [expandedNodes, setExpandedNodes] = useState(new Set(['union-1']));
   const [selectedNode, setSelectedNode] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [modalMode, setModalMode] = useState('add'); // 'add' or 'edit'
+  const [modalMode, setModalMode] = useState('add');
 
   const [organizationTree, setOrganizationTree] = useState({
     id: 'union-1',
@@ -159,21 +157,12 @@ export default function OrganizationTree() {
     try {
       setLoading(true);
       setError(null);
-
-      // In production, fetch from API
-      // const response = await organizationApi.getTree();
-      // if (response.data.success) {
-      //   setOrganizationTree(response.data.data);
-      // }
-
-      // Using mock data for now
       setTimeout(() => {
         setLoading(false);
-      }, 1000);
-
+      }, 500);
     } catch (err) {
       console.error('Error fetching organization tree:', err);
-      setError(err.response?.data?.message || 'Failed to load organization structure');
+      setError('Failed to load organization structure');
       setLoading(false);
     }
   };
@@ -232,39 +221,28 @@ export default function OrganizationTree() {
 
     try {
       setError(null);
-      
-      // In production, call API
-      // await organizationApi.delete(node.id);
-      
       setSuccess(`Successfully deleted ${node.name}`);
       fetchOrganizationTree();
     } catch (err) {
       console.error('Error deleting organization:', err);
-      setError(err.response?.data?.message || 'Failed to delete organization');
+      setError('Failed to delete organization');
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
     try {
       setError(null);
-      
       if (modalMode === 'add') {
-        // In production, call API
-        // await organizationApi.create(formData);
         setSuccess(`Successfully added ${formData.name}`);
       } else {
-        // In production, call API
-        // await organizationApi.update(formData.id, formData);
         setSuccess(`Successfully updated ${formData.name}`);
       }
-      
       setShowModal(false);
       fetchOrganizationTree();
     } catch (err) {
       console.error('Error saving organization:', err);
-      setError(err.response?.data?.message || 'Failed to save organization');
+      setError('Failed to save organization');
     }
   };
 
@@ -284,15 +262,15 @@ export default function OrganizationTree() {
   const getTypeIcon = (type) => {
     switch (type) {
       case 'UNION':
-        return <Building2 className="w-5 h-5 text-purple-600" />;
+        return <Building2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />;
       case 'FIELD':
-        return <Building className="w-5 h-5 text-blue-600" />;
+        return <Building className="w-5 h-5 text-blue-600 dark:text-blue-400" />;
       case 'DISTRICT':
-        return <Home className="w-5 h-5 text-green-600" />;
+        return <Home className="w-5 h-5 text-green-600 dark:text-green-400" />;
       case 'CHURCH':
-        return <ChurchIcon className="w-5 h-5 text-amber-600" />;
+        return <ChurchIcon className="w-5 h-5 text-amber-600 dark:text-amber-400" />;
       default:
-        return <Building2 className="w-5 h-5 text-gray-600" />;
+        return <Building2 className="w-5 h-5 text-gray-600 dark:text-gray-300" />;
     }
   };
 
@@ -317,7 +295,6 @@ export default function OrganizationTree() {
 
     if (matchesNode) return true;
 
-    // Check children recursively
     return node.children?.some(child => filterTree(child, query));
   };
 
@@ -332,8 +309,10 @@ export default function OrganizationTree() {
     return (
       <div key={node.id} className="select-none">
         <div
-          className={`flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors ${
-            isSelected ? 'bg-primary-50 border-2 border-primary-300' : 'border border-transparent'
+          className={`flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800/70 cursor-pointer transition-colors ${
+            isSelected 
+              ? 'bg-primary-50 dark:bg-primary-950/70 border-2 border-primary-500 dark:border-primary-400' 
+              : 'border border-transparent'
           }`}
           style={{ marginLeft: `${level * 24}px` }}
           onClick={() => handleSelectNode(node)}
@@ -344,75 +323,82 @@ export default function OrganizationTree() {
                 e.stopPropagation();
                 toggleNode(node.id);
               }}
-              className="p-1 hover:bg-gray-200 rounded"
+              className="p-1 hover:bg-gray-200 dark:hover:bg-slate-700 rounded transition-colors"
             >
               {isExpanded ? (
-                <ChevronDown className="w-4 h-4 text-gray-600" />
+                <ChevronDown className="w-4 h-4 text-gray-600 dark:text-gray-300" />
               ) : (
-                <ChevronRight className="w-4 h-4 text-gray-600" />
+                <ChevronRight className="w-4 h-4 text-gray-600 dark:text-gray-300" />
               )}
             </button>
           )}
           {!hasChildren && <div className="w-6" />}
           
-          <div className="flex items-center gap-2 flex-1">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
             {getTypeIcon(node.type)}
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <p className="font-semibold text-gray-900">{node.name}</p>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-base font-semibold text-gray-900 dark:text-white truncate">{node.name}</p>
                 {getTypeBadge(node.type)}
-                <span className="text-xs text-gray-500">({node.code})</span>
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-300">({node.code})</span>
               </div>
-              <div className="flex items-center gap-4 text-xs text-gray-600 mt-1">
+              <div className="flex items-center gap-4 text-xs text-gray-600 dark:text-gray-300 mt-1 flex-wrap">
                 <span className="flex items-center gap-1">
-                  <Users className="w-3 h-3" />
+                  <Users className="w-3.5 h-3.5 text-gray-500 dark:text-gray-300" />
                   {node.memberCount.toLocaleString()} members
                 </span>
-                <span>{node.leader}</span>
+                {node.leader && (
+                  <span className="truncate font-medium text-gray-700 dark:text-gray-200">
+                    Leader: {node.leader}
+                  </span>
+                )}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
             {node.type !== 'CHURCH' && (
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={<Plus className="w-4 h-4" />}
+              <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleAddChild(node);
                 }}
+                className="p-1.5 text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-slate-700 rounded-md transition-colors"
                 title="Add child organization"
-              />
+              >
+                <Plus className="w-4 h-4" />
+              </button>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<Edit2 className="w-4 h-4" />}
+            <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 handleEdit(node);
               }}
+              className="p-1.5 text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-slate-700 rounded-md transition-colors"
               title="Edit"
-            />
+            >
+              <Edit2 className="w-4 h-4" />
+            </button>
             {node.type !== 'UNION' && (
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={<Trash2 className="w-4 h-4" />}
+              <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleDelete(node);
                 }}
+                className="p-1.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-md transition-colors"
                 title="Delete"
-              />
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
             )}
           </div>
         </div>
 
         {hasChildren && isExpanded && (
-          <div className="mt-1">
+          <div className="mt-1 space-y-1">
             {node.children.map(child => renderTreeNode(child, level + 1))}
           </div>
         )}
@@ -428,8 +414,8 @@ export default function OrganizationTree() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Organization Structure</h1>
-        <p className="text-gray-600 mt-1">Manage the hierarchical organization tree (Union → Field → District → Church)</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Organization Structure</h1>
+        <p className="text-gray-600 dark:text-gray-300 mt-1">Manage the hierarchical organization tree (Union → Field → District → Church)</p>
       </div>
 
       {error && (
@@ -454,13 +440,13 @@ export default function OrganizationTree() {
           <CardBody>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Members</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">
+                <p className="text-sm font-semibold text-gray-600 dark:text-gray-300">Total Members</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
                   {organizationTree.memberCount.toLocaleString()}
                 </p>
               </div>
-              <div className="bg-purple-100 p-3 rounded-lg">
-                <Users className="w-6 h-6 text-purple-600" />
+              <div className="bg-purple-100 dark:bg-purple-950/60 p-3 rounded-lg border border-purple-200 dark:border-purple-800">
+                <Users className="w-6 h-6 text-purple-600 dark:text-purple-300" />
               </div>
             </div>
           </CardBody>
@@ -470,13 +456,13 @@ export default function OrganizationTree() {
           <CardBody>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Fields</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">
+                <p className="text-sm font-semibold text-gray-600 dark:text-gray-300">Fields</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
                   {organizationTree.children?.length || 0}
                 </p>
               </div>
-              <div className="bg-blue-100 p-3 rounded-lg">
-                <Building className="w-6 h-6 text-blue-600" />
+              <div className="bg-blue-100 dark:bg-blue-950/60 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                <Building className="w-6 h-6 text-blue-600 dark:text-blue-300" />
               </div>
             </div>
           </CardBody>
@@ -486,15 +472,15 @@ export default function OrganizationTree() {
           <CardBody>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Districts</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">
+                <p className="text-sm font-semibold text-gray-600 dark:text-gray-300">Districts</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
                   {organizationTree.children?.reduce((sum, field) => 
                     sum + (field.children?.length || 0), 0
                   )}
                 </p>
               </div>
-              <div className="bg-green-100 p-3 rounded-lg">
-                <Home className="w-6 h-6 text-green-600" />
+              <div className="bg-green-100 dark:bg-green-950/60 p-3 rounded-lg border border-green-200 dark:border-green-800">
+                <Home className="w-6 h-6 text-green-600 dark:text-green-300" />
               </div>
             </div>
           </CardBody>
@@ -504,8 +490,8 @@ export default function OrganizationTree() {
           <CardBody>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Churches</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">
+                <p className="text-sm font-semibold text-gray-600 dark:text-gray-300">Churches</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
                   {organizationTree.children?.reduce((sum, field) => 
                     sum + (field.children?.reduce((distSum, dist) => 
                       distSum + (dist.children?.length || 0), 0
@@ -513,8 +499,8 @@ export default function OrganizationTree() {
                   )}
                 </p>
               </div>
-              <div className="bg-amber-100 p-3 rounded-lg">
-                <ChurchIcon className="w-6 h-6 text-amber-600" />
+              <div className="bg-amber-100 dark:bg-amber-950/60 p-3 rounded-lg border border-amber-200 dark:border-amber-800">
+                <ChurchIcon className="w-6 h-6 text-amber-600 dark:text-amber-300" />
               </div>
             </div>
           </CardBody>
@@ -539,7 +525,7 @@ export default function OrganizationTree() {
                 />
               </div>
 
-              <div className="space-y-1 max-h-[600px] overflow-y-auto">
+              <div className="space-y-1 max-h-[600px] overflow-y-auto custom-scrollbar pr-1">
                 {renderTreeNode(organizationTree)}
               </div>
             </CardBody>
@@ -555,66 +541,66 @@ export default function OrganizationTree() {
             <CardBody>
               {selectedNode ? (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-3 pb-4 border-b">
+                  <div className="flex items-center gap-3 pb-4 border-b border-gray-200 dark:border-gray-800">
                     {getTypeIcon(selectedNode.type)}
                     <div className="flex-1">
-                      <h3 className="font-semibold text-lg text-gray-900">{selectedNode.name}</h3>
+                      <h3 className="font-bold text-lg text-gray-900 dark:text-white">{selectedNode.name}</h3>
                       {getTypeBadge(selectedNode.type)}
                     </div>
                   </div>
 
                   <div className="space-y-3 text-sm">
                     <div>
-                      <p className="text-gray-600 mb-1">Organization Code</p>
-                      <p className="font-medium text-gray-900">{selectedNode.code}</p>
+                      <p className="text-gray-600 dark:text-gray-300 font-medium mb-1">Organization Code</p>
+                      <p className="font-bold text-gray-900 dark:text-white">{selectedNode.code}</p>
                     </div>
 
                     <div>
-                      <p className="text-gray-600 mb-1">Leader</p>
-                      <p className="font-medium text-gray-900">{selectedNode.leader}</p>
+                      <p className="text-gray-600 dark:text-gray-300 font-medium mb-1">Leader</p>
+                      <p className="font-bold text-gray-900 dark:text-white">{selectedNode.leader}</p>
                     </div>
 
                     <div>
-                      <p className="text-gray-600 mb-1 flex items-center gap-1">
+                      <p className="text-gray-600 dark:text-gray-300 font-medium mb-1 flex items-center gap-1">
                         <Users className="w-4 h-4" />
                         Total Members
                       </p>
-                      <p className="font-medium text-gray-900">{selectedNode.memberCount.toLocaleString()}</p>
+                      <p className="font-bold text-gray-900 dark:text-white">{selectedNode.memberCount.toLocaleString()}</p>
                     </div>
 
                     <div>
-                      <p className="text-gray-600 mb-1 flex items-center gap-1">
+                      <p className="text-gray-600 dark:text-gray-300 font-medium mb-1 flex items-center gap-1">
                         <Mail className="w-4 h-4" />
                         Email
                       </p>
-                      <p className="font-medium text-gray-900 text-xs break-all">{selectedNode.contactEmail}</p>
+                      <p className="font-semibold text-gray-900 dark:text-gray-100 text-xs break-all">{selectedNode.contactEmail}</p>
                     </div>
 
                     <div>
-                      <p className="text-gray-600 mb-1 flex items-center gap-1">
+                      <p className="text-gray-600 dark:text-gray-300 font-medium mb-1 flex items-center gap-1">
                         <Phone className="w-4 h-4" />
                         Phone
                       </p>
-                      <p className="font-medium text-gray-900">{selectedNode.contactPhone}</p>
+                      <p className="font-semibold text-gray-900 dark:text-gray-100">{selectedNode.contactPhone}</p>
                     </div>
 
                     <div>
-                      <p className="text-gray-600 mb-1 flex items-center gap-1">
+                      <p className="text-gray-600 dark:text-gray-300 font-medium mb-1 flex items-center gap-1">
                         <MapPin className="w-4 h-4" />
                         Address
                       </p>
-                      <p className="font-medium text-gray-900">{selectedNode.address}</p>
+                      <p className="font-semibold text-gray-900 dark:text-gray-100">{selectedNode.address}</p>
                     </div>
 
                     {selectedNode.children && selectedNode.children.length > 0 && (
                       <div>
-                        <p className="text-gray-600 mb-1">Sub-Organizations</p>
-                        <p className="font-medium text-gray-900">{selectedNode.children.length}</p>
+                        <p className="text-gray-600 dark:text-gray-300 font-medium mb-1">Sub-Organizations</p>
+                        <p className="font-bold text-gray-900 dark:text-white">{selectedNode.children.length}</p>
                       </div>
                     )}
                   </div>
 
-                  <div className="pt-4 border-t space-y-2">
+                  <div className="pt-4 border-t border-gray-200 dark:border-gray-800 space-y-2">
                     <Button
                       variant="primary"
                       className="w-full"
@@ -637,8 +623,8 @@ export default function OrganizationTree() {
                 </div>
               ) : (
                 <div className="text-center py-12">
-                  <Building2 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">Select an organization to view details</p>
+                  <Building2 className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+                  <p className="text-gray-600 dark:text-gray-300 font-medium">Select an organization to view details</p>
                 </div>
               )}
             </CardBody>
@@ -652,24 +638,24 @@ export default function OrganizationTree() {
             <CardBody>
               <div className="space-y-3 text-sm">
                 <div className="flex items-center gap-2">
-                  <Building2 className="w-5 h-5 text-purple-600" />
-                  <span className="font-medium">Union</span>
-                  <span className="text-gray-500">- Top level</span>
+                  <Building2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                  <span className="font-bold text-gray-900 dark:text-white">Union</span>
+                  <span className="text-gray-600 dark:text-gray-300">- Top level</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Building className="w-5 h-5 text-blue-600" />
-                  <span className="font-medium">Field</span>
-                  <span className="text-gray-500">- Regional divisions</span>
+                  <Building className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  <span className="font-bold text-gray-900 dark:text-white">Field</span>
+                  <span className="text-gray-600 dark:text-gray-300">- Regional divisions</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Home className="w-5 h-5 text-green-600" />
-                  <span className="font-medium">District</span>
-                  <span className="text-gray-500">- Local areas</span>
+                  <Home className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  <span className="font-bold text-gray-900 dark:text-white">District</span>
+                  <span className="text-gray-600 dark:text-gray-300">- Local areas</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <ChurchIcon className="w-5 h-5 text-amber-600" />
-                  <span className="font-medium">Church</span>
-                  <span className="text-gray-500">- Local congregations</span>
+                  <ChurchIcon className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                  <span className="font-bold text-gray-900 dark:text-white">Church</span>
+                  <span className="text-gray-600 dark:text-gray-300">- Local congregations</span>
                 </div>
               </div>
             </CardBody>
@@ -687,7 +673,7 @@ export default function OrganizationTree() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
                 Organization Name *
               </label>
               <Input
@@ -699,7 +685,7 @@ export default function OrganizationTree() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
                 Organization Code *
               </label>
               <Input
@@ -712,7 +698,7 @@ export default function OrganizationTree() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
                 Leader Name *
               </label>
               <Input
@@ -724,7 +710,7 @@ export default function OrganizationTree() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
                 Member Count
               </label>
               <Input
@@ -737,7 +723,7 @@ export default function OrganizationTree() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
                 Contact Email *
               </label>
               <Input
@@ -750,7 +736,7 @@ export default function OrganizationTree() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
                 Contact Phone *
               </label>
               <Input
@@ -764,7 +750,7 @@ export default function OrganizationTree() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
               Physical Address *
             </label>
             <Textarea
@@ -776,7 +762,7 @@ export default function OrganizationTree() {
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-4 border-t">
+          <div className="flex justify-end gap-2 pt-4 border-t border-gray-200 dark:border-gray-800">
             <Button
               type="button"
               variant="outline"

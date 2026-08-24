@@ -1,52 +1,46 @@
-package com.example.Camp.dto.auth;
+package com.example.Camp.dto.user;
 
 import com.example.Camp.enums.Gender;
 import com.example.Camp.enums.Position;
-import com.example.Camp.enums.Role;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.time.LocalDate;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class RegisterRequest {
-    
+@Builder
+public class ProvisionCoordinatorRequest {
+
     @NotBlank(message = "First name is required")
     private String firstName;
-    
+
     @NotBlank(message = "Last name is required")
     private String lastName;
-    
+
     @NotBlank(message = "Email is required")
     @Email(message = "Email must be valid")
     private String email;
-    
+
     private String phoneNumber;
-    
-    @NotBlank(message = "Password is required")
-    private String password;
-    
-    // Self-registration is strictly for church members (PARTICIPANT).
-    // Role is defaulted to PARTICIPANT and enforced server-side.
-    private Role role = Role.PARTICIPANT;
-    
+
+    @NotNull(message = "Position is required")
     private Position position;
-    
-    private Gender gender;
-    
-    private LocalDate dateOfBirth;
-    
+
+    @NotNull(message = "Organization unit ID is required")
     private Long organizationUnitId;
-    
-    private Long districtId;
-    
-    private String customChurchName;
-    
-    private String preferredLanguage;
+
+    /**
+     * Optional initial password. If null or blank, the system assigns default credentials (Coord@2026).
+     */
+    private String password;
+
+    private Gender gender;
+
+    @Builder.Default
+    private String preferredLanguage = "en";
 }

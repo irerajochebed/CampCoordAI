@@ -17,4 +17,9 @@ public class LoginRequest {
     
     @NotBlank(message = "Password is required")
     private String password;
+    
+    /**
+     * Requested portal type: 'PARTICIPANT' or 'COORDINATOR_ADMIN'
+     */
+    private String portal;
 }
