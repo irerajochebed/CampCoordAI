@@ -83,12 +83,19 @@ public class ProposalController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-    @GetMapping({"/pending-review", "/pending"})
+    @GetMapping({"/pending-review", "/pending", "/pending-leader-review"})
     @PreAuthorize("hasRole('ADMINISTRATOR') or hasRole('COORDINATOR')")
     public ResponseEntity<ApiResponse<List<ProposalResponse>>> getPendingReviewProposals(
             Authentication authentication) {
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-        List<ProposalResponse> response = proposalService.getPendingReviewProposalsForUser(userDetails.getId());
+        List<ProposalResponse> response = proposalService.getPendingLeaderReviewProposalsForUser(userDetails.getId());
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/pending-admin-approval")
+    @PreAuthorize("hasRole('ADMINISTRATOR')")
+    public ResponseEntity<ApiResponse<List<ProposalResponse>>> getPendingAdminApprovalProposals() {
+        List<ProposalResponse> response = proposalService.getPendingAdminApprovalProposals();
         return ResponseEntity.ok(ApiResponse.success(response));
     }
     
@@ -154,11 +161,10 @@ public class ProposalController {
     @PreAuthorize("hasRole('ADMINISTRATOR')")
     public ResponseEntity<ApiResponse<ProposalResponse>> adminApproval(
             @PathVariable Long id,
-            @RequestBody(required = false) ProposalReviewRequest request,
+            @RequestBody(required = false) com.example.Camp.dto.proposal.AdminApprovalRequest request,
             Authentication authentication) {
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-        String comments = (request != null && request.getComments() != null) ? request.getComments() : "Approved by Union Administrator";
-        ProposalResponse response = proposalService.adminApproval(id, comments, userDetails.getId());
+        ProposalResponse response = proposalService.adminApproval(id, request, userDetails.getId());
         return ResponseEntity.ok(ApiResponse.success("Proposal approved and official event record created successfully", response));
     }
 

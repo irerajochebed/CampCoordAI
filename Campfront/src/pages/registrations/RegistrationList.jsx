@@ -196,10 +196,6 @@ export default function RegistrationList() {
     ...events.map(event => ({ value: event.id.toString(), label: event.name }))
   ];
 
-  if (loading) {
-    return <PageSpinner message="Loading registrations..." />;
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -277,7 +273,18 @@ export default function RegistrationList() {
       </Card>
 
       {/* Registrations Table */}
-      {filteredRegistrations.length === 0 ? (
+      {loading ? (
+        <Card>
+          <CardBody>
+            <div className="text-center py-8 text-gray-500">
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-5 h-5 border-2 border-primary-600 border-t-transparent rounded-full animate-spin"></div>
+                <span>Fetching registrations...</span>
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+      ) : filteredRegistrations.length === 0 ? (
         <Card>
           <CardBody>
             <EmptyState

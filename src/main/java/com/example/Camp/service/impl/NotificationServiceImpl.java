@@ -5,13 +5,14 @@ import com.example.Camp.dto.notification.NotificationResponse;
 import com.example.Camp.entity.Event;
 import com.example.Camp.entity.Notification;
 import com.example.Camp.entity.User;
+import com.example.Camp.repository.EventRepository;
 import com.example.Camp.repository.NotificationRepository;
 import com.example.Camp.service.EventService;
 import com.example.Camp.service.NotificationService;
 import com.example.Camp.service.UserService;
 import com.example.Camp.util.DtoMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,20 +21,35 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 @Transactional
 public class NotificationServiceImpl implements NotificationService {
     
     private final NotificationRepository notificationRepository;
     private final UserService userService;
+    private final EventRepository eventRepository;
     private final EventService eventService;
     private final DtoMapper dtoMapper;
+
+    public NotificationServiceImpl(
+            NotificationRepository notificationRepository,
+            UserService userService,
+            EventRepository eventRepository,
+            @Lazy EventService eventService,
+            DtoMapper dtoMapper) {
+        this.notificationRepository = notificationRepository;
+        this.userService = userService;
+        this.eventRepository = eventRepository;
+        this.eventService = eventService;
+        this.dtoMapper = dtoMapper;
+    }
     
     @Override
     public NotificationResponse createNotification(NotificationRequest request) {
         User recipient = userService.getUserById(request.getRecipientId());
-        Event event = request.getEventId() != null ? eventService.getEventEntity(request.getEventId()) : null;
+        Event event = request.getEventId() != null 
+                ? eventRepository.findById(request.getEventId()).orElse(null) 
+                : null;
         
         Notification notification = Notification.builder()
                 .recipient(recipient)

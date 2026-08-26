@@ -151,30 +151,38 @@ public class DataSeeder implements CommandLineRunner {
     }
     
     private void seedDepartments() {
-        log.info("Seeding departments");
+        log.info("Seeding 14 Official Rwanda Union Mission (RUM) Ministries");
         
-        createDepartment(DepartmentType.YOUTH_MINISTRIES, "Youth Ministries", 
-                "Ministry focused on young people's spiritual growth and development");
-        createDepartment(DepartmentType.MIFEM, "MIFEM (Mission Féministe)", 
-                "Women's ministries department");
-        createDepartment(DepartmentType.CHILDRENS_MINISTRIES, "Children's Ministries", 
-                "Ministry dedicated to children's spiritual education");
-        createDepartment(DepartmentType.FAMILY_MINISTRIES, "Family Ministries", 
-                "Supporting and strengthening family units");
-        createDepartment(DepartmentType.HEALTH_MINISTRIES, "Health Ministries", 
-                "Promoting physical and spiritual health");
-        createDepartment(DepartmentType.MINISTERIAL_ASSOCIATION, "Ministerial Association", 
-                "Supporting pastors and church workers");
-        createDepartment(DepartmentType.PUBLISHING_MINISTRIES, "Publishing Ministries", 
-                "Literature evangelism and publications");
-        createDepartment(DepartmentType.SABBATH_SCHOOL, "Sabbath School", 
-                "Bible study and discipleship programs");
-        createDepartment(DepartmentType.PERSONAL_MINISTRIES, "Personal Ministries", 
-                "Evangelism and outreach activities");
-        createDepartment(DepartmentType.EDUCATION, "Education", 
-                "Adventist education and schools");
+        createDepartment(DepartmentType.YOUTH, "Youth Ministries", 
+                "Ministry focused on young people spiritual growth, Pathfinder clubs, and youth camps");
+        createDepartment(DepartmentType.WOMEN, "Women Ministries (MIFEM)", 
+                "Ministères Féminins — Empowering Adventist women in leadership and service");
+        createDepartment(DepartmentType.CHILDREN, "Children Ministries", 
+                "Ministry dedicated to children spiritual education, Bible clubs, and activities");
+        createDepartment(DepartmentType.FAMILY, "Family Ministries", 
+                "Supporting and strengthening Christian family units, marriage, and home life");
+        createDepartment(DepartmentType.MINISTERIAL, "Ministerial Association", 
+                "Supporting pastors, elders, evangelists, and gospel workers across fields");
+        createDepartment(DepartmentType.PERSONAL_MINISTRIES, "Personal Ministries & Sabbath School", 
+                "Evangelism, outreach, Bible study, and discipleship programs");
+        createDepartment(DepartmentType.CHAPLAINCY, "Adventist Chaplaincy Ministries (ACM)", 
+                "Chaplaincy services in schools, universities, hospitals, prisons, and military");
+        createDepartment(DepartmentType.POSSIBILITY, "Adventist Possibility Ministries (APM)", 
+                "Inclusion and support for individuals with special needs and disabilities");
+        createDepartment(DepartmentType.HEALTH, "Health Ministries", 
+                "Promoting physical, mental, and spiritual health principles and wellness");
+        createDepartment(DepartmentType.PUBLISHING, "Publishing Ministries", 
+                "Literature evangelism, publications, and Christian book ministry");
+        createDepartment(DepartmentType.STEWARDSHIP, "Stewardship Ministries", 
+                "Biblical stewardship, tithing, and financial management");
+        createDepartment(DepartmentType.PARL, "Public Affairs & Religious Liberty (PARL)", 
+                "Promoting religious freedom, freedom of conscience, and public relations");
+        createDepartment(DepartmentType.EDUCATION, "Education Department", 
+                "Overseeing Adventist schools, universities, and educational institutions");
+        createDepartment(DepartmentType.COMMUNICATION, "Communication Department", 
+                "Media relations, digital evangelism, technology, and broadcasting");
         
-        log.info("Departments seeded successfully");
+        log.info("All 14 Official RUM Ministries seeded successfully");
     }
     
     private void createDepartment(DepartmentType type, String name, String description) {
@@ -184,7 +192,7 @@ public class DataSeeder implements CommandLineRunner {
                 .description(description)
                 .build();
         departmentRepository.save(department);
-        log.info("Created Department: {}", name);
+        log.info("Created Ministry/Department: {}", name);
     }
     
     private void seedInitialUsers() {
@@ -211,7 +219,7 @@ public class DataSeeder implements CommandLineRunner {
         log.info("Created Administrator: {}", admin.getEmail());
         
         // Create Department Leaders
-        Department youthDept = departmentRepository.findByType(DepartmentType.YOUTH_MINISTRIES)
+        Department youthDept = departmentRepository.findByType(DepartmentType.YOUTH)
                 .orElseThrow(() -> new RuntimeException("Youth department not found"));
         
         User youthLeader = User.builder()

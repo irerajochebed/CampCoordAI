@@ -161,10 +161,6 @@ export default function PaymentList() {
     pendingCount: filteredPayments.filter(p => p.status === 'PENDING').length,
   };
 
-  if (loading) {
-    return <PageSpinner message="Loading payments..." />;
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -297,7 +293,18 @@ export default function PaymentList() {
       </Card>
 
       {/* Payments Table */}
-      {filteredPayments.length === 0 ? (
+      {loading ? (
+        <Card>
+          <CardBody>
+            <div className="text-center py-8 text-gray-500">
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-5 h-5 border-2 border-primary-600 border-t-transparent rounded-full animate-spin"></div>
+                <span>Fetching payments...</span>
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+      ) : filteredPayments.length === 0 ? (
         <Card>
           <CardBody>
             <EmptyState

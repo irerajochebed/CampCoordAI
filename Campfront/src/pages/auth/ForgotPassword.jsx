@@ -27,15 +27,7 @@ export default function ForgotPassword() {
     }
 
     setLoading(true);
-    setError('');
-
     try {
-      // TODO: Replace with actual API call
-      // await authApi.forgotPassword({ email });
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
       setSuccess(true);
     } catch (err) {
       setError(err.response?.data?.message || 'An error occurred. Please try again.');

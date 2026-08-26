@@ -187,10 +187,6 @@ export default function CoordinatorDashboard() {
     ? 'Union Proposals Pending Your Endorsement'
     : 'Pending Reviews';
 
-  if (loading && myEvents.length === 0) {
-    return <PageSpinner message="Loading dashboard..." />;
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}

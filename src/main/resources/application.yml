@@ -1,6 +1,8 @@
 spring:
   application:
     name: CampCoordAI
+  main:
+    allow-circular-references: true
 
   # Database Configuration
   datasource:

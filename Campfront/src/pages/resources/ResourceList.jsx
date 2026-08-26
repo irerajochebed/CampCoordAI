@@ -187,10 +187,6 @@ export default function ResourceList() {
     return <Package className="w-5 h-5" />;
   };
 
-  if (loading) {
-    return <PageSpinner message="Loading resources..." />;
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -341,7 +337,14 @@ export default function ResourceList() {
           <CardTitle>Resources ({filteredResources.length})</CardTitle>
         </CardHeader>
         <CardBody>
-          {filteredResources.length > 0 ? (
+          {loading ? (
+            <div className="text-center py-8 text-gray-500">
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-5 h-5 border-2 border-primary-600 border-t-transparent rounded-full animate-spin"></div>
+                <span>Fetching resources...</span>
+              </div>
+            </div>
+          ) : filteredResources.length > 0 ? (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>

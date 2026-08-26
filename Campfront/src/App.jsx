@@ -71,11 +71,7 @@ function ProtectedRoute({ children, allowedRoles, requirePosition }) {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return null;
   }
 
   if (!user) {
@@ -99,11 +95,7 @@ function PublicRoute({ children }) {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return null;
   }
 
   if (user) {
@@ -138,13 +130,13 @@ function AppRoutes() {
         {/* Proposal Routes */}
         <Route path="proposals" element={<ProposalList />} />
         <Route path="proposals/new" element={
-          <ProtectedRoute allowedRoles={['COORDINATOR']} requirePosition="DEPARTMENT_LEADER">
+          <ProtectedRoute allowedRoles={['COORDINATOR', 'ADMINISTRATOR']}>
             <ProposalForm />
           </ProtectedRoute>
         } />
         <Route path="proposals/:id" element={<ProposalDetail />} />
         <Route path="proposals/:id/edit" element={
-          <ProtectedRoute allowedRoles={['COORDINATOR']} requirePosition="DEPARTMENT_LEADER">
+          <ProtectedRoute allowedRoles={['COORDINATOR', 'ADMINISTRATOR']}>
             <ProposalForm />
           </ProtectedRoute>
         } />

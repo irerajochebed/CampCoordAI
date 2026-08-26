@@ -1,18 +1,23 @@
 package com.example.Camp.service.impl;
 
+import com.example.Camp.dto.proposal.ProposalCreateRequest;
 import com.example.Camp.dto.proposal.ProposalRequest;
 import com.example.Camp.dto.proposal.ProposalResponse;
 import com.example.Camp.dto.proposal.ProposalReviewRequest;
+import com.example.Camp.dto.proposal.AdminApprovalRequest;
+import com.example.Camp.dto.notification.NotificationRequest;
 import com.example.Camp.entity.*;
 import com.example.Camp.enums.*;
 import com.example.Camp.exception.BadRequestException;
 import com.example.Camp.exception.ResourceNotFoundException;
 import com.example.Camp.repository.*;
+import com.example.Camp.service.NotificationService;
 import com.example.Camp.service.ProposalService;
 import com.example.Camp.service.UserService;
 import com.example.Camp.util.DtoMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,7 +28,6 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 @Transactional
 public class ProposalServiceImpl implements ProposalService {
@@ -34,12 +38,33 @@ public class ProposalServiceImpl implements ProposalService {
     private final EventRepository eventRepository;
     private final OrganizationUnitRepository organizationUnitRepository;
     private final UserService userService;
+    private final NotificationService notificationService;
     private final DtoMapper dtoMapper;
+
+    public ProposalServiceImpl(
+            ProposalRepository proposalRepository,
+            ProposalReviewRepository proposalReviewRepository,
+            DepartmentRepository departmentRepository,
+            EventRepository eventRepository,
+            OrganizationUnitRepository organizationUnitRepository,
+            UserService userService,
+            @Lazy NotificationService notificationService,
+            DtoMapper dtoMapper) {
+        this.proposalRepository = proposalRepository;
+        this.proposalReviewRepository = proposalReviewRepository;
+        this.departmentRepository = departmentRepository;
+        this.eventRepository = eventRepository;
+        this.organizationUnitRepository = organizationUnitRepository;
+        this.userService = userService;
+        this.notificationService = notificationService;
+        this.dtoMapper = dtoMapper;
+    }
 
     // ── CREATE ────────────────────────────────────────────────────────────────
 
     @Override
     public ProposalResponse createProposal(ProposalRequest request, Long userId) {
+        validateDates(request.getStartDate(), request.getEndDate());
         User proposedBy = userService.getUserById(userId);
         Department department = departmentRepository.findById(request.getDepartmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("Department", "id", request.getDepartmentId()));
@@ -62,7 +87,40 @@ public class ProposalServiceImpl implements ProposalService {
                 .requiredResources(request.getRequiredResources())
                 .scope(request.getScope())
                 .targetOrganizationUnit(targetUnit)
-                .status(ProposalStatus.DRAFT)
+                .status(ProposalStatus.SUBMITTED)
+                .build();
+
+        Proposal saved = proposalRepository.save(proposal);
+        log.info("Proposal created: {} (scope={}) by user {}", saved.getEventName(), saved.getScope(), userId);
+        return dtoMapper.toProposalResponse(saved);
+    }
+
+    @Override
+    public ProposalResponse createProposal(ProposalCreateRequest request, Long userId) {
+        validateDates(request.getStartDate(), request.getEndDate());
+        User proposedBy = userService.getUserById(userId);
+        Department department = departmentRepository.findById(request.getDepartmentId())
+                .orElseThrow(() -> new ResourceNotFoundException("Department", "id", request.getDepartmentId()));
+        OrganizationUnit targetUnit = organizationUnitRepository.findById(request.getTargetOrganizationUnitId())
+                .orElseThrow(() -> new ResourceNotFoundException("OrganizationUnit", "id", request.getTargetOrganizationUnitId()));
+
+        validateScopeMatchesUnit(request.getScope(), targetUnit);
+
+        Proposal proposal = Proposal.builder()
+                .eventName(request.getEventName())
+                .eventType(request.getEventType())
+                .department(department)
+                .proposedBy(proposedBy)
+                .objectives(request.getObjectives())
+                .startDate(request.getStartDate())
+                .endDate(request.getEndDate())
+                .venue(request.getVenue())
+                .expectedParticipants(request.getExpectedParticipants())
+                .estimatedBudget(request.getEstimatedBudget())
+                .requiredResources(request.getRequiredResources())
+                .scope(request.getScope())
+                .targetOrganizationUnit(targetUnit)
+                .status(ProposalStatus.SUBMITTED)
                 .build();
 
         Proposal saved = proposalRepository.save(proposal);
@@ -155,6 +213,12 @@ public class ProposalServiceImpl implements ProposalService {
         proposal.setDeptLeaderEndorsed(false); // reset on re-submission
         log.info("Proposal {} submitted (scope={})", id, proposal.getScope());
         return dtoMapper.toProposalResponse(proposalRepository.save(proposal));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProposalResponse> getPendingLeaderReviewProposalsForUser(Long userId) {
+        return getPendingReviewProposalsForUser(userId);
     }
 
     // ── SCOPE-AWARE PENDING PROPOSALS FOR CURRENT USER ───────────────────────
@@ -253,6 +317,31 @@ public class ProposalServiceImpl implements ProposalService {
 
     // ── MULTI-LEVEL ADMIN APPROVAL (Level 2: Union Administrator) ──────────────
     @Override
+    public ProposalResponse adminApproval(Long id, AdminApprovalRequest request, Long adminId) {
+        Proposal proposal = getProposalEntity(id);
+        User admin = userService.getUserById(adminId);
+
+        if (request != null) {
+            if (request.getConfirmedVenue() != null && !request.getConfirmedVenue().trim().isEmpty()) {
+                proposal.setVenue(request.getConfirmedVenue().trim());
+            }
+            if (request.getConfirmedStartDate() != null) {
+                proposal.setStartDate(request.getConfirmedStartDate());
+            }
+            if (request.getConfirmedEndDate() != null) {
+                proposal.setEndDate(request.getConfirmedEndDate());
+            }
+            validateDates(proposal.getStartDate(), proposal.getEndDate());
+        }
+
+        String comments = (request != null && request.getComments() != null && !request.getComments().trim().isEmpty())
+                ? request.getComments().trim()
+                : "Approved by Union Administrator";
+
+        return executeAdminApproval(proposal, comments, admin);
+    }
+
+    @Override
     public ProposalResponse adminApproval(Long id, String comments, Long adminId) {
         Proposal proposal = getProposalEntity(id);
         User admin = userService.getUserById(adminId);
@@ -261,21 +350,36 @@ public class ProposalServiceImpl implements ProposalService {
                 ? comments.trim()
                 : "Approved by Union Administrator";
 
-        saveReview(proposal, admin, ProposalStatus.APPROVED, "ADMIN_FINAL_APPROVAL", effectiveComments);
+        return executeAdminApproval(proposal, effectiveComments, admin);
+    }
+
+    private ProposalResponse executeAdminApproval(Proposal proposal, String comments, User admin) {
+        saveReview(proposal, admin, ProposalStatus.APPROVED, "ADMIN_FINAL_APPROVAL", comments);
 
         proposal.setStatus(ProposalStatus.APPROVED);
         proposal.setAdminApprovedBy(admin);
-        proposal.setAdminReviewComments(effectiveComments);
+        proposal.setAdminReviewComments(comments);
         proposal.setAdminApprovedAt(LocalDateTime.now());
         proposal.setReviewedBy(admin);
-        proposal.setReviewComments(effectiveComments);
+        proposal.setReviewComments(comments);
 
         // System locks dates/venue and automatically creates the official event record
         autoCreateEvent(proposal);
 
         Proposal saved = proposalRepository.save(proposal);
-        log.info("Union Administrator {} finalized approval for proposal {} → Status: APPROVED", admin.getEmail(), id);
+        log.info("Union Administrator {} finalized approval for proposal {} → Status: APPROVED", admin.getEmail(), proposal.getId());
+        
+        // Automated notification to Coordinator
+        sendApprovalNotification(saved);
+        
         return dtoMapper.toProposalResponse(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProposalResponse> getPendingAdminApprovalProposals() {
+        return proposalRepository.findPendingFinalApprovalForUnionAdmin().stream()
+                .map(dtoMapper::toProposalResponse).collect(Collectors.toList());
     }
 
     // ── FIELD LEADER REVIEW (FIELD scope) ────────────────────────────────────
@@ -426,6 +530,34 @@ public class ProposalServiceImpl implements ProposalService {
                 .comments(comments)
                 .build();
         proposalReviewRepository.save(review);
+    }
+
+    private void validateDates(java.time.LocalDate startDate, java.time.LocalDate endDate) {
+        if (startDate == null || endDate == null) {
+            throw new BadRequestException("Start date and end date are required");
+        }
+        if (endDate.isBefore(startDate)) {
+            throw new BadRequestException("End date cannot be before start date");
+        }
+    }
+
+    private void sendApprovalNotification(Proposal proposal) {
+        if (proposal.getProposedBy() == null || notificationService == null) return;
+        try {
+            NotificationRequest request = new NotificationRequest();
+            request.setRecipientId(proposal.getProposedBy().getId());
+            if (proposal.getEvent() != null) {
+                request.setEventId(proposal.getEvent().getId());
+                request.setActionUrl("/app/events/" + proposal.getEvent().getId());
+            }
+            request.setType(NotificationType.GENERAL_ANNOUNCEMENT);
+            request.setTitle("Proposal Approved!");
+            request.setMessage("Your proposal '" + proposal.getEventName() + "' has been approved by the Union Administrator.");
+            notificationService.createNotification(request);
+            log.info("Sent proposal approval notification to user {}", proposal.getProposedBy().getId());
+        } catch (Exception e) {
+            log.warn("Failed to send proposal approval notification: {}", e.getMessage());
+        }
     }
 
     private void autoCreateEvent(Proposal proposal) {

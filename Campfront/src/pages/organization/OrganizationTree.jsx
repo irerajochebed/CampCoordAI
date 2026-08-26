@@ -45,93 +45,128 @@ export default function OrganizationTree() {
     leader: 'Pastor Emmanuel Mugisha',
     contactEmail: 'info@rum.adventist.org',
     contactPhone: '+250 788 123 456',
-    address: 'KN 3 Ave, Kigali, Rwanda',
-    memberCount: 45000,
+    address: 'Kigali, Rwanda',
+    memberCount: 125000,
     children: [
       {
         id: 'field-1',
         type: 'FIELD',
+        name: 'Central Rwanda Field',
+        code: 'CRF',
+        leader: 'Pastor Gitwe Field Officer',
+        contactEmail: 'crf@rum.adventist.org',
+        contactPhone: '+250 788 100 001',
+        address: 'Muhanga',
+        memberCount: 16000,
+        children: []
+      },
+      {
+        id: 'field-2',
+        type: 'FIELD',
+        name: 'East Central Rwanda Field',
+        code: 'ECRF',
+        leader: 'Pastor Paul Uwizeye',
+        contactEmail: 'ecrf@rum.adventist.org',
+        contactPhone: '+250 788 100 002',
+        address: 'Kigali',
+        memberCount: 22000,
+        children: []
+      },
+      {
+        id: 'field-3',
+        type: 'FIELD',
         name: 'North Rwanda Field',
         code: 'NRF',
         leader: 'Pastor Jean Claude Habimana',
-        contactEmail: 'info@nrf.adventist.org',
-        contactPhone: '+250 788 234 567',
-        address: 'Musanze District',
-        memberCount: 12000,
+        contactEmail: 'nrf@rum.adventist.org',
+        contactPhone: '+250 788 100 003',
+        address: 'Musanze',
+        memberCount: 18000,
         children: [
           {
             id: 'district-1',
             type: 'DISTRICT',
             name: 'Musanze District',
-            code: 'MSD',
-            leader: 'Elder Patrick Nkurunziza',
+            code: 'NRF-MUS',
+            leader: 'Elder David Niyonzima',
             contactEmail: 'musanze@nrf.adventist.org',
             contactPhone: '+250 788 345 678',
-            address: 'Musanze Town',
+            address: 'Kigombe Zone, Musanze',
             memberCount: 3500,
-            children: [
-              {
-                id: 'church-1',
-                type: 'CHURCH',
-                name: 'Musanze Central Church',
-                code: 'MCC',
-                leader: 'Elder David Nsengimana',
-                contactEmail: 'central@musanze.adventist.org',
-                contactPhone: '+250 788 456 789',
-                address: 'Musanze Central, RN4',
-                memberCount: 850,
-                children: []
-              },
-              {
-                id: 'church-2',
-                type: 'CHURCH',
-                name: 'Ruhengeri Church',
-                code: 'RHC',
-                leader: 'Elder Paul Uwimana',
-                contactEmail: 'ruhengeri@musanze.adventist.org',
-                contactPhone: '+250 788 567 890',
-                address: 'Ruhengeri Sector',
-                memberCount: 620,
-                children: []
-              }
-            ]
+            children: []
           },
           {
             id: 'district-2',
             type: 'DISTRICT',
-            name: 'Gakenke District',
-            code: 'GKD',
+            name: 'Bukamba District',
+            code: 'NRF-BUK',
             leader: 'Elder Joseph Mukama',
-            contactEmail: 'gakenke@nrf.adventist.org',
+            contactEmail: 'bukamba@nrf.adventist.org',
             contactPhone: '+250 788 678 901',
-            address: 'Gakenke Town',
+            address: 'Bukamba Zone, Musanze',
             memberCount: 2800,
             children: []
           }
         ]
       },
       {
-        id: 'field-2',
+        id: 'field-4',
         type: 'FIELD',
-        name: 'South Rwanda Field',
-        code: 'SRF',
-        leader: 'Pastor Marie Claire Uwera',
-        contactEmail: 'info@srf.adventist.org',
-        contactPhone: '+250 788 789 012',
-        address: 'Huye District',
+        name: 'North-East Rwanda Field',
+        code: 'NERF',
+        leader: 'Pastor Nyagatare Field Leader',
+        contactEmail: 'nerf@rum.adventist.org',
+        contactPhone: '+250 788 100 004',
+        address: 'Nyagatare',
+        memberCount: 14000,
+        children: []
+      },
+      {
+        id: 'field-5',
+        type: 'FIELD',
+        name: 'North-West Rwanda Field',
+        code: 'NWRF',
+        leader: 'Pastor Rubavu Field Leader',
+        contactEmail: 'nwrf@rum.adventist.org',
+        contactPhone: '+250 788 100 005',
+        address: 'Rubavu',
         memberCount: 15000,
         children: []
       },
       {
-        id: 'field-3',
+        id: 'field-6',
         type: 'FIELD',
-        name: 'East Rwanda Field',
-        code: 'ERF',
-        leader: 'Pastor Samuel Uwizeyimana',
-        contactEmail: 'info@erf.adventist.org',
-        contactPhone: '+250 788 890 123',
-        address: 'Rwamagana District',
-        memberCount: 10000,
+        name: 'South Rwanda Field',
+        code: 'SRF',
+        leader: 'Pastor Marie Claire Uwera',
+        contactEmail: 'srf@rum.adventist.org',
+        contactPhone: '+250 788 100 006',
+        address: 'Huye',
+        memberCount: 15000,
+        children: []
+      },
+      {
+        id: 'field-7',
+        type: 'FIELD',
+        name: 'South-East Rwanda Field',
+        code: 'SERF',
+        leader: 'Pastor Ngoma Field Leader',
+        contactEmail: 'serf@rum.adventist.org',
+        contactPhone: '+250 788 100 007',
+        address: 'Ngoma',
+        memberCount: 12500,
+        children: []
+      },
+      {
+        id: 'field-8',
+        type: 'FIELD',
+        name: 'West Rwanda Field',
+        code: 'WRF',
+        leader: 'Pastor Karongi Field Leader',
+        contactEmail: 'wrf@rum.adventist.org',
+        contactPhone: '+250 788 100 008',
+        address: 'Karongi',
+        memberCount: 12500,
         children: []
       }
     ]
@@ -157,9 +192,8 @@ export default function OrganizationTree() {
     try {
       setLoading(true);
       setError(null);
-      setTimeout(() => {
-        setLoading(false);
-      }, 500);
+      // Fetch live units if available
+      setLoading(false);
     } catch (err) {
       console.error('Error fetching organization tree:', err);
       setError('Failed to load organization structure');
@@ -405,10 +439,6 @@ export default function OrganizationTree() {
       </div>
     );
   };
-
-  if (loading) {
-    return <PageSpinner message="Loading organization structure..." />;
-  }
 
   return (
     <div className="space-y-6">

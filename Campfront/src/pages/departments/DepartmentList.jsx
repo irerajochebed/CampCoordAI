@@ -4,16 +4,20 @@ import { PageHeader, StatusBadge, Modal } from '../../components/ui/index';
 import { Plus, Users, CalendarDays, Eye, Edit2 } from 'lucide-react';
 
 const DEPARTMENTS = [
-  { id: 1, name: 'Youth Ministries',       leader: 'Jean Pierre N.', events: 4, members: 320, status: 'ACTIVE', icon: '🏕️', color: '#4f46e5', description: 'Empowering young Adventists through camps and leadership programs.' },
-  { id: 2, name: 'MIFEM',                  leader: 'Grace Mukamana',  events: 2, members: 180, status: 'ACTIVE', icon: '👩', color: '#ec4899', description: 'Ministry for Adventist Women — Conferences and retreats.' },
+  { id: 1, name: 'Youth Ministries',       leader: 'Jean Pierre N.', events: 4, members: 320, status: 'ACTIVE', icon: '🏕️', color: '#4f46e5', description: 'Youth Ministries, Pathfinder, and Adventurer clubs.' },
+  { id: 2, name: "Women's Ministries (MIFEM)", leader: 'Grace Mukamana',  events: 2, members: 180, status: 'ACTIVE', icon: '👩', color: '#ec4899', description: 'Ministères Féminins — Empowering Adventist women in leadership.' },
   { id: 3, name: "Children's Ministries",  leader: 'Alice Nyiraneza', events: 3, members: 210, status: 'ACTIVE', icon: '🧒', color: '#f59e0b', description: 'Nurturing children through Bible clubs and camps.' },
   { id: 4, name: 'Family Ministries',      leader: 'Pastor Eric H.',  events: 2, members: 145, status: 'ACTIVE', icon: '👨‍👩‍👧', color: '#10b981', description: 'Strengthening Adventist families through seminars.' },
-  { id: 5, name: 'Health Ministries',      leader: 'Dr. Samuel K.',   events: 1, members: 88,  status: 'ACTIVE', icon: '🏥', color: '#06b6d4', description: 'Promoting wholistic health principles.' },
-  { id: 6, name: 'Ministerial Association',leader: 'Elder David K.',   events: 1, members: 62,  status: 'ACTIVE', icon: '✝️', color: '#8b5cf6', description: 'Supporting pastors and church elders.' },
-  { id: 7, name: 'Publishing Ministries',  leader: 'Mary Uwimana',    events: 1, members: 45,  status: 'ACTIVE', icon: '📚', color: '#f97316', description: 'Sharing Adventist literature across Rwanda.' },
-  { id: 8, name: 'Sabbath School',         leader: 'John Bizimana',   events: 0, members: 200, status: 'ACTIVE', icon: '📖', color: '#84cc16', description: 'Bible study groups and quarterly programs.' },
-  { id: 9, name: 'Personal Ministries',    leader: 'Ruth Ingabire',   events: 1, members: 110, status: 'ACTIVE', icon: '🤝', color: '#14b8a6', description: 'Evangelism and outreach programs.' },
-  { id: 10,name: 'Education',              leader: 'Prof. Peter N.',   events: 1, members: 75,  status: 'ACTIVE', icon: '🎓', color: '#a855f7', description: 'Supporting Adventist schools and educators.' },
+  { id: 5, name: 'Ministerial Association',leader: 'Elder David K.',   events: 1, members: 62,  status: 'ACTIVE', icon: '✝️', color: '#8b5cf6', description: 'Supporting pastors and church elders across fields.' },
+  { id: 6, name: 'Personal Ministries & Sabbath School', leader: 'Ruth Ingabire', events: 3, members: 240, status: 'ACTIVE', icon: '🤝', color: '#14b8a6', description: 'Evangelism, outreach, Bible study, and discipleship programs.' },
+  { id: 7, name: 'Adventist Chaplaincy Ministries (ACM)', leader: 'Pastor Joseph M.', events: 1, members: 75, status: 'ACTIVE', icon: '⛪', color: '#6366f1', description: 'Chaplaincy services in schools, hospitals, and institutions.' },
+  { id: 8, name: 'Adventist Possibility Ministries (APM)', leader: 'Claire U.', events: 1, members: 50, status: 'ACTIVE', icon: '♿', color: '#0ea5e9', description: 'Inclusion and support for individuals with special needs.' },
+  { id: 9, name: 'Health Ministries',      leader: 'Dr. Samuel K.',   events: 1, members: 88,  status: 'ACTIVE', icon: '🏥', color: '#06b6d4', description: 'Promoting physical, mental, and spiritual health principles.' },
+  { id: 10, name: 'Publishing Ministries',  leader: 'Mary Uwimana',    events: 1, members: 45,  status: 'ACTIVE', icon: '📚', color: '#f97316', description: 'Literature evangelism and Christian book ministry.' },
+  { id: 11, name: 'Stewardship Ministries', leader: 'Elder Isaac R.',  events: 2, members: 130, status: 'ACTIVE', icon: '💎', color: '#eab308', description: 'Biblical stewardship, tithing, and resource management.' },
+  { id: 12, name: 'Public Affairs & Religious Liberty (PARL)', leader: 'Adv. Emmanuel B.', events: 1, members: 40, status: 'ACTIVE', icon: '⚖️', color: '#64748b', description: 'Promoting religious freedom, freedom of conscience, and PR.' },
+  { id: 13, name: 'Education Department',  leader: 'Prof. Peter N.',   events: 1, members: 75,  status: 'ACTIVE', icon: '🎓', color: '#a855f7', description: 'Overseeing Adventist schools, universities, and educators.' },
+  { id: 14, name: 'Communication Department', leader: 'Jean Paul M.',  events: 2, members: 95,  status: 'ACTIVE', icon: '📡', color: '#3b82f6', description: 'Media relations, digital evangelism, and broadcasting.' },
 ];
 
 export default function DepartmentList() {
@@ -21,10 +25,10 @@ export default function DepartmentList() {
   return (
     <div className="animate-fade-in">
       <PageHeader
-        title="Departments"
-        subtitle="All 10 ministerial departments of Rwanda Union Mission"
-        breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Departments' }]}
-        actions={<button className="btn btn-primary"><Plus size={16} /> Add Department</button>}
+        title="Ministries & Departments"
+        subtitle="All 14 official organizational functional ministries of Rwanda Union Mission"
+        breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Ministries' }]}
+        actions={<button className="btn btn-primary"><Plus size={16} /> Add Ministry</button>}
       />
 
       <div className="events-grid">

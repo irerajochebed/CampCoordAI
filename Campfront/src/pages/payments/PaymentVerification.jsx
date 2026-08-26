@@ -246,10 +246,6 @@ export default function PaymentVerification() {
   // Calculate statistics
   const totalAmount = filteredPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
 
-  if (loading) {
-    return <PageSpinner message="Loading pending payments..." />;
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}

@@ -33,14 +33,14 @@ ON CONFLICT (code) DO UPDATE SET
 -- 2. Level 2: 8 FIELDS under RUM
 INSERT INTO organization_units (name, code, level, location, parent_id, is_custom, deleted, created_at, updated_at)
 VALUES 
-    ('North Rwanda Field', 'NRF', 'FIELD', 'Musanze', (SELECT id FROM organization_units WHERE code = 'RUM' LIMIT 1), false, false, NOW(), NOW()),
+    ('Central Rwanda Field', 'CRF', 'FIELD', 'Muhanga', (SELECT id FROM organization_units WHERE code = 'RUM' LIMIT 1), false, false, NOW(), NOW()),
     ('East Central Rwanda Field', 'ECRF', 'FIELD', 'Kigali', (SELECT id FROM organization_units WHERE code = 'RUM' LIMIT 1), false, false, NOW(), NOW()),
+    ('North Rwanda Field', 'NRF', 'FIELD', 'Musanze', (SELECT id FROM organization_units WHERE code = 'RUM' LIMIT 1), false, false, NOW(), NOW()),
     ('North-East Rwanda Field', 'NERF', 'FIELD', 'Nyagatare', (SELECT id FROM organization_units WHERE code = 'RUM' LIMIT 1), false, false, NOW(), NOW()),
-    ('South-East Rwanda Field', 'SERF', 'FIELD', 'Ngoma', (SELECT id FROM organization_units WHERE code = 'RUM' LIMIT 1), false, false, NOW(), NOW()),
     ('North-West Rwanda Field', 'NWRF', 'FIELD', 'Rubavu', (SELECT id FROM organization_units WHERE code = 'RUM' LIMIT 1), false, false, NOW(), NOW()),
-    ('West Rwanda Field', 'WRF', 'FIELD', 'Karongi', (SELECT id FROM organization_units WHERE code = 'RUM' LIMIT 1), false, false, NOW(), NOW()),
-    ('South Rwanda Field', 'SRF', 'FIELD', 'Southern Province', (SELECT id FROM organization_units WHERE code = 'RUM' LIMIT 1), false, false, NOW(), NOW()),
-    ('Central Rwanda Field', 'CRF', 'FIELD', 'Muhanga / Gitwe', (SELECT id FROM organization_units WHERE code = 'RUM' LIMIT 1), false, false, NOW(), NOW())
+    ('South Rwanda Field', 'SRF', 'FIELD', 'Huye', (SELECT id FROM organization_units WHERE code = 'RUM' LIMIT 1), false, false, NOW(), NOW()),
+    ('South-East Rwanda Field', 'SERF', 'FIELD', 'Ngoma', (SELECT id FROM organization_units WHERE code = 'RUM' LIMIT 1), false, false, NOW(), NOW()),
+    ('West Rwanda Field', 'WRF', 'FIELD', 'Karongi', (SELECT id FROM organization_units WHERE code = 'RUM' LIMIT 1), false, false, NOW(), NOW())
 ON CONFLICT (code) DO UPDATE SET 
     name = EXCLUDED.name, 
     level = EXCLUDED.level, 
@@ -91,4 +91,27 @@ ON CONFLICT (code) DO UPDATE SET
     location = EXCLUDED.location,
     parent_id = EXCLUDED.parent_id,
     updated_at = NOW();
+
+-- 4. OFFICIAL 14 RUM MINISTRIES (DEPARTMENTS) SEED DATA
+INSERT INTO departments (type, name, description, deleted, created_at, updated_at)
+VALUES 
+    ('YOUTH', 'Youth Ministries', 'Ministry focused on young people spiritual growth, Pathfinder clubs, and youth camps', false, NOW(), NOW()),
+    ('WOMEN', 'Women Ministries (MIFEM)', 'Ministères Féminins — Empowering Adventist women in leadership and service', false, NOW(), NOW()),
+    ('CHILDREN', 'Children Ministries', 'Ministry dedicated to children spiritual education, Bible clubs, and activities', false, NOW(), NOW()),
+    ('FAMILY', 'Family Ministries', 'Supporting and strengthening Christian family units, marriage, and home life', false, NOW(), NOW()),
+    ('MINISTERIAL', 'Ministerial Association', 'Supporting pastors, elders, evangelists, and gospel workers across fields', false, NOW(), NOW()),
+    ('PERSONAL_MINISTRIES', 'Personal Ministries & Sabbath School', 'Evangelism, outreach, Bible study, and discipleship programs', false, NOW(), NOW()),
+    ('CHAPLAINCY', 'Adventist Chaplaincy Ministries (ACM)', 'Chaplaincy services in schools, universities, hospitals, prisons, and military', false, NOW(), NOW()),
+    ('POSSIBILITY', 'Adventist Possibility Ministries (APM)', 'Inclusion and support for individuals with special needs and disabilities', false, NOW(), NOW()),
+    ('HEALTH', 'Health Ministries', 'Promoting physical, mental, and spiritual health principles and wellness', false, NOW(), NOW()),
+    ('PUBLISHING', 'Publishing Ministries', 'Literature evangelism, publications, and Christian book ministry', false, NOW(), NOW()),
+    ('STEWARDSHIP', 'Stewardship Ministries', 'Biblical stewardship, tithing, and financial management', false, NOW(), NOW()),
+    ('PARL', 'Public Affairs & Religious Liberty (PARL)', 'Promoting religious freedom, freedom of conscience, and public relations', false, NOW(), NOW()),
+    ('EDUCATION', 'Education Department', 'Overseeing Adventist schools, universities, and educational institutions', false, NOW(), NOW()),
+    ('COMMUNICATION', 'Communication Department', 'Media relations, digital evangelism, technology, and broadcasting', false, NOW(), NOW())
+ON CONFLICT (type) DO UPDATE SET 
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
 

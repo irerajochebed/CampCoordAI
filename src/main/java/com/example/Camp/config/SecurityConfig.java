@@ -62,9 +62,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Public Auth Endpoints
                         .requestMatchers("/api/auth/**", "/api/v1/auth/**").permitAll()
-                        // Public Organization Units (GET /api/v1/org-units/**)
+                        // Public Organization Units & Departments/Ministries
                         .requestMatchers(HttpMethod.GET, "/api/v1/org-units/**", "/api/v1/organization-units/**", "/api/organization-units/**", "/api/org-units/**").permitAll()
                         .requestMatchers("/api/v1/org-units/**", "/api/v1/organization-units/**", "/api/organization-units/**", "/api/org-units/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/departments/**", "/api/departments/**", "/api/v1/ministries/**", "/api/ministries/**").permitAll()
+                        .requestMatchers("/api/v1/departments/**", "/api/departments/**", "/api/v1/ministries/**", "/api/ministries/**").permitAll()
                         // Public general endpoints & static resources
                         .requestMatchers("/api/public/**", "/api/v1/public/**", "/error", "/favicon.ico").permitAll()
                         // Admin Role Endpoints

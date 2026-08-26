@@ -30,6 +30,7 @@ export default function Sidebar() {
     { name: t('nav.payments', 'Payments'), key: 'nav.payments', href: '/app/payments', icon: DollarSign, roles: ['ADMINISTRATOR', 'COORDINATOR'] },
     { name: t('nav.resources', 'Resources'), key: 'nav.resources', href: '/app/resources', icon: Package, roles: ['ADMINISTRATOR', 'COORDINATOR'] },
     { name: t('nav.analytics', 'AI Insights'), key: 'nav.analytics', href: '/app/analytics', icon: Brain, roles: ['ADMINISTRATOR', 'COORDINATOR'] },
+    { name: t('nav.departments', 'Ministries'), key: 'nav.departments', href: '/app/departments', icon: Building2, roles: ['ADMINISTRATOR', 'COORDINATOR'] },
     { name: t('nav.organization', 'Organization'), key: 'nav.organization', href: '/app/organization', icon: Building2, roles: ['ADMINISTRATOR'] },
     { name: t('nav.users', 'Users'), key: 'nav.users', href: '/app/users', icon: Users, roles: ['ADMINISTRATOR'] },
   ];

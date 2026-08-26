@@ -28,7 +28,7 @@ export default function OrganizationUnitSelector({
 
   const [customChurchName, setCustomChurchName] = useState(value.customChurchName || '');
 
-  // Initial Load: Fetch Union & Fields
+  // Initial Load: Fetch Union & 8 RUM Fields
   useEffect(() => {
     let isMounted = true;
     setLoadingFields(true);
@@ -38,7 +38,13 @@ export default function OrganizationUnitSelector({
         let fetchedFields = [];
         let fetchedUnionId = null;
 
-        // 1. Try getting top-level Union via getChildren()
+        // 1. Try fetching fields from /api/v1/org-units/fields
+        const fieldsApiRes = await organizationApi.getFields().catch(() => null);
+        if (fieldsApiRes?.data?.data && fieldsApiRes.data.data.length > 0) {
+          fetchedFields = fieldsApiRes.data.data;
+        }
+
+        // 2. Try getting top-level Union via getChildren()
         const unionRes = await organizationApi.getChildren().catch(() => null);
         const unionData = unionRes?.data?.data || [];
         
@@ -47,25 +53,26 @@ export default function OrganizationUnitSelector({
           fetchedUnionId = unionData[0].id;
           if (isMounted) setSelectedUnionId(fetchedUnionId);
 
-          // Fetch fields under Union
-          const fieldRes = await organizationApi.getChildren(fetchedUnionId).catch(() => null);
-          fetchedFields = fieldRes?.data?.data || [];
+          if (fetchedFields.length === 0) {
+            const fieldRes = await organizationApi.getChildren(fetchedUnionId).catch(() => null);
+            fetchedFields = fieldRes?.data?.data || [];
+          }
         }
 
-        // 2. Fallback: If no fields returned by parentId, fetch level FIELD directly
+        // 3. Fallback: If no fields returned by parentId, fetch level FIELD directly
         if (!fetchedFields || fetchedFields.length === 0) {
           const levelRes = await organizationApi.getByLevel('FIELD').catch(() => null);
           fetchedFields = levelRes?.data?.data || [];
         }
 
-        // 3. Fallback: If still empty, fetch all and filter level FIELD
+        // 4. Fallback: If still empty, fetch all and filter level FIELD
         if (!fetchedFields || fetchedFields.length === 0) {
           const allRes = await organizationApi.getAll().catch(() => null);
           const allData = allRes?.data?.data || [];
           fetchedFields = allData.filter(u => u.level === 'FIELD');
         }
 
-        // Sort fields alphabetically
+        // Sort 8 fields alphabetically
         fetchedFields.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
         if (isMounted) {

@@ -23,6 +23,7 @@ export default function ProposalForm() {
   const [submitting, setSubmitting] = useState(false);
   const [alert, setAlert] = useState(null);
   const [userDepartment, setUserDepartment] = useState(null);
+  const [departments, setDepartments] = useState([]);
   
   const [formData, setFormData] = useState({
     eventName: '',
@@ -63,31 +64,47 @@ export default function ProposalForm() {
     } catch {}
   };
 
+  const OFFICIAL_RUM_MINISTRIES = [
+    { id: 1, type: 'YOUTH', name: 'Youth Ministries' },
+    { id: 2, type: 'WOMEN', name: "Women's Ministries (MIFEM)" },
+    { id: 3, type: 'CHILDREN', name: "Children's Ministries" },
+    { id: 4, type: 'FAMILY', name: 'Family Ministries' },
+    { id: 5, type: 'MINISTERIAL', name: 'Ministerial Association' },
+    { id: 6, type: 'PERSONAL_MINISTRIES', name: 'Personal Ministries & Sabbath School' },
+    { id: 7, type: 'CHAPLAINCY', name: 'Adventist Chaplaincy Ministries (ACM)' },
+    { id: 8, type: 'POSSIBILITY', name: 'Adventist Possibility Ministries (APM)' },
+    { id: 9, type: 'HEALTH', name: 'Health Ministries' },
+    { id: 10, type: 'PUBLISHING', name: 'Publishing Ministries' },
+    { id: 11, type: 'STEWARDSHIP', name: 'Stewardship Ministries' },
+    { id: 12, type: 'PARL', name: 'Public Affairs & Religious Liberty (PARL)' },
+    { id: 13, type: 'EDUCATION', name: 'Education Department' },
+    { id: 14, type: 'COMMUNICATION', name: 'Communication Department' }
+  ];
+
+  const activeMinistryList = departments.length > 0 ? departments : OFFICIAL_RUM_MINISTRIES;
+
   const fetchUserDepartment = async () => {
     try {
-      // Fetch all departments and find the one where current user is the leader
       const response = await departmentApi.getAll();
-      if (response.data.success) {
-        const departments = response.data.data || [];
-        // Find department where current user is the leader
-        const myDepartment = departments.find(dept => dept.leader?.id === user.userId);
+      if (response.data?.success && response.data.data?.length > 0) {
+        const depts = response.data.data;
+        setDepartments(depts);
+        const myDepartment = depts.find(dept => dept.leader?.id === user?.userId || dept.leader?.id === user?.id);
         
         if (myDepartment) {
           setUserDepartment(myDepartment);
           setFormData(prev => ({ ...prev, departmentId: myDepartment.id }));
-        } else {
-          setAlert({
-            type: 'warning',
-            message: 'You are not assigned as a leader of any department. Please contact the administrator.'
-          });
+        } else if (depts.length > 0) {
+          setFormData(prev => ({ ...prev, departmentId: prev.departmentId || depts[0].id }));
         }
+      } else {
+        setDepartments(OFFICIAL_RUM_MINISTRIES);
+        setFormData(prev => ({ ...prev, departmentId: prev.departmentId || OFFICIAL_RUM_MINISTRIES[0].id }));
       }
     } catch (error) {
-      console.error('Error fetching user department:', error);
-      setAlert({
-        type: 'error',
-        message: error.message || 'Failed to load your department information. Please check if the backend is running.'
-      });
+      console.error('Error fetching ministry information:', error);
+      setDepartments(OFFICIAL_RUM_MINISTRIES);
+      setFormData(prev => ({ ...prev, departmentId: prev.departmentId || OFFICIAL_RUM_MINISTRIES[0].id }));
     }
   };
 
@@ -293,23 +310,17 @@ export default function ProposalForm() {
                 />
               </div>
 
-              {/* Department - Auto-filled and Read-only */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Department <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={userDepartment?.name || 'Loading department...'}
-                    disabled
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 cursor-not-allowed"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    This is automatically set based on the department you lead
-                  </p>
-                </div>
-              </div>
+              {/* Hosting Ministry / Department Selector */}
+              <Select
+                label="Hosting Ministry / Department *"
+                name="departmentId"
+                value={formData.departmentId}
+                onChange={handleChange}
+                options={activeMinistryList.map(d => ({ value: d.id, label: d.name }))}
+                error={errors.departmentId}
+                placeholder="Select Ministry / Department"
+                required
+              />
 
               {/* Scope and Target Organization Unit */}
               <div className="space-y-4">

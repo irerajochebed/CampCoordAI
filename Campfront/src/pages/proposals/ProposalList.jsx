@@ -212,10 +212,6 @@ export default function ProposalList() {
     { value: 'NEEDS_REVISION', label: 'Needs Revision' },
   ];
 
-  if (loading) {
-    return <PageSpinner message="Loading proposals..." />;
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -230,14 +226,14 @@ export default function ProposalList() {
               : 'View event proposals'}
           </p>
         </div>
-        {isDepartmentLeader && (
-          <Link to="/proposals/new">
+        {(isDepartmentLeader || user?.role === 'COORDINATOR' || isAdmin) && (
+          <Link to="/app/proposals/new">
             <Button 
               variant="primary" 
               icon={<Plus className="w-4 h-4" />}
               className="whitespace-nowrap"
             >
-              Create New Proposal
+              + Create New Proposal
             </Button>
           </Link>
         )}
@@ -253,11 +249,11 @@ export default function ProposalList() {
 
       {/* Filters */}
       <Card>
-        <CardBody>
+        <CardBody className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="md:col-span-2">
               <Input
-                placeholder="Search by event name, department, or venue..."
+                placeholder="Search by event name, ministry / department, or venue..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 icon={<Search className="w-5 h-5" />}
@@ -272,30 +268,43 @@ export default function ProposalList() {
         </CardBody>
       </Card>
 
-      {/* Proposals Table */}
+      {/* Proposals List Table */}
       <Card>
         <CardHeader>
           <CardTitle>
-            {filteredProposals.length} Proposal{filteredProposals.length !== 1 ? 's' : ''}
+            Proposals ({filteredProposals.length})
           </CardTitle>
         </CardHeader>
         <CardBody>
-          {filteredProposals.length === 0 ? (
+          {loading ? (
+            <div className="text-center py-8 text-gray-500">
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-5 h-5 border-2 border-primary-600 border-t-transparent rounded-full animate-spin"></div>
+                <span>Fetching proposals...</span>
+              </div>
+            </div>
+          ) : filteredProposals.length === 0 ? (
             <EmptyState
               icon={<FileText className="w-12 h-12" />}
               title="No proposals found"
-              description={
+              message={
                 searchTerm || statusFilter !== 'ALL'
-                  ? 'Try adjusting your filters'
+                  ? 'Try adjusting your search or filter criteria'
+                  : isUnionAdmin
+                  ? 'No event proposals have been submitted for admin approval yet.'
                   : isDepartmentLeader
-                  ? 'Create your first proposal for your department to get started'
-                  : 'No proposals have been submitted yet'
+                  ? 'No proposals created for your ministry yet.'
+                  : 'Get started by creating your first event proposal.'
               }
               action={
-                isDepartmentLeader && (
-                  <Link to="/proposals/new">
-                    <Button variant="primary">Create Proposal</Button>
-                  </Link>
+                (isDepartmentLeader || user?.role === 'COORDINATOR' || isAdmin) && (
+                  <Button
+                    variant="primary"
+                    icon={<Plus className="w-4 h-4" />}
+                    onClick={() => navigate('/proposals/new')}
+                  >
+                    Create Proposal
+                  </Button>
                 )
               }
             />
@@ -304,7 +313,7 @@ export default function ProposalList() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Event Name</TableHead>
-                  <TableHead>Department</TableHead>
+                  <TableHead>Ministry / Department</TableHead>
                   <TableHead>Event Type</TableHead>
                   <TableHead>Dates</TableHead>
                   <TableHead>Expected Participants</TableHead>

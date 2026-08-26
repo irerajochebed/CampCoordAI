@@ -301,11 +301,7 @@ export default function SessionManagement() {
   // Sort dates
   const sortedDates = Object.keys(groupedSessions).sort((a, b) => new Date(a) - new Date(b));
 
-  if (loading) {
-    return <PageSpinner message="Loading sessions..." />;
-  }
-
-  const canManage = isUnionAdmin || event?.coordinator?.id === user.userId;
+  const canManage = isUnionAdmin || event?.coordinator?.id === user?.userId;
 
   return (
     <div className="space-y-6">

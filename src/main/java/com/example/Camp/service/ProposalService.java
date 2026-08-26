@@ -1,5 +1,7 @@
 package com.example.Camp.service;
 
+import com.example.Camp.dto.proposal.AdminApprovalRequest;
+import com.example.Camp.dto.proposal.ProposalCreateRequest;
 import com.example.Camp.dto.proposal.ProposalRequest;
 import com.example.Camp.dto.proposal.ProposalResponse;
 import com.example.Camp.dto.proposal.ProposalReviewRequest;
@@ -11,6 +13,7 @@ import java.util.List;
 public interface ProposalService {
     
     ProposalResponse createProposal(ProposalRequest request, Long userId);
+    ProposalResponse createProposal(ProposalCreateRequest request, Long userId);
     ProposalResponse updateProposal(Long id, ProposalRequest request);
     ProposalResponse getProposalById(Long id);
     List<ProposalResponse> getAllProposals();
@@ -18,6 +21,8 @@ public interface ProposalService {
     List<ProposalResponse> getProposalsByUser(Long userId);
     List<ProposalResponse> getProposalsByDepartment(Long departmentId);
     List<ProposalResponse> getPendingReviewProposals();
+    List<ProposalResponse> getPendingLeaderReviewProposalsForUser(Long userId);
+    List<ProposalResponse> getPendingAdminApprovalProposals();
     ProposalResponse submitProposal(Long id);
     ProposalResponse reviewProposal(Long id, ProposalReviewRequest request, Long reviewerId);
     ProposalResponse approveProposal(Long id, Long reviewerId);
@@ -36,6 +41,7 @@ public interface ProposalService {
 
     // Level 2: Union Administrator Final Approval (Auto-creates official event record)
     ProposalResponse adminApproval(Long id, String comments, Long adminId);
+    ProposalResponse adminApproval(Long id, AdminApprovalRequest request, Long adminId);
 
     // Dept Leader endorses a UNION-scope proposal before it reaches Union Admin
     ProposalResponse endorseProposal(Long id, String comments, Long coordinatorId);

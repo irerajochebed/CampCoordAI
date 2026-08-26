@@ -89,6 +89,8 @@ export const proposalApi = {
   getByStatus: (status) => api.get(`/proposals/status/${status}`),
   getMyProposals: () => api.get('/proposals/my-proposals'),
   getPendingReview: () => api.get('/proposals/pending-review'),
+  getPendingLeaderReview: () => api.get('/proposals/pending-leader-review'),
+  getPendingAdminApproval: () => api.get('/proposals/pending-admin-approval'),
   getPendingReviewCount: () => api.get('/proposals/pending-review/count'),
   create: (data) => api.post('/proposals', data),
   update: (id, data) => api.put(`/proposals/${id}`, data),
@@ -291,6 +293,7 @@ export const departmentApi = {
 export const organizationApi = {
   getAll: () => api.get('/organization-units'),
   getChildren: (parentId) => api.get('/v1/org-units/children' + (parentId ? `?parentId=${parentId}` : '')),
+  getFields: () => api.get('/v1/org-units/fields'),
   getById: (id) => api.get(`/organization-units/${id}`),
   getByLevel: (level) => api.get(`/organization-units/level/${level}`),
   create: (data) => api.post('/organization-units', data),

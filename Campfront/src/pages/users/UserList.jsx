@@ -214,10 +214,6 @@ export default function UserList() {
     { value: 'PA_TEAM', label: 'PA Team' },
   ];
 
-  if (loading) {
-    return <PageSpinner message="Loading users..." />;
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -301,7 +297,14 @@ export default function UserList() {
           </div>
         </CardHeader>
         <CardBody>
-          {filteredUsers.length === 0 ? (
+          {loading ? (
+            <div className="text-center py-8 text-gray-500">
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-5 h-5 border-2 border-primary-600 border-t-transparent rounded-full animate-spin"></div>
+                <span>Fetching users...</span>
+              </div>
+            </div>
+          ) : filteredUsers.length === 0 ? (
             <EmptyState
               icon={<Users className="w-12 h-12" />}
               title="No users found"

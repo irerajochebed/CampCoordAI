@@ -207,10 +207,6 @@ export default function EventList() {
     { value: 'CANCELLED', label: 'Cancelled' },
   ];
 
-  if (loading) {
-    return <PageSpinner message="Loading events..." />;
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -241,7 +237,7 @@ export default function EventList() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="md:col-span-2">
               <Input
-                placeholder="Search by event name, venue, or department..."
+                placeholder="Search by event name, venue, or ministry / department..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 icon={<Search className="w-5 h-5" />}
@@ -256,7 +252,7 @@ export default function EventList() {
               value={departmentFilter}
               onChange={(e) => setDepartmentFilter(e.target.value)}
               options={[
-                { value: 'ALL', label: 'All Departments' },
+                { value: 'ALL', label: 'All Ministries / Departments' },
                 ...departments.map(dept => ({ value: dept.id, label: dept.name }))
               ]}
             />
@@ -267,19 +263,33 @@ export default function EventList() {
       {/* Events Table */}
       <Card>
         <CardHeader>
-          <CardTitle>
-            {filteredEvents.length} Event{filteredEvents.length !== 1 ? 's' : ''}
-          </CardTitle>
+          <CardTitle>Events ({filteredEvents.length})</CardTitle>
         </CardHeader>
         <CardBody>
-          {filteredEvents.length === 0 ? (
+          {loading ? (
+            <div className="text-center py-8 text-gray-500">
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-5 h-5 border-2 border-primary-600 border-t-transparent rounded-full animate-spin"></div>
+                <span>Fetching events...</span>
+              </div>
+            </div>
+          ) : filteredEvents.length === 0 ? (
             <EmptyState
               icon={<Calendar className="w-12 h-12" />}
               title="No events found"
-              description={
+              message={
                 searchTerm || statusFilter !== 'ALL' || departmentFilter !== 'ALL'
-                  ? 'Try adjusting your filters'
-                  : 'No events have been created yet'
+                  ? 'Try adjusting your search or filter criteria'
+                  : 'No active events found'
+              }
+              action={
+                (isEventCoordinator || isAdmin) && (
+                  <Link to="/events/new">
+                    <Button variant="primary" icon={<Plus className="w-4 h-4" />}>
+                      Create Event
+                    </Button>
+                  </Link>
+                )
               }
             />
           ) : (
@@ -287,7 +297,7 @@ export default function EventList() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Event Name</TableHead>
-                  <TableHead>Department</TableHead>
+                  <TableHead>Ministry / Department</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Dates</TableHead>
                   <TableHead>Venue</TableHead>

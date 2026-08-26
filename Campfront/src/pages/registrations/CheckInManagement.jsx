@@ -244,11 +244,7 @@ export default function CheckInManagement() {
     pending: registrations.filter(r => r.status !== 'CONFIRMED' && r.status !== 'CHECKED_IN' && r.status !== 'CANCELLED').length
   };
 
-  if (loading) {
-    return <PageSpinner message="Loading check-in data..." />;
-  }
-
-  const canManage = isUnionAdmin || event?.coordinator?.id === user.userId;
+  const canManage = isUnionAdmin || event?.coordinator?.id === user?.userId;
 
   return (
     <div className="space-y-6">

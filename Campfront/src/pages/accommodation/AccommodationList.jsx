@@ -131,10 +131,6 @@ export default function AccommodationList() {
     totalAvailable: accommodations.reduce((sum, acc) => sum + ((acc.totalCapacity || 0) - (acc.occupiedCount || 0)), 0)
   };
 
-  if (loading) {
-    return <PageSpinner message="Loading accommodations..." />;
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -184,7 +180,18 @@ export default function AccommodationList() {
         </CardBody>
       </Card>
 
-      {!selectedEventId ? (
+      {loading ? (
+        <Card>
+          <CardBody>
+            <div className="text-center py-8 text-gray-500">
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-5 h-5 border-2 border-primary-600 border-t-transparent rounded-full animate-spin"></div>
+                <span>Fetching accommodations...</span>
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+      ) : !selectedEventId ? (
         <Card>
           <CardBody>
             <EmptyState

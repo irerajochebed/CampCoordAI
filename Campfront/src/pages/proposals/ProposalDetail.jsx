@@ -29,6 +29,7 @@ import { PageSpinner } from '../../components/ui/Spinner';
 import { useAuth } from '../../contexts/AuthContext';
 import Modal from '../../components/ui/Modal';
 import Textarea from '../../components/ui/Textarea';
+import Input from '../../components/ui/Input';
 
 export default function ProposalDetail() {
   const navigate = useNavigate();
@@ -41,6 +42,9 @@ export default function ProposalDetail() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewAction, setReviewAction] = useState(null); // 'leader_recommend', 'leader_revision', 'leader_reject', 'admin_approve', 'admin_revision', 'admin_reject'
   const [reviewComments, setReviewComments] = useState('');
+  const [confirmedVenue, setConfirmedVenue] = useState('');
+  const [confirmedStartDate, setConfirmedStartDate] = useState('');
+  const [confirmedEndDate, setConfirmedEndDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   // Authorization checks
@@ -73,6 +77,11 @@ export default function ProposalDetail() {
   const handleOpenReview = (action) => {
     setReviewAction(action);
     setReviewComments('');
+    if (proposal) {
+      setConfirmedVenue(proposal.venue || '');
+      setConfirmedStartDate(proposal.startDate || '');
+      setConfirmedEndDate(proposal.endDate || '');
+    }
     setShowReviewModal(true);
   };
 
@@ -105,7 +114,9 @@ export default function ProposalDetail() {
         });
       } else if (reviewAction === 'admin_approve') {
         response = await proposalApi.adminApproval(id, {
-          decision: 'APPROVED',
+          confirmedVenue: confirmedVenue.trim() || proposal.venue,
+          confirmedStartDate: confirmedStartDate || proposal.startDate,
+          confirmedEndDate: confirmedEndDate || proposal.endDate,
           comments: reviewComments.trim()
         });
       } else if (reviewAction === 'admin_revision') {
@@ -699,13 +710,38 @@ export default function ProposalDetail() {
       >
         <div className="space-y-4">
           {reviewAction === 'admin_approve' && (
-            <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-2.5 text-xs text-emerald-900">
-              <ShieldCheck className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold text-emerald-950">Union Administrator Final Approval</p>
-                <p className="mt-0.5">
-                  Confirming approval locks the proposed dates and venue, and automatically creates the official event record in the events catalog.
-                </p>
+            <div className="space-y-4">
+              <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-2.5 text-xs text-emerald-900">
+                <ShieldCheck className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-emerald-950">Union Administrator Final Approval</p>
+                  <p className="mt-0.5">
+                    Confirming approval locks the proposed dates and venue, and automatically creates the official event record in the events catalog.
+                  </p>
+                </div>
+              </div>
+              <Input
+                label="Confirmed Venue"
+                value={confirmedVenue}
+                onChange={(e) => setConfirmedVenue(e.target.value)}
+                placeholder="Enter confirmed venue"
+                required
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Input
+                  label="Confirmed Start Date"
+                  type="date"
+                  value={confirmedStartDate}
+                  onChange={(e) => setConfirmedStartDate(e.target.value)}
+                  required
+                />
+                <Input
+                  label="Confirmed End Date"
+                  type="date"
+                  value={confirmedEndDate}
+                  onChange={(e) => setConfirmedEndDate(e.target.value)}
+                  required
+                />
               </div>
             </div>
           )}

@@ -227,11 +227,7 @@ export default function StaffAssignment() {
     return variants[position] || 'default';
   };
 
-  if (loading) {
-    return <PageSpinner message="Loading staff assignments..." />;
-  }
-
-  const canManage = isUnionAdmin || event?.coordinator?.id === user.userId;
+  const canManage = isUnionAdmin || event?.coordinator?.id === user?.userId;
 
   return (
     <div className="space-y-6">

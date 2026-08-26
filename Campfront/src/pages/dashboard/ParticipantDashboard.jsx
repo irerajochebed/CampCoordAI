@@ -15,7 +15,7 @@ import Button from '../../components/ui/Button';
 import { PageSpinner } from '../../components/ui/Spinner';
 
 export default function ParticipantDashboard() {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [registrations, setRegistrations] = useState([
     { 
       id: 1, 
@@ -48,14 +48,6 @@ export default function ParticipantDashboard() {
     { id: 2, title: 'Room Assigned', message: 'You have been assigned to Building A, Room 101', time: '5 hours ago', read: false },
     { id: 3, title: 'Schedule Update', message: 'Morning devotion time changed to 7:00 AM', time: '1 day ago', read: true },
   ]);
-
-  useEffect(() => {
-    setTimeout(() => setLoading(false), 1000);
-  }, []);
-
-  if (loading) {
-    return <PageSpinner message="Loading dashboard..." />;
-  }
 
   const getStatusBadge = (status) => {
     const variants = {

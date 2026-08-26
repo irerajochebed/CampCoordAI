@@ -161,10 +161,6 @@ export default function AdminDashboard() {
   const loading = statsLoading || proposalsLoading;
   const error = statsError || proposalsError;
 
-  if (loading && !stats) {
-    return <PageSpinner message="Loading dashboard..." />;
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}

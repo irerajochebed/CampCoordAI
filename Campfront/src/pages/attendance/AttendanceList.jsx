@@ -247,10 +247,6 @@ export default function AttendanceList() {
     return <Badge variant="warning">Absent</Badge>;
   };
 
-  if (loading && !selectedEvent) {
-    return <PageSpinner message="Loading attendance data..." />;
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
