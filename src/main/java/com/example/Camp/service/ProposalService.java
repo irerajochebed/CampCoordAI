@@ -48,4 +48,8 @@ public interface ProposalService {
 
     // Field Leader approves/rejects a FIELD-scope proposal
     ProposalResponse fieldReviewProposal(Long id, ProposalReviewRequest request, Long fieldLeaderId);
+
+    // Reviewer resolution logic
+    com.example.Camp.entity.User findDesignatedReviewer(com.example.Camp.enums.ProposalScope scope, Long targetOrgUnitId, Long departmentId);
+    com.example.Camp.entity.User findDesignatedReviewer(com.example.Camp.enums.ProposalScope scope, Long targetOrgUnitId, Long departmentId, Long creatorId);
 }

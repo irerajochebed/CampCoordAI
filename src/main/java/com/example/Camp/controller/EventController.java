@@ -16,12 +16,37 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+import com.example.Camp.dto.event.ConflictCheckDto;
+import com.example.Camp.service.ConflictValidationService;
+import java.time.LocalDate;
+
 @RestController
-@RequestMapping("/api/events")
+@RequestMapping({"/api/events", "/api/v1/events"})
 @RequiredArgsConstructor
 public class EventController {
     
     private final EventService eventService;
+    private final ConflictValidationService conflictValidationService;
+
+    @GetMapping("/check-conflicts")
+    public ResponseEntity<ApiResponse<ConflictCheckDto>> checkConflicts(
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
+            @RequestParam(required = false) Long orgUnitId,
+            @RequestParam(required = false) Long departmentId,
+            @RequestParam(required = false) String venue,
+            @RequestParam(required = false) List<Long> leaderIds,
+            @RequestParam(required = false) Long excludeProposalId) {
+        
+        LocalDate start = (startDate != null && !startDate.isBlank()) ? LocalDate.parse(startDate) : null;
+        LocalDate end = (endDate != null && !endDate.isBlank()) ? LocalDate.parse(endDate) : null;
+
+        ConflictCheckDto result = conflictValidationService.performFullConflictCheck(
+                start, end, orgUnitId, departmentId, venue, leaderIds, excludeProposalId
+        );
+
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
     
     @PostMapping
     @PreAuthorize("hasRole('ADMINISTRATOR') or hasRole('COORDINATOR')")
@@ -74,6 +99,13 @@ public class EventController {
     public ResponseEntity<ApiResponse<List<EventResponse>>> getEventsByCoordinator(
             @PathVariable Long coordinatorId) {
         List<EventResponse> response = eventService.getEventsByCoordinator(coordinatorId);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+    
+    @GetMapping("/my-events")
+    public ResponseEntity<ApiResponse<List<EventResponse>>> getMyEvents(Authentication authentication) {
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        List<EventResponse> response = eventService.getEventsByCoordinator(userDetails.getId());
         return ResponseEntity.ok(ApiResponse.success(response));
     }
     

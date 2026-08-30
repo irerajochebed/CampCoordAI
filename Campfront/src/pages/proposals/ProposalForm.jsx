@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { proposalApi, departmentApi, organizationApi } from '../../api';
+import { proposalApi, departmentApi, organizationApi, eventApi } from '../../api';
 import { FileText, Save, ArrowLeft } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -10,13 +10,14 @@ import Select from '../../components/ui/Select';
 import Textarea from '../../components/ui/Textarea';
 import Alert from '../../components/ui/Alert';
 import { PageSpinner } from '../../components/ui/Spinner';
-
 import OrganizationUnitSelector from '../../components/ui/OrganizationUnitSelector';
+import { useTranslation } from '../../contexts/LanguageContext';
 
 export default function ProposalForm() {
   const navigate = useNavigate();
   const { id } = useParams();
   const { user } = useAuth();
+  const { t } = useTranslation();
   const isEdit = !!id;
 
   const [loading, setLoading] = useState(isEdit);
@@ -37,12 +38,15 @@ export default function ProposalForm() {
     venue: '',
     expectedParticipants: '',
     estimatedBudget: '',
+    amountPerParticipant: '',
     requiredResources: ''
   });
 
   const [errors, setErrors] = useState({});
   const [orgUnits, setOrgUnits] = useState([]);
   const [filteredUnits, setFilteredUnits] = useState([]);
+  const [conflictState, setConflictState] = useState({ loading: false, result: null });
+  const minStartDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   useEffect(() => {
     fetchUserDepartment();
@@ -50,17 +54,54 @@ export default function ProposalForm() {
     if (isEdit) fetchProposal();
   }, [id]);
 
-  // Filter org units whenever scope changes
+  useEffect(() => {
+    if (!formData.startDate || !formData.endDate) {
+      setConflictState({ loading: false, result: null });
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setConflictState({ loading: true, result: null });
+      try {
+        const res = await eventApi.checkConflicts({
+          startDate: formData.startDate,
+          endDate: formData.endDate,
+          venue: formData.venue,
+          departmentId: formData.departmentId,
+          orgUnitId: formData.targetOrganizationUnitId,
+          leaderIds: user?.id ? [user.id] : [],
+          excludeProposalId: id ? Number(id) : null
+        });
+        setConflictState({ loading: false, result: res.data?.data });
+      } catch (err) {
+        setConflictState({ loading: false, result: null });
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [formData.startDate, formData.endDate, formData.venue, formData.departmentId, formData.targetOrganizationUnitId, user?.id, id]);
+
   useEffect(() => {
     const level = formData.scope === 'UNION' ? 'UNION' : formData.scope === 'DISTRICT' ? 'DISTRICT' : 'FIELD';
-    setFilteredUnits(orgUnits.filter(u => u.level === level));
-    setFormData(prev => ({ ...prev, targetOrganizationUnitId: '' }));
+    const units = orgUnits.filter(u => u.level === level);
+    setFilteredUnits(units);
+    if (formData.scope === 'UNION') {
+      const rumUnit = units.find(u => u.code === 'RUM' || u.id === 1) || units[0];
+      setFormData(prev => ({ ...prev, targetOrganizationUnitId: rumUnit ? rumUnit.id : 1 }));
+    } else {
+      setFormData(prev => ({ ...prev, targetOrganizationUnitId: '' }));
+    }
   }, [formData.scope, orgUnits]);
 
   const fetchOrgUnits = async () => {
     try {
       const res = await organizationApi.getAll();
-      setOrgUnits(res.data?.data || []);
+      const units = res.data?.data || [];
+      setOrgUnits(units);
+      if (formData.scope === 'UNION') {
+        const rumUnit = units.find(u => u.code === 'RUM' || u.id === 1) || units[0];
+        setFormData(prev => ({ ...prev, targetOrganizationUnitId: rumUnit ? rumUnit.id : 1 }));
+      }
     } catch {}
   };
 
@@ -81,56 +122,59 @@ export default function ProposalForm() {
     { id: 14, type: 'COMMUNICATION', name: 'Communication Department' }
   ];
 
-  const activeMinistryList = departments.length > 0 ? departments : OFFICIAL_RUM_MINISTRIES;
+  const activeMinistryList = (departments.length > 0 ? departments : OFFICIAL_RUM_MINISTRIES).map(d => ({
+    id: d.id,
+    type: d.type,
+    name: t(`ministries.${d.type}`, d.name)
+  }));
 
   const fetchUserDepartment = async () => {
     try {
       const response = await departmentApi.getAll();
       if (response.data?.success && response.data.data?.length > 0) {
-        const depts = response.data.data;
-        setDepartments(depts);
-        const myDepartment = depts.find(dept => dept.leader?.id === user?.userId || dept.leader?.id === user?.id);
-        
-        if (myDepartment) {
-          setUserDepartment(myDepartment);
-          setFormData(prev => ({ ...prev, departmentId: myDepartment.id }));
-        } else if (depts.length > 0) {
-          setFormData(prev => ({ ...prev, departmentId: prev.departmentId || depts[0].id }));
+        setDepartments(response.data.data);
+        const dept = response.data.data.find(d => d.leader?.id === user?.userId || d.leader?.id === user?.id);
+        if (dept) {
+          setUserDepartment(dept);
+          setFormData(prev => ({ ...prev, departmentId: dept.id }));
+        } else if (response.data.data.length > 0) {
+          setFormData(prev => ({ ...prev, departmentId: response.data.data[0].id }));
         }
       } else {
-        setDepartments(OFFICIAL_RUM_MINISTRIES);
-        setFormData(prev => ({ ...prev, departmentId: prev.departmentId || OFFICIAL_RUM_MINISTRIES[0].id }));
+        setFormData(prev => ({ ...prev, departmentId: 1 }));
       }
-    } catch (error) {
-      console.error('Error fetching ministry information:', error);
-      setDepartments(OFFICIAL_RUM_MINISTRIES);
-      setFormData(prev => ({ ...prev, departmentId: prev.departmentId || OFFICIAL_RUM_MINISTRIES[0].id }));
+    } catch (err) {
+      setFormData(prev => ({ ...prev, departmentId: 1 }));
     }
   };
 
   const fetchProposal = async () => {
     try {
-      setLoading(true);
       const response = await proposalApi.getById(id);
-      if (response.data.success) {
-        const p = response.data.data;
+      if (response.data?.success) {
+        const proposal = response.data.data;
         setFormData({
-          eventName: p.eventName,
-          eventType: p.eventType,
-          departmentId: p.departmentId || '',
-          scope: p.scope || 'FIELD',
-          targetOrganizationUnitId: p.targetOrganizationUnitId || '',
-          objectives: p.objectives,
-          startDate: p.startDate,
-          endDate: p.endDate,
-          venue: p.venue,
-          expectedParticipants: p.expectedParticipants || '',
-          estimatedBudget: p.estimatedBudget || '',
-          requiredResources: p.requiredResources || ''
+          eventName: proposal.eventName || '',
+          eventType: proposal.eventType || 'CAMP',
+          departmentId: proposal.department?.id || '',
+          scope: proposal.scope || 'FIELD',
+          targetOrganizationUnitId: proposal.targetOrganizationUnit?.id || '',
+          objectives: proposal.objectives || '',
+          startDate: proposal.startDate || '',
+          endDate: proposal.endDate || '',
+          venue: proposal.venue || '',
+          expectedParticipants: proposal.expectedParticipants || '',
+          estimatedBudget: proposal.estimatedBudget || '',
+          amountPerParticipant: proposal.amountPerParticipant || (proposal.estimatedBudget && proposal.expectedParticipants ? Math.round(Number(proposal.estimatedBudget) / Number(proposal.expectedParticipants)) : ''),
+          requiredResources: proposal.requiredResources || ''
         });
       }
     } catch (error) {
-      setAlert({ type: 'error', message: error.response?.data?.message || 'Failed to fetch proposal' });
+      console.error('Error fetching proposal:', error);
+      setAlert({
+        type: 'error',
+        message: t('common.error', 'Failed to fetch proposal details')
+      });
     } finally {
       setLoading(false);
     }
@@ -140,42 +184,46 @@ export default function ProposalForm() {
     const newErrors = {};
 
     if (!formData.eventName.trim()) {
-      newErrors.eventName = 'Event name is required';
+      newErrors.eventName = t('common.error', 'Event name is required');
     }
 
     if (!formData.eventType) {
-      newErrors.eventType = 'Event type is required';
+      newErrors.eventType = t('common.error', 'Event type is required');
     }
 
     if (!formData.departmentId) {
-      newErrors.departmentId = 'Department is required. You must be assigned as a department leader.';
+      newErrors.departmentId = t('common.error', 'Department is required');
     }
 
     if (!formData.objectives.trim()) {
-      newErrors.objectives = 'Objectives are required';
+      newErrors.objectives = t('common.error', 'Objectives are required');
     }
 
     if (!formData.startDate) {
-      newErrors.startDate = 'Start date is required';
+      newErrors.startDate = t('common.error', 'Start date is required');
+    } else if (formData.startDate < minStartDate) {
+      newErrors.startDate = t('proposals.advanceNoticeError', 'Events must be planned and scheduled at least 30 days in advance to allow proper participant preparation.');
     }
 
     if (!formData.endDate) {
-      newErrors.endDate = 'End date is required';
+      newErrors.endDate = t('common.error', 'End date is required');
     }
 
     if (formData.startDate && formData.endDate && new Date(formData.startDate) > new Date(formData.endDate)) {
-      newErrors.endDate = 'End date must be after start date';
+      newErrors.endDate = t('common.error', 'End date must be after start date');
     }
 
     if (!formData.venue.trim()) {
-      newErrors.venue = 'Venue is required';
+      newErrors.venue = t('common.error', 'Venue is required');
     }
 
-    if (!formData.estimatedBudget || formData.estimatedBudget <= 0) {
-      newErrors.estimatedBudget = 'Valid budget is required';
+    if (!formData.estimatedBudget || Number(formData.estimatedBudget) <= 0) {
+      newErrors.estimatedBudget = t('common.error', 'Valid budget is required');
     }
-    if (!formData.scope) newErrors.scope = 'Scope is required';
-    if (!formData.targetOrganizationUnitId) newErrors.targetOrganizationUnitId = 'Target organization unit is required';
+    if (!formData.scope) newErrors.scope = t('common.error', 'Scope is required');
+    if (formData.scope !== 'UNION' && !formData.targetOrganizationUnitId) {
+      newErrors.targetOrganizationUnitId = t('common.error', 'Target organization unit is required');
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -185,18 +233,22 @@ export default function ProposalForm() {
     e.preventDefault();
 
     if (!validate()) {
-      setAlert({ type: 'error', message: 'Please fill in all required fields correctly' });
+      setAlert({ type: 'error', message: t('common.error', 'Please fill in all required fields correctly') });
       return;
     }
 
     setSubmitting(true);
     try {
+      const targetUnitId = formData.scope === 'UNION' 
+        ? (formData.targetOrganizationUnitId ? Number(formData.targetOrganizationUnitId) : 1)
+        : Number(formData.targetOrganizationUnitId);
+
       const payload = {
         ...formData,
-        departmentId: parseInt(formData.departmentId),
-        targetOrganizationUnitId: parseInt(formData.targetOrganizationUnitId),
-        expectedParticipants: formData.expectedParticipants ? parseInt(formData.expectedParticipants) : null,
-        estimatedBudget: parseFloat(formData.estimatedBudget)
+        departmentId: Number(formData.departmentId),
+        targetOrganizationUnitId: targetUnitId,
+        expectedParticipants: formData.expectedParticipants ? Number(formData.expectedParticipants) : null,
+        estimatedBudget: Number(formData.estimatedBudget)
       };
 
       let response;
@@ -206,17 +258,23 @@ export default function ProposalForm() {
         response = await proposalApi.create(payload);
       }
 
-      if (response.data.success) {
+      if (response.data?.success) {
         setAlert({
           type: 'success',
-          message: `Proposal ${isEdit ? 'updated' : 'created'} successfully`
+          message: t('common.success', `Proposal ${isEdit ? 'updated' : 'created'} successfully`)
         });
-        setTimeout(() => navigate('/proposals'), 1500);
+        setTimeout(() => navigate('/app/proposals'), 1500);
       }
     } catch (error) {
+      console.error('Error submitting proposal:', error);
+      const serverMessage = error.response?.data?.message 
+        || error.response?.data?.error 
+        || (typeof error.response?.data === 'string' ? error.response.data : null)
+        || error.message 
+        || t('common.error', 'Failed to save proposal');
       setAlert({
         type: 'error',
-        message: error.response?.data?.message || `Failed to ${isEdit ? 'update' : 'create'} proposal`
+        message: serverMessage
       });
     } finally {
       setSubmitting(false);
@@ -226,20 +284,20 @@ export default function ProposalForm() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    // Clear error for this field
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
 
   const scopeOptions = [
-    { value: 'DISTRICT', label: 'District — reviewed by District Pastor' },
-    { value: 'FIELD', label: 'Field — reviewed by Field Leader' },
-    { value: 'UNION', label: 'Union — reviewed by Dept Leader then Union Admin' },
+    { value: 'FIELD', label: t('orgSelector.step2Field', 'Conference / Field Level') },
+    { value: 'UNION', label: t('orgSelector.step1Union', 'Rwanda Union Level (RUM)') },
+    { value: 'DISTRICT', label: t('orgSelector.step3District', 'Evangelical District Level') }
   ];
 
   const eventTypeOptions = [
     { value: 'CAMP', label: 'Camp' },
+    { value: 'CAMPOREE', label: 'Camporee' },
     { value: 'CONFERENCE', label: 'Conference' },
     { value: 'RETREAT', label: 'Retreat' },
     { value: 'TRAINING', label: 'Training' },
@@ -248,27 +306,26 @@ export default function ProposalForm() {
   ];
 
   if (loading) {
-    return <PageSpinner message="Loading proposal..." />;
+    return <PageSpinner message={t('common.loading', 'Loading proposal...')} />;
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
-            {isEdit ? 'Edit Proposal' : 'Create New Proposal'}
+            {isEdit ? t('proposals.editProposal', 'Edit Proposal') : t('proposals.newProposal', 'Create New Proposal')}
           </h1>
           <p className="text-gray-600 mt-1">
-            {isEdit ? 'Update your event proposal' : 'Submit a new event proposal for review'}
+            {isEdit ? t('proposals.editProposal', 'Update your event proposal') : t('proposals.subtitle', 'Submit a new event proposal for review')}
           </p>
         </div>
         <Button
           variant="ghost"
           icon={<ArrowLeft className="w-4 h-4" />}
-          onClick={() => navigate('/proposals')}
+          onClick={() => navigate('/app/proposals')}
         >
-          Back to Proposals
+          {t('common.backToProposals', 'Back to Proposals')}
         </Button>
       </div>
 
@@ -283,14 +340,13 @@ export default function ProposalForm() {
       <form onSubmit={handleSubmit}>
         <Card>
           <CardHeader>
-            <CardTitle>Proposal Details</CardTitle>
+            <CardTitle>{t('proposals.proposalDetails', 'Proposal Details')}</CardTitle>
           </CardHeader>
           <CardBody>
             <div className="space-y-6">
-              {/* Basic Information */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Input
-                  label="Event Name"
+                  label={t('proposals.eventName', 'Event Name')}
                   name="eventName"
                   value={formData.eventName}
                   onChange={handleChange}
@@ -300,7 +356,7 @@ export default function ProposalForm() {
                 />
 
                 <Select
-                  label="Event Type"
+                  label={t('proposals.eventType', 'Event Type')}
                   name="eventType"
                   value={formData.eventType}
                   onChange={handleChange}
@@ -310,9 +366,8 @@ export default function ProposalForm() {
                 />
               </div>
 
-              {/* Hosting Ministry / Department Selector */}
               <Select
-                label="Hosting Ministry / Department *"
+                label={t('proposals.hostingMinistry', 'Hosting Ministry / Department *')}
                 name="departmentId"
                 value={formData.departmentId}
                 onChange={handleChange}
@@ -322,11 +377,10 @@ export default function ProposalForm() {
                 required
               />
 
-              {/* Scope and Target Organization Unit */}
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <Select
-                    label="Proposal Scope"
+                    label={t('proposals.proposalScope', 'Proposal Scope')}
                     name="scope"
                     value={formData.scope}
                     onChange={handleChange}
@@ -336,7 +390,7 @@ export default function ProposalForm() {
                   />
                   {formData.scope !== 'DISTRICT' && (
                     <Select
-                      label={formData.scope === 'UNION' ? 'Target Union' : 'Target Field'}
+                      label={formData.scope === 'UNION' ? t('proposals.targetUnion', 'Target Union') : t('proposals.targetField', 'Target Field')}
                       name="targetOrganizationUnitId"
                       value={formData.targetOrganizationUnitId}
                       onChange={handleChange}
@@ -351,7 +405,7 @@ export default function ProposalForm() {
                 {formData.scope === 'DISTRICT' && (
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Target District Location Scope <span className="text-red-500">*</span>
+                      {t('proposals.targetDistrict', 'Target District Location Scope')} <span className="text-red-500">*</span>
                     </label>
                     <OrganizationUnitSelector
                       showChurch={false}
@@ -374,7 +428,7 @@ export default function ProposalForm() {
               </div>
 
               <Textarea
-                label="Objectives"
+                label={t('proposals.objectives', 'Objectives')}
                 name="objectives"
                 value={formData.objectives}
                 onChange={handleChange}
@@ -384,12 +438,12 @@ export default function ProposalForm() {
                 placeholder="Describe the main objectives of this event..."
               />
 
-              {/* Dates and Location */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Input
-                  label="Start Date"
+                  label={t('proposals.startDate', 'Start Date')}
                   name="startDate"
                   type="date"
+                  min={minStartDate}
                   value={formData.startDate}
                   onChange={handleChange}
                   error={errors.startDate}
@@ -397,7 +451,7 @@ export default function ProposalForm() {
                 />
 
                 <Input
-                  label="End Date"
+                  label={t('proposals.endDate', 'End Date')}
                   name="endDate"
                   type="date"
                   value={formData.endDate}
@@ -407,8 +461,38 @@ export default function ProposalForm() {
                 />
               </div>
 
+              {formData.startDate && formData.endDate && (
+                <div className="mt-2">
+                  {conflictState.loading ? (
+                    <div className="p-3 bg-blue-50 text-blue-700 text-xs font-semibold rounded-lg flex items-center gap-2">
+                      <span className="w-2 h-2 bg-blue-600 rounded-full animate-ping"></span>
+                      Checking RUM Master Calendar & Leader Availability...
+                    </div>
+                  ) : conflictState.result ? (
+                    conflictState.result.hasConflict ? (
+                      <div className="p-4 bg-red-50 border border-red-200 rounded-lg space-y-2">
+                        <div className="flex items-center gap-2 text-red-800 font-bold text-sm">
+                          <span className="w-2.5 h-2.5 bg-red-600 rounded-full"></span>
+                          Schedule & Leadership Conflict Detected
+                        </div>
+                        <ul className="list-disc list-inside text-xs text-red-700 space-y-1 font-medium">
+                          {conflictState.result.conflicts.map((msg, idx) => (
+                            <li key={idx}>{msg}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-lg flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full"></span>
+                        Calendar Available: No schedule, venue, or leader conflicts detected for selected dates.
+                      </div>
+                    )
+                  ) : null}
+                </div>
+              )}
+
               <Input
-                label="Venue"
+                label={t('proposals.venue', 'Venue')}
                 name="venue"
                 value={formData.venue}
                 onChange={handleChange}
@@ -417,10 +501,9 @@ export default function ProposalForm() {
                 placeholder="Enter event venue/location"
               />
 
-              {/* Participants and Budget */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <Input
-                  label="Expected Participants"
+                  label={t('proposals.expectedParticipants', 'Expected Participants')}
                   name="expectedParticipants"
                   type="number"
                   value={formData.expectedParticipants}
@@ -431,21 +514,48 @@ export default function ProposalForm() {
                 />
 
                 <Input
-                  label="Estimated Budget (RWF)"
+                  label={t('proposals.estimatedBudget', 'Estimated Total Budget (RWF)')}
                   name="estimatedBudget"
                   type="number"
                   value={formData.estimatedBudget}
                   onChange={handleChange}
                   error={errors.estimatedBudget}
                   required
-                  placeholder="Enter budget in RWF"
+                  placeholder="Enter total budget in RWF"
                   min="0"
                   step="1000"
                 />
+
+                <Input
+                  label={t('proposals.amountPerParticipant', 'Amount per Participant to be Paid (RWF)')}
+                  name="amountPerParticipant"
+                  type="number"
+                  value={formData.amountPerParticipant}
+                  onChange={handleChange}
+                  placeholder="Fee per participant in RWF"
+                  min="0"
+                  step="500"
+                />
               </div>
 
+              {Boolean(Number(formData.expectedParticipants) > 0 && Number(formData.estimatedBudget) > 0) && (
+                <div className="p-3.5 bg-amber-50/80 border border-amber-200 rounded-xl flex items-center justify-between text-xs">
+                  <span className="text-amber-900 font-semibold flex items-center gap-1.5">
+                    <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>
+                    Estimated Cost / Amount per Participant to be Paid:
+                  </span>
+                  <span className="font-bold text-amber-950 text-sm bg-white px-2.5 py-1 rounded-md border border-amber-200 shadow-sm">
+                    {new Intl.NumberFormat('en-RW', { style: 'currency', currency: 'RWF', minimumFractionDigits: 0 }).format(
+                      formData.amountPerParticipant 
+                        ? Number(formData.amountPerParticipant) 
+                        : Math.round(Number(formData.estimatedBudget) / Number(formData.expectedParticipants))
+                    )} / person
+                  </span>
+                </div>
+              )}
+
               <Textarea
-                label="Required Resources"
+                label={t('proposals.requiredResources', 'Required Resources')}
                 name="requiredResources"
                 value={formData.requiredResources}
                 onChange={handleChange}
@@ -456,14 +566,13 @@ export default function ProposalForm() {
           </CardBody>
         </Card>
 
-        {/* Action Buttons */}
         <div className="flex justify-end gap-4 mt-6">
           <Button
             type="button"
             variant="ghost"
-            onClick={() => navigate('/proposals')}
+            onClick={() => navigate('/app/proposals')}
           >
-            Cancel
+            {t('common.cancel', 'Cancel')}
           </Button>
           <Button
             type="submit"
@@ -471,7 +580,7 @@ export default function ProposalForm() {
             icon={<Save className="w-4 h-4" />}
             loading={submitting}
           >
-            {isEdit ? 'Update Proposal' : 'Create Proposal'}
+            {isEdit ? t('proposals.editProposal', 'Update Proposal') : t('proposals.newProposal', 'Create Proposal')}
           </Button>
         </div>
       </form>

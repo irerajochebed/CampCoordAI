@@ -27,6 +27,7 @@ import Badge from '../../components/ui/Badge';
 import Alert from '../../components/ui/Alert';
 import { PageSpinner } from '../../components/ui/Spinner';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTranslation } from '../../contexts/LanguageContext';
 import Modal from '../../components/ui/Modal';
 import Textarea from '../../components/ui/Textarea';
 import Input from '../../components/ui/Input';
@@ -35,6 +36,7 @@ export default function ProposalDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
   const { user, isAdmin } = useAuth();
+  const { t } = useTranslation();
   
   const [proposal, setProposal] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -204,7 +206,7 @@ export default function ProposalDetail() {
         <Button
           variant="primary"
           className="mt-4"
-          onClick={() => navigate('/proposals')}
+          onClick={() => navigate('/app/proposals')}
         >
           Back to Proposals
         </Button>
@@ -267,7 +269,7 @@ export default function ProposalDetail() {
           <Button
             variant="ghost"
             icon={<ArrowLeft className="w-4 h-4" />}
-            onClick={() => navigate('/proposals')}
+            onClick={() => navigate('/app/proposals')}
             className="mb-3"
           >
             Back to Proposals
@@ -293,7 +295,7 @@ export default function ProposalDetail() {
         {/* Action Controls */}
         <div className="flex gap-2 flex-wrap items-center">
           {canEdit && (
-            <Link to={`/proposals/${id}/edit`}>
+            <Link to={`/app/proposals/${id}/edit`}>
               <Button variant="ghost" icon={<Edit className="w-4 h-4" />}>
                 Edit Proposal
               </Button>
@@ -543,10 +545,19 @@ export default function ProposalDetail() {
                     <DollarSign className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 font-medium">Estimated Budget</p>
+                    <p className="text-xs text-gray-500 font-medium">Estimated Budget & Fee</p>
                     <p className="font-semibold text-gray-900">
                       {formatCurrency(proposal.estimatedBudget)}
                     </p>
+                    {(proposal.amountPerParticipant || (proposal.expectedParticipants && proposal.estimatedBudget)) && (
+                      <p className="text-xs text-amber-700 font-bold mt-1 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 inline-block">
+                        {formatCurrency(
+                          proposal.amountPerParticipant 
+                            ? proposal.amountPerParticipant 
+                            : Math.round(Number(proposal.estimatedBudget) / Number(proposal.expectedParticipants))
+                        )} / participant
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

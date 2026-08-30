@@ -66,6 +66,9 @@ import AIInsights from './pages/analytics/AIInsights';
 // User Pages
 import UserList from './pages/users/UserList';
 
+// Notification Pages
+import NotificationList from './pages/notifications/NotificationList';
+
 // Protected Route Component
 function ProtectedRoute({ children, allowedRoles, requirePosition }) {
   const { user, loading } = useAuth();
@@ -128,13 +131,21 @@ function AppRoutes() {
         <Route path="users" element={<ProtectedRoute allowedRoles={['ADMINISTRATOR']}><UserList /></ProtectedRoute>} />
         
         {/* Proposal Routes */}
-        <Route path="proposals" element={<ProposalList />} />
+        <Route path="proposals" element={
+          <ProtectedRoute allowedRoles={['COORDINATOR', 'ADMINISTRATOR']}>
+            <ProposalList />
+          </ProtectedRoute>
+        } />
         <Route path="proposals/new" element={
           <ProtectedRoute allowedRoles={['COORDINATOR', 'ADMINISTRATOR']}>
             <ProposalForm />
           </ProtectedRoute>
         } />
-        <Route path="proposals/:id" element={<ProposalDetail />} />
+        <Route path="proposals/:id" element={
+          <ProtectedRoute allowedRoles={['COORDINATOR', 'ADMINISTRATOR']}>
+            <ProposalDetail />
+          </ProtectedRoute>
+        } />
         <Route path="proposals/:id/edit" element={
           <ProtectedRoute allowedRoles={['COORDINATOR', 'ADMINISTRATOR']}>
             <ProposalForm />
@@ -144,9 +155,21 @@ function AppRoutes() {
         {/* Event Routes */}
         <Route path="events" element={<EventList />} />
         <Route path="events/:id" element={<EventDetail />} />
-        <Route path="events/:id/edit" element={<EventForm />} />
-        <Route path="events/:id/sessions" element={<SessionManagement />} />
-        <Route path="events/:id/staff" element={<StaffAssignment />} />
+        <Route path="events/:id/edit" element={
+          <ProtectedRoute allowedRoles={['COORDINATOR', 'ADMINISTRATOR']}>
+            <EventForm />
+          </ProtectedRoute>
+        } />
+        <Route path="events/:id/sessions" element={
+          <ProtectedRoute allowedRoles={['COORDINATOR', 'ADMINISTRATOR']}>
+            <SessionManagement />
+          </ProtectedRoute>
+        } />
+        <Route path="events/:id/staff" element={
+          <ProtectedRoute allowedRoles={['COORDINATOR', 'ADMINISTRATOR']}>
+            <StaffAssignment />
+          </ProtectedRoute>
+        } />
         
         {/* Registration Routes */}
         <Route path="registrations" element={<RegistrationList />} />
@@ -263,6 +286,9 @@ function AppRoutes() {
             <AIInsights />
           </ProtectedRoute>
         } />
+        
+        {/* Notification Routes */}
+        <Route path="notifications" element={<NotificationList />} />
         
         {/* Catch all - 404 */}
         <Route path="*" element={

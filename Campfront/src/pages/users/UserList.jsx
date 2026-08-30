@@ -25,8 +25,10 @@ import EmptyState from '../../components/ui/EmptyState';
 import { userApi } from '../../api';
 import CreateCoordinatorModal from './CreateCoordinatorModal';
 import EditUserModal from './EditUserModal';
+import { useTranslation } from '../../contexts/LanguageContext';
 
 export default function UserList() {
+  const { t } = useTranslation();
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [loading, setLoading] = useState(true);

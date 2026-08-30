@@ -97,4 +97,6 @@ export function useTranslation() {
   return context;
 }
 
+export const useLanguage = useTranslation;
+
 export default LanguageContext;

@@ -57,6 +57,9 @@ public interface RegistrationRepository extends JpaRepository<Registration, Long
     
     boolean existsByQrCode(String qrCode);
     
+    @Query("SELECT r FROM Registration r WHERE r.deleted = false ORDER BY r.createdAt DESC")
+    List<Registration> findAllActive();
+    
     @Query("SELECT r FROM Registration r WHERE r.deleted = false AND " +
            "r.event.id = :eventId AND r.participant.id = :participantId")
     Optional<Registration> findByEventAndParticipant(@Param("eventId") Long eventId, 

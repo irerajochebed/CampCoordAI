@@ -35,6 +35,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
     
     @Query("SELECT u FROM User u WHERE u.deleted = false AND u.role = :role AND u.active = true")
     List<User> findActiveByRole(@Param("role") Role role);
+
+    @Query("SELECT u FROM User u WHERE u.deleted = false AND u.active = true AND u.position = :position AND u.organizationUnit.id = :orgUnitId")
+    List<User> findActiveByPositionAndOrganizationUnitId(@Param("position") Position position, @Param("orgUnitId") Long orgUnitId);
+
+    @Query("SELECT u FROM User u WHERE u.deleted = false AND u.active = true AND u.organizationUnit.id = :orgUnitId")
+    List<User> findActiveByOrganizationUnitId(@Param("orgUnitId") Long orgUnitId);
+
+    @Query("SELECT u FROM User u WHERE u.deleted = false AND u.active = true AND u.organizationUnit.parent IS NOT NULL AND u.organizationUnit.parent.id = :parentOrgUnitId")
+    List<User> findActiveByParentOrganizationUnitId(@Param("parentOrgUnitId") Long parentOrgUnitId);
     
     @Query("SELECT u FROM User u WHERE u.deleted = false AND " +
            "(LOWER(u.firstName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +

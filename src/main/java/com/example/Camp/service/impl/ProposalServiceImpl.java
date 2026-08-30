@@ -21,6 +21,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,9 +38,11 @@ public class ProposalServiceImpl implements ProposalService {
     private final DepartmentRepository departmentRepository;
     private final EventRepository eventRepository;
     private final OrganizationUnitRepository organizationUnitRepository;
+    private final UserRepository userRepository;
     private final UserService userService;
     private final NotificationService notificationService;
     private final DtoMapper dtoMapper;
+    private final com.example.Camp.service.ConflictValidationService conflictValidationService;
 
     public ProposalServiceImpl(
             ProposalRepository proposalRepository,
@@ -47,17 +50,192 @@ public class ProposalServiceImpl implements ProposalService {
             DepartmentRepository departmentRepository,
             EventRepository eventRepository,
             OrganizationUnitRepository organizationUnitRepository,
+            UserRepository userRepository,
             UserService userService,
             @Lazy NotificationService notificationService,
-            DtoMapper dtoMapper) {
+            DtoMapper dtoMapper,
+            com.example.Camp.service.ConflictValidationService conflictValidationService) {
         this.proposalRepository = proposalRepository;
         this.proposalReviewRepository = proposalReviewRepository;
         this.departmentRepository = departmentRepository;
         this.eventRepository = eventRepository;
         this.organizationUnitRepository = organizationUnitRepository;
+        this.userRepository = userRepository;
         this.userService = userService;
         this.notificationService = notificationService;
         this.dtoMapper = dtoMapper;
+        this.conflictValidationService = conflictValidationService;
+    }
+
+    // ── REVIEWER RESOLUTION LOGIC ─────────────────────────────────────────────
+
+    // ── REVIEWER RESOLUTION LOGIC ─────────────────────────────────────────────
+
+    @Override
+    public User findDesignatedReviewer(ProposalScope scope, Long targetOrgUnitId, Long departmentId) {
+        return findDesignatedReviewer(scope, targetOrgUnitId, departmentId, null);
+    }
+
+    @Override
+    public User findDesignatedReviewer(ProposalScope scope, Long targetOrgUnitId, Long departmentId, Long creatorId) {
+        log.info("Resolving designated reviewer: scope={}, targetOrgUnitId={}, departmentId={}, creatorId={}", scope, targetOrgUnitId, departmentId, creatorId);
+        User resolved = null;
+        try {
+            if (scope == ProposalScope.UNION) {
+                // 1. Look up user with organization_unit_id = 1 (RUM) AND matching department_id
+                if (departmentId != null) {
+                    Department dept = departmentRepository.findById(departmentId).orElse(null);
+                    if (dept != null && dept.getLeader() != null 
+                            && Boolean.TRUE.equals(dept.getLeader().getActive()) 
+                            && !Boolean.TRUE.equals(dept.getLeader().getDeleted())) {
+                        User leader = dept.getLeader();
+                        if (leader.getOrganizationUnit() != null 
+                                && Long.valueOf(1L).equals(leader.getOrganizationUnit().getId())
+                                && (creatorId == null || !leader.getId().equals(creatorId))) {
+                            log.info("Found Union Department Leader: {} for department {}", leader.getEmail(), departmentId);
+                            resolved = leader;
+                        }
+                    }
+                }
+                // Fallback step 1: Check active users in Union (id=1) excluding creator
+                if (resolved == null) {
+                    List<User> unionUsers = userRepository.findActiveByOrganizationUnitId(1L);
+                    for (User u : unionUsers) {
+                        if ((u.getPosition() == Position.UNION_LEADER || u.getPosition() == Position.DEPARTMENT_LEADER)
+                                && (creatorId == null || !u.getId().equals(creatorId))) {
+                            log.info("Found Union Leader: {}", u.getEmail());
+                            resolved = u;
+                            break;
+                        }
+                    }
+                }
+            } else if (scope == ProposalScope.FIELD) {
+                Long fieldId = (targetOrgUnitId != null && targetOrgUnitId > 0L) ? targetOrgUnitId : 1L;
+                if (departmentId != null) {
+                    Department dept = departmentRepository.findById(departmentId).orElse(null);
+                    if (dept != null && dept.getLeader() != null 
+                            && Boolean.TRUE.equals(dept.getLeader().getActive()) 
+                            && !Boolean.TRUE.equals(dept.getLeader().getDeleted())) {
+                        User leader = dept.getLeader();
+                        if (leader.getPosition() == Position.FIELD_LEADER 
+                                && leader.getOrganizationUnit() != null 
+                                && fieldId.equals(leader.getOrganizationUnit().getId())
+                                && (creatorId == null || !leader.getId().equals(creatorId))) {
+                            log.info("Found Field Leader: {} for department {}", leader.getEmail(), departmentId);
+                            resolved = leader;
+                        }
+                    }
+                }
+                if (resolved == null) {
+                    List<User> fieldLeaders = userRepository.findActiveByPositionAndOrganizationUnitId(Position.FIELD_LEADER, fieldId);
+                    for (User fl : fieldLeaders) {
+                        if (creatorId == null || !fl.getId().equals(creatorId)) {
+                            log.info("Fallback 1: Found Field Leader {} for field {}", fl.getEmail(), fieldId);
+                            resolved = fl;
+                            break;
+                        }
+                    }
+                }
+                if (resolved == null) {
+                    List<User> childLeaders = userRepository.findActiveByParentOrganizationUnitId(fieldId);
+                    for (User cl : childLeaders) {
+                        if (creatorId == null || !cl.getId().equals(creatorId)) {
+                            log.info("Fallback 2: Found Child District Leader {} under field {}", cl.getEmail(), fieldId);
+                            resolved = cl;
+                            break;
+                        }
+                    }
+                }
+            } else if (scope == ProposalScope.DISTRICT) {
+                if (targetOrgUnitId != null && targetOrgUnitId > 0L) {
+                    List<User> districtPastors = userRepository.findActiveByPositionAndOrganizationUnitId(Position.DISTRICT_PASTOR, targetOrgUnitId);
+                    if (districtPastors.isEmpty()) {
+                        districtPastors = userRepository.findActiveByPositionAndOrganizationUnitId(Position.PASTOR, targetOrgUnitId);
+                    }
+                    for (User dp : districtPastors) {
+                        if (creatorId == null || !dp.getId().equals(creatorId)) {
+                            resolved = dp;
+                            break;
+                        }
+                    }
+                    if (resolved == null) {
+                        OrganizationUnit districtUnit = organizationUnitRepository.findById(targetOrgUnitId).orElse(null);
+                        if (districtUnit != null && districtUnit.getParent() != null) {
+                            List<User> fieldLeaders = userRepository.findActiveByPositionAndOrganizationUnitId(Position.FIELD_LEADER, districtUnit.getParent().getId());
+                            for (User fl : fieldLeaders) {
+                                if (creatorId == null || !fl.getId().equals(creatorId)) {
+                                    resolved = fl;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error in findDesignatedReviewer: {}", e.getMessage(), e);
+        }
+
+        // Resilient Fallback: Any active Administrator (excluding creator if possible)
+        if (resolved == null) {
+            List<User> admins = userRepository.findActiveByRole(Role.ADMINISTRATOR);
+            for (User admin : admins) {
+                if (creatorId == null || !admin.getId().equals(creatorId)) {
+                    resolved = admin;
+                    break;
+                }
+            }
+            if (resolved == null && !admins.isEmpty()) {
+                resolved = admins.get(0);
+            }
+        }
+
+        log.info("Designated reviewer resolved: {}", resolved != null ? resolved.getEmail() : "None");
+        return resolved;
+    }
+
+    private void sendProposalSubmissionNotifications(Proposal proposal, User reviewer, User creator) {
+        if (notificationService == null) return;
+
+        String reviewerTitle = (reviewer != null)
+                ? (reviewer.getFirstName() + " " + reviewer.getLastName() + " (" + (reviewer.getPosition() != null ? reviewer.getPosition() : reviewer.getRole()) + ")")
+                : "Union Administrator";
+
+        String creatorTitle = (creator != null)
+                ? (creator.getFirstName() + " " + creator.getLastName())
+                : "Coordinator";
+
+        // 1. Notify Creator: Inform WHO the proposal was sent to
+        if (creator != null) {
+            try {
+                NotificationRequest creatorNotif = new NotificationRequest();
+                creatorNotif.setRecipientId(creator.getId());
+                creatorNotif.setActionUrl("/app/proposals/" + proposal.getId());
+                creatorNotif.setType(NotificationType.GENERAL_ANNOUNCEMENT);
+                creatorNotif.setTitle("Proposal Submitted: " + proposal.getEventName());
+                creatorNotif.setMessage("Your proposal '" + proposal.getEventName() + "' (Scope: " + proposal.getScope() + ") has been submitted and sent to " + reviewerTitle + " for review.");
+                notificationService.createNotification(creatorNotif);
+                log.info("Sent proposal submission confirmation notification to creator {}", creator.getId());
+            } catch (Exception e) {
+                log.warn("Failed to send creator notification: {}", e.getMessage());
+            }
+        }
+
+        // 2. Notify Reviewer: Inform pending review
+        if (reviewer != null && (creator == null || !reviewer.getId().equals(creator.getId()))) {
+            try {
+                NotificationRequest reviewerNotif = new NotificationRequest();
+                reviewerNotif.setRecipientId(reviewer.getId());
+                reviewerNotif.setActionUrl("/app/proposals/" + proposal.getId());
+                reviewerNotif.setType(NotificationType.GENERAL_ANNOUNCEMENT);
+                reviewerNotif.setTitle("New Proposal Pending Review: " + proposal.getEventName());
+                reviewerNotif.setMessage("A new proposal '" + proposal.getEventName() + "' has been submitted by " + creatorTitle + " and is awaiting your review.");
+                notificationService.createNotification(reviewerNotif);
+                log.info("Sent proposal review request notification to reviewer {}", reviewer.getId());
+            } catch (Exception e) {
+                log.warn("Failed to send reviewer notification: {}", e.getMessage());
+            }
+        }
     }
 
     // ── CREATE ────────────────────────────────────────────────────────────────
@@ -65,17 +243,67 @@ public class ProposalServiceImpl implements ProposalService {
     @Override
     public ProposalResponse createProposal(ProposalRequest request, Long userId) {
         validateDates(request.getStartDate(), request.getEndDate());
-        User proposedBy = userService.getUserById(userId);
-        Department department = departmentRepository.findById(request.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Department", "id", request.getDepartmentId()));
-        OrganizationUnit targetUnit = organizationUnitRepository.findById(request.getTargetOrganizationUnitId())
-                .orElseThrow(() -> new ResourceNotFoundException("OrganizationUnit", "id", request.getTargetOrganizationUnitId()));
+        // 30-Day Advance Notice Rule
+        conflictValidationService.validateAdvanceNotice(request.getStartDate());
 
-        validateScopeMatchesUnit(request.getScope(), targetUnit);
+        User proposedBy = userService.getUserById(userId);
+
+        // Leader Availability & Schedule Conflict Validation
+        List<Long> leadersToCheck = new ArrayList<>();
+        if (userId != null) leadersToCheck.add(userId);
+        List<String> leaderConflicts = conflictValidationService.checkLeaderAvailability(leadersToCheck, request.getStartDate(), request.getEndDate(), null);
+        Long checkOrgUnitId = request.getTargetOrganizationUnitId() != null ? request.getTargetOrganizationUnitId() : (proposedBy.getOrganizationUnit() != null ? proposedBy.getOrganizationUnit().getId() : 1L);
+        List<String> scheduleConflicts = conflictValidationService.checkScheduleConflicts(checkOrgUnitId, request.getDepartmentId(), request.getVenue(), request.getStartDate(), request.getEndDate(), null);
+
+        List<String> allConflicts = new ArrayList<>();
+        allConflicts.addAll(leaderConflicts);
+        allConflicts.addAll(scheduleConflicts);
+
+        if (!allConflicts.isEmpty()) {
+            throw new BadRequestException("Proposal creation blocked due to schedule conflicts:\n- " + String.join("\n- ", allConflicts));
+        }
+
+        // Resilient Department Resolution
+        Department department = null;
+        if (request.getDepartmentId() != null) {
+            department = departmentRepository.findById(request.getDepartmentId()).orElse(null);
+        }
+        if (department == null) {
+            department = departmentRepository.findByType(DepartmentType.YOUTH).orElse(null);
+        }
+        if (department == null) {
+            List<Department> allDepts = departmentRepository.findAll();
+            if (!allDepts.isEmpty()) {
+                department = allDepts.get(0);
+            } else {
+                throw new ResourceNotFoundException("Department", "id", request.getDepartmentId() != null ? request.getDepartmentId() : 1L);
+            }
+        }
+
+        // Resilient Target Unit Resolution
+        Long targetUnitId = request.getTargetOrganizationUnitId();
+        if (request.getScope() == ProposalScope.UNION || targetUnitId == null || targetUnitId <= 0L) {
+            targetUnitId = 1L;
+        }
+
+        OrganizationUnit targetUnit = organizationUnitRepository.findById(targetUnitId).orElse(null);
+        if (targetUnit == null) {
+            targetUnit = organizationUnitRepository.findByCode("RUM").orElse(null);
+        }
+        if (targetUnit == null) {
+            List<OrganizationUnit> units = organizationUnitRepository.findAll();
+            if (!units.isEmpty()) {
+                targetUnit = units.get(0);
+            } else {
+                throw new ResourceNotFoundException("OrganizationUnit", "id", targetUnitId);
+            }
+        }
+
+        User reviewer = findDesignatedReviewer(request.getScope(), targetUnit.getId(), department.getId(), userId);
 
         Proposal proposal = Proposal.builder()
                 .eventName(request.getEventName())
-                .eventType(request.getEventType())
+                .eventType(request.getEventType() != null ? request.getEventType() : EventType.CAMP)
                 .department(department)
                 .proposedBy(proposedBy)
                 .objectives(request.getObjectives())
@@ -85,13 +313,19 @@ public class ProposalServiceImpl implements ProposalService {
                 .expectedParticipants(request.getExpectedParticipants())
                 .estimatedBudget(request.getEstimatedBudget())
                 .requiredResources(request.getRequiredResources())
-                .scope(request.getScope())
+                .scope(request.getScope() != null ? request.getScope() : ProposalScope.UNION)
                 .targetOrganizationUnit(targetUnit)
                 .status(ProposalStatus.SUBMITTED)
+                .reviewedBy(reviewer)
+                .leaderReviewedBy(reviewer)
                 .build();
 
         Proposal saved = proposalRepository.save(proposal);
-        log.info("Proposal created: {} (scope={}) by user {}", saved.getEventName(), saved.getScope(), userId);
+        sendProposalSubmissionNotifications(saved, reviewer, proposedBy);
+        if (saved.getScope() == ProposalScope.FIELD) {
+            notifyFieldScopeUnionLeaders(saved);
+        }
+        log.info("Proposal created: {} (scope={}) by user {}, assigned reviewer {}", saved.getEventName(), saved.getScope(), userId, reviewer != null ? reviewer.getEmail() : "None");
         return dtoMapper.toProposalResponse(saved);
     }
 
@@ -99,16 +333,46 @@ public class ProposalServiceImpl implements ProposalService {
     public ProposalResponse createProposal(ProposalCreateRequest request, Long userId) {
         validateDates(request.getStartDate(), request.getEndDate());
         User proposedBy = userService.getUserById(userId);
-        Department department = departmentRepository.findById(request.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Department", "id", request.getDepartmentId()));
-        OrganizationUnit targetUnit = organizationUnitRepository.findById(request.getTargetOrganizationUnitId())
-                .orElseThrow(() -> new ResourceNotFoundException("OrganizationUnit", "id", request.getTargetOrganizationUnitId()));
 
-        validateScopeMatchesUnit(request.getScope(), targetUnit);
+        Department department = null;
+        if (request.getDepartmentId() != null) {
+            department = departmentRepository.findById(request.getDepartmentId()).orElse(null);
+        }
+        if (department == null) {
+            department = departmentRepository.findByType(DepartmentType.YOUTH).orElse(null);
+        }
+        if (department == null) {
+            List<Department> allDepts = departmentRepository.findAll();
+            if (!allDepts.isEmpty()) {
+                department = allDepts.get(0);
+            } else {
+                throw new ResourceNotFoundException("Department", "id", request.getDepartmentId() != null ? request.getDepartmentId() : 1L);
+            }
+        }
+
+        Long targetUnitId = request.getTargetOrganizationUnitId();
+        if (request.getScope() == ProposalScope.UNION || targetUnitId == null || targetUnitId <= 0L) {
+            targetUnitId = 1L;
+        }
+
+        OrganizationUnit targetUnit = organizationUnitRepository.findById(targetUnitId).orElse(null);
+        if (targetUnit == null) {
+            targetUnit = organizationUnitRepository.findByCode("RUM").orElse(null);
+        }
+        if (targetUnit == null) {
+            List<OrganizationUnit> units = organizationUnitRepository.findAll();
+            if (!units.isEmpty()) {
+                targetUnit = units.get(0);
+            } else {
+                throw new ResourceNotFoundException("OrganizationUnit", "id", targetUnitId);
+            }
+        }
+
+        User reviewer = findDesignatedReviewer(request.getScope(), targetUnit.getId(), department.getId(), userId);
 
         Proposal proposal = Proposal.builder()
                 .eventName(request.getEventName())
-                .eventType(request.getEventType())
+                .eventType(request.getEventType() != null ? request.getEventType() : EventType.CAMP)
                 .department(department)
                 .proposedBy(proposedBy)
                 .objectives(request.getObjectives())
@@ -118,13 +382,16 @@ public class ProposalServiceImpl implements ProposalService {
                 .expectedParticipants(request.getExpectedParticipants())
                 .estimatedBudget(request.getEstimatedBudget())
                 .requiredResources(request.getRequiredResources())
-                .scope(request.getScope())
+                .scope(request.getScope() != null ? request.getScope() : ProposalScope.UNION)
                 .targetOrganizationUnit(targetUnit)
                 .status(ProposalStatus.SUBMITTED)
+                .reviewedBy(reviewer)
+                .leaderReviewedBy(reviewer)
                 .build();
 
         Proposal saved = proposalRepository.save(proposal);
-        log.info("Proposal created: {} (scope={}) by user {}", saved.getEventName(), saved.getScope(), userId);
+        sendProposalSubmissionNotifications(saved, reviewer, proposedBy);
+        log.info("Proposal created: {} (scope={}) by user {}, assigned reviewer {}", saved.getEventName(), saved.getScope(), userId, reviewer != null ? reviewer.getEmail() : "None");
         return dtoMapper.toProposalResponse(saved);
     }
 
@@ -209,10 +476,22 @@ public class ProposalServiceImpl implements ProposalService {
         if (proposal.getStatus() != ProposalStatus.DRAFT && proposal.getStatus() != ProposalStatus.REVISION_REQUESTED) {
             throw new BadRequestException("Only DRAFT or REVISION_REQUESTED proposals can be submitted");
         }
+        User reviewer = findDesignatedReviewer(
+                proposal.getScope(), 
+                proposal.getTargetOrganizationUnit() != null ? proposal.getTargetOrganizationUnit().getId() : 1L, 
+                proposal.getDepartment() != null ? proposal.getDepartment().getId() : null,
+                proposal.getProposedBy() != null ? proposal.getProposedBy().getId() : null);
+        
         proposal.setStatus(ProposalStatus.SUBMITTED);
         proposal.setDeptLeaderEndorsed(false); // reset on re-submission
-        log.info("Proposal {} submitted (scope={})", id, proposal.getScope());
-        return dtoMapper.toProposalResponse(proposalRepository.save(proposal));
+        if (reviewer != null) {
+            proposal.setReviewedBy(reviewer);
+            proposal.setLeaderReviewedBy(reviewer);
+        }
+        Proposal saved = proposalRepository.save(proposal);
+        sendProposalSubmissionNotifications(saved, reviewer, proposal.getProposedBy());
+        log.info("Proposal {} submitted (scope={}), assigned reviewer {}", id, proposal.getScope(), reviewer != null ? reviewer.getEmail() : "None");
+        return dtoMapper.toProposalResponse(saved);
     }
 
     @Override
@@ -549,14 +828,32 @@ public class ProposalServiceImpl implements ProposalService {
             if (proposal.getEvent() != null) {
                 request.setEventId(proposal.getEvent().getId());
                 request.setActionUrl("/app/events/" + proposal.getEvent().getId());
+            } else {
+                request.setActionUrl("/app/proposals/" + proposal.getId());
             }
             request.setType(NotificationType.GENERAL_ANNOUNCEMENT);
-            request.setTitle("Proposal Approved!");
-            request.setMessage("Your proposal '" + proposal.getEventName() + "' has been approved by the Union Administrator.");
+            request.setTitle("Proposal Approved & Registration Open!");
+            request.setMessage("Your proposal '" + proposal.getEventName() + "' has been approved by the Union Administrator. The official event has been automatically created and registration is now OPEN!");
             notificationService.createNotification(request);
-            log.info("Sent proposal approval notification to user {}", proposal.getProposedBy().getId());
+            log.info("Sent proposal approval and event registration open notification to user {}", proposal.getProposedBy().getId());
         } catch (Exception e) {
             log.warn("Failed to send proposal approval notification: {}", e.getMessage());
+        }
+    }
+
+    private void notifyFieldScopeUnionLeaders(Proposal proposal) {
+        if (proposal == null || notificationService == null) return;
+        try {
+            String title = "Field Scope Event / Proposal Scheduled: " + proposal.getEventName();
+            String msg = "A Field Scope event proposal '" + proposal.getEventName() + "' at venue '" + proposal.getVenue() 
+                    + "' (" + proposal.getStartDate() + " to " + proposal.getEndDate() + ") has been submitted by " 
+                    + (proposal.getProposedBy() != null ? proposal.getProposedBy().getFirstName() + " " + proposal.getProposedBy().getLastName() : "Field Organizer") 
+                    + " for field " + (proposal.getTargetOrganizationUnit() != null ? proposal.getTargetOrganizationUnit().getName() : "Field Unit") + ".";
+            String actionUrl = proposal.getEvent() != null ? "/app/events/" + proposal.getEvent().getId() : "/app/proposals/" + proposal.getId();
+            Long senderId = proposal.getProposedBy() != null ? proposal.getProposedBy().getId() : null;
+            notificationService.notifyUnionLeadersForFieldScope(title, msg, actionUrl, senderId, proposal.getEvent());
+        } catch (Exception e) {
+            log.warn("Failed to notify Union Leaders for Field scope proposal: {}", e.getMessage());
         }
     }
 
@@ -566,16 +863,24 @@ public class ProposalServiceImpl implements ProposalService {
                 .eventCode("EVT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
                 .name(proposal.getEventName())
                 .type(proposal.getEventType())
+                .description(proposal.getObjectives())
                 .startDate(proposal.getStartDate())
                 .endDate(proposal.getEndDate())
                 .venue(proposal.getVenue())
                 .budget(proposal.getEstimatedBudget())
-                .status(EventStatus.PLANNED)
+                .maxParticipants(proposal.getExpectedParticipants())
+                .registrationStartDate(LocalDate.now())
+                .registrationEndDate(proposal.getEndDate())
+                .status(EventStatus.REGISTRATION_OPEN)
                 .proposal(proposal)
                 .coordinator(proposal.getProposedBy())
                 .build();
-        eventRepository.save(event);
-        proposal.setEvent(event);
-        log.info("Auto-created Event {} for approved proposal {}", event.getEventCode(), proposal.getId());
+        Event saved = eventRepository.save(event);
+        proposal.setEvent(saved);
+        log.info("Auto-created Event {} (status: REGISTRATION_OPEN) for approved proposal {}", saved.getEventCode(), proposal.getId());
+
+        if (proposal.getScope() == ProposalScope.FIELD) {
+            notifyFieldScopeUnionLeaders(proposal);
+        }
     }
 }

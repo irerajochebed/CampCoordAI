@@ -17,6 +17,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useProposals } from '../../hooks';
 import { eventApi, proposalApi } from '../../api';
 import { useTranslation } from '../../contexts/LanguageContext';
+import MasterScheduleCalendar from '../../components/calendar/MasterScheduleCalendar';
 
 export default function CoordinatorDashboard() {
   const { t } = useTranslation();
@@ -376,7 +377,10 @@ export default function CoordinatorDashboard() {
           </Card>
         )}
 
-        {/* My recent events */}
+        {/* RUM Master Schedule & Conflict Visualizer */}
+        <MasterScheduleCalendar />
+
+        {/* Main Content Grid */}
         <Card>
           <CardHeader action={
             <Link to="/app/events">

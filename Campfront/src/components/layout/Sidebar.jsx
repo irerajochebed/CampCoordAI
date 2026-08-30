@@ -22,7 +22,7 @@ export default function Sidebar() {
 
   const navigation = [
     { name: t('nav.dashboard', 'Dashboard'), key: 'nav.dashboard', href: '/app/dashboard', icon: LayoutDashboard, roles: ['ADMINISTRATOR', 'COORDINATOR', 'PARTICIPANT'] },
-    { name: t('nav.proposals', 'Proposals'), key: 'nav.proposals', href: '/app/proposals', icon: FileText, roles: ['ADMINISTRATOR', 'COORDINATOR', 'PARTICIPANT'] },
+    { name: t('nav.proposals', 'Proposals'), key: 'nav.proposals', href: '/app/proposals', icon: FileText, roles: ['ADMINISTRATOR', 'COORDINATOR'] },
     { name: t('nav.events', 'Events'), key: 'nav.events', href: '/app/events', icon: Calendar, roles: ['ADMINISTRATOR', 'COORDINATOR', 'PARTICIPANT'] },
     { name: t('nav.registrations', 'Registrations'), key: 'nav.registrations', href: '/app/registrations', icon: ClipboardList, roles: ['ADMINISTRATOR', 'COORDINATOR', 'PARTICIPANT'] },
     { name: t('nav.attendance', 'Attendance'), key: 'nav.attendance', href: '/app/attendance', icon: QrCode, roles: ['ADMINISTRATOR', 'COORDINATOR'] },

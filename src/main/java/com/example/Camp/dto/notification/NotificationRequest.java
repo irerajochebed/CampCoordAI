@@ -15,6 +15,8 @@ public class NotificationRequest {
     @NotNull(message = "Recipient ID is required")
     private Long recipientId;
     
+    private Long senderId;
+    private Long parentNotificationId;
     private Long eventId;
     
     @NotNull(message = "Notification type is required")

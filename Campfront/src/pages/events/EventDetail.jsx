@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { eventApi, sessionApi } from '../../api';
+import { eventApi, sessionApi, registrationApi, accommodationApi } from '../../api';
 import { 
   ArrowLeft, 
   Calendar, 
@@ -16,7 +16,11 @@ import {
   ClipboardList,
   Building2,
   Clock,
-  User
+  User,
+  Lock,
+  UserCheck,
+  CreditCard,
+  Home
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -32,23 +36,32 @@ export default function EventDetail() {
   
   const [event, setEvent] = useState(null);
   const [sessions, setSessions] = useState([]);
+  const [userRegistration, setUserRegistration] = useState(null);
+  const [accommodationAssignment, setAccommodationAssignment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [alert, setAlert] = useState(null);
 
+  const isParticipant = user?.role === 'PARTICIPANT';
   const isUnionAdmin = isAdmin || user?.position === 'UNION_ADMINISTRATOR';
-  const isEventCoordinator = event?.coordinator?.id === user.userId;
+  const isEventCoordinator = !isParticipant && user && (event?.coordinator?.id === user.id || event?.coordinator?.id === user.userId);
+  const canManage = !isParticipant && (isUnionAdmin || isEventCoordinator);
 
   useEffect(() => {
     fetchEvent();
     fetchSessions();
-  }, [id]);
+    if (user) {
+      fetchUserRegistration();
+    }
+  }, [id, user]);
 
   const fetchEvent = async () => {
     try {
       setLoading(true);
       const response = await eventApi.getById(id);
-      if (response.data.success) {
+      if (response.data?.success) {
         setEvent(response.data.data);
+      } else if (response.data) {
+        setEvent(response.data);
       }
     } catch (error) {
       setAlert({
@@ -63,11 +76,42 @@ export default function EventDetail() {
   const fetchSessions = async () => {
     try {
       const response = await sessionApi.getByEvent(id);
-      if (response.data.success) {
+      if (response.data?.success) {
         setSessions(response.data.data || []);
+      } else if (Array.isArray(response.data)) {
+        setSessions(response.data);
       }
     } catch (error) {
       console.error('Error fetching sessions:', error);
+    }
+  };
+
+  const fetchUserRegistration = async () => {
+    try {
+      const response = await registrationApi.getMyRegistrations();
+      const regs = response.data?.data || response.data || [];
+      if (Array.isArray(regs)) {
+        const match = regs.find(r => 
+          (r.event?.id?.toString() === id.toString() || r.eventId?.toString() === id.toString()) && 
+          r.status !== 'CANCELLED'
+        );
+        setUserRegistration(match || null);
+
+        if (match) {
+          try {
+            const accRes = await accommodationApi.getAssignmentByRegistration(match.id);
+            if (accRes.data?.success) {
+              setAccommodationAssignment(accRes.data.data);
+            } else if (accRes.data) {
+              setAccommodationAssignment(accRes.data);
+            }
+          } catch (accErr) {
+            console.log("No specific room assignment record found", accErr);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching user registration:', error);
     }
   };
 
@@ -102,7 +146,7 @@ export default function EventDetail() {
           break;
       }
 
-      if (response.data.success) {
+      if (response.data?.success) {
         setAlert({ type: 'success', message: 'Event status updated successfully' });
         fetchEvent();
       }
@@ -115,6 +159,7 @@ export default function EventDetail() {
   };
 
   const getStatusBadge = (status) => {
+    if (!status) return <Badge variant="default" size="lg">UNKNOWN</Badge>;
     const variants = {
       DRAFT: 'default',
       PLANNING: 'info',
@@ -132,20 +177,40 @@ export default function EventDetail() {
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-RW', {
-      style: 'currency',
-      currency: 'RWF',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(amount);
+    if (amount == null) return 'N/A';
+    try {
+      return new Intl.NumberFormat('en-RW', {
+        style: 'currency',
+        currency: 'RWF',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(amount);
+    } catch (e) {
+      return `${amount} RWF`;
+    }
+  };
+
+  const formatDate = (dateStr, options) => {
+    if (!dateStr) return 'N/A';
+    try {
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString('en-US', options);
+    } catch (e) {
+      return 'N/A';
+    }
   };
 
   const calculateDuration = () => {
     if (!event?.startDate || !event?.endDate) return 'N/A';
-    const start = new Date(event.startDate);
-    const end = new Date(event.endDate);
-    const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
-    return `${days} day${days !== 1 ? 's' : ''}`;
+    try {
+      const start = new Date(event.startDate);
+      const end = new Date(event.endDate);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) return 'N/A';
+      const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+      return `${days} day${days !== 1 ? 's' : ''}`;
+    } catch (e) {
+      return 'N/A';
+    }
   };
 
   if (loading) {
@@ -161,7 +226,7 @@ export default function EventDetail() {
         <Button
           variant="primary"
           className="mt-4"
-          onClick={() => navigate('/events')}
+          onClick={() => navigate('/app/events')}
         >
           Back to Events
         </Button>
@@ -169,7 +234,8 @@ export default function EventDetail() {
     );
   }
 
-  const canManage = isUnionAdmin || isEventCoordinator;
+  const feeAmount = event.registrationFee ?? event.amountPerPerson ?? 0;
+  const isRegistered = !!userRegistration;
 
   return (
     <div className="space-y-6">
@@ -179,23 +245,51 @@ export default function EventDetail() {
           <Button
             variant="ghost"
             icon={<ArrowLeft className="w-4 h-4" />}
-            onClick={() => navigate('/events')}
+            onClick={() => navigate('/app/events')}
             className="mb-4"
           >
             Back to Events
           </Button>
-          <h1 className="text-2xl font-bold text-gray-900">{event.name}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{event.name || 'Unnamed Event'}</h1>
           <div className="flex items-center gap-3 mt-2 flex-wrap">
             {getStatusBadge(event.status)}
-            <Badge variant="info">{event.type}</Badge>
-            <Badge variant="default">{event.department?.name}</Badge>
+            <Badge variant="info">{event.type || 'EVENT'}</Badge>
+            <Badge variant="default">{event.department?.name || 'N/A'}</Badge>
           </div>
         </div>
 
+        {/* Action Buttons for Participants */}
+        {isParticipant && (
+          <div className="flex gap-2 flex-wrap items-center">
+            {isRegistered ? (
+              <>
+                <Badge variant="success" size="lg" className="py-2 px-3 text-sm flex items-center gap-1.5 font-medium">
+                  <UserCheck className="w-4 h-4" />
+                  Registered ({userRegistration.status})
+                </Badge>
+                <Link to={`/app/registrations/${userRegistration.id}`}>
+                  <Button variant="outline">
+                    View My Registration
+                  </Button>
+                </Link>
+              </>
+            ) : (
+              event.status === 'REGISTRATION_OPEN' && (
+                <Link to={`/app/registrations/new?eventId=${id}`}>
+                  <Button variant="primary" size="lg">
+                    Register Now - {formatCurrency(feeAmount)}
+                  </Button>
+                </Link>
+              )
+            )}
+          </div>
+        )}
+
+        {/* Action Buttons for Coordinators/Admins */}
         {canManage && (
           <div className="flex gap-2 flex-wrap">
             {(event.status === 'DRAFT' || event.status === 'PLANNING') && (
-              <Link to={`/events/${id}/edit`}>
+              <Link to={`/app/events/${id}/edit`}>
                 <Button variant="ghost" icon={<Edit className="w-4 h-4" />}>
                   Edit
                 </Button>
@@ -214,6 +308,11 @@ export default function EventDetail() {
 
             {event.status === 'REGISTRATION_OPEN' && (
               <>
+                <Link to={`/app/registrations/new?eventId=${id}`}>
+                  <Button variant="primary" icon={<UserPlus className="w-4 h-4" />}>
+                    Register Participant
+                  </Button>
+                </Link>
                 <Button
                   variant="warning"
                   icon={<StopCircle className="w-4 h-4" />}
@@ -279,18 +378,10 @@ export default function EventDetail() {
                   <div>
                     <p className="text-sm text-gray-600">Event Dates</p>
                     <p className="font-medium text-gray-900">
-                      {new Date(event.startDate).toLocaleDateString('en-RW', { 
-                        year: 'numeric', 
-                        month: 'long', 
-                        day: 'numeric' 
-                      })}
+                      {formatDate(event.startDate, { year: 'numeric', month: 'long', day: 'numeric' })}
                     </p>
                     <p className="text-sm text-gray-500">
-                      to {new Date(event.endDate).toLocaleDateString('en-RW', { 
-                        year: 'numeric', 
-                        month: 'long', 
-                        day: 'numeric' 
-                      })}
+                      to {formatDate(event.endDate, { year: 'numeric', month: 'long', day: 'numeric' })}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">Duration: {calculateDuration()}</p>
                   </div>
@@ -302,7 +393,7 @@ export default function EventDetail() {
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Venue</p>
-                    <p className="font-medium text-gray-900">{event.venue}</p>
+                    <p className="font-medium text-gray-900">{event.venue || 'N/A'}</p>
                   </div>
                 </div>
 
@@ -314,16 +405,8 @@ export default function EventDetail() {
                     <p className="text-sm text-gray-600">Registration</p>
                     <p className="font-medium text-gray-900">
                       {event.registrationCount || 0}
-                      {event.capacity && ` / ${event.capacity}`}
+                      {(event.maxParticipants || event.capacity) && ` / ${event.maxParticipants || event.capacity}`}
                     </p>
-                    {event.capacity && (
-                      <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-purple-600 h-2 rounded-full" 
-                          style={{ width: `${Math.min((event.registrationCount / event.capacity) * 100, 100)}%` }}
-                        />
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -332,15 +415,13 @@ export default function EventDetail() {
                     <DollarSign className="w-5 h-5 text-amber-600" />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Budget & Fees</p>
-                    {event.budget && (
-                      <p className="font-medium text-gray-900">
+                    <p className="text-sm text-gray-600">Payment per Person</p>
+                    <p className="font-bold text-lg text-amber-700">
+                      {formatCurrency(feeAmount)}
+                    </p>
+                    {!isParticipant && event.budget != null && (
+                      <p className="text-xs text-gray-500 mt-1">
                         Budget: {formatCurrency(event.budget)}
-                      </p>
-                    )}
-                    {event.registrationFee && (
-                      <p className="text-sm text-gray-600">
-                        Reg. Fee: {formatCurrency(event.registrationFee)}
                       </p>
                     )}
                   </div>
@@ -361,116 +442,237 @@ export default function EventDetail() {
             </Card>
           )}
 
-          {/* Sessions */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Sessions ({sessions.length})</CardTitle>
-                {canManage && (
-                  <Link to={`/events/${id}/sessions`}>
-                    <Button variant="ghost" size="sm" icon={<ClipboardList className="w-4 h-4" />}>
-                      Manage Sessions
-                    </Button>
-                  </Link>
-                )}
-              </div>
-            </CardHeader>
-            <CardBody>
-              {sessions.length === 0 ? (
-                <div className="text-center py-8">
-                  <ClipboardList className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-600">No sessions scheduled yet</p>
-                  {canManage && (
-                    <Link to={`/events/${id}/sessions`}>
-                      <Button variant="primary" size="sm" className="mt-3">
-                        Create First Session
+          {/* GATING: If Participant is NOT registered, show locked message for Sessions & Accommodation */}
+          {isParticipant && !isRegistered ? (
+            <Card className="border-amber-200 bg-amber-50/50">
+              <CardBody className="text-center py-8">
+                <div className="bg-amber-100 p-3 rounded-full w-14 h-14 mx-auto mb-3 flex items-center justify-center">
+                  <Lock className="w-7 h-7 text-amber-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">Sessions Schedule & Accommodation Information Locked</h3>
+                <p className="text-sm text-gray-600 mt-2 max-w-lg mx-auto">
+                  You are currently not registered for <strong>{event.name}</strong>. Register now to unlock the complete session schedule and view your accommodation details.
+                </p>
+                <div className="mt-4 p-3 bg-white inline-block rounded-lg border border-amber-200 text-sm">
+                  <span className="text-gray-600">Registration Fee: </span>
+                  <span className="font-bold text-gray-900">{formatCurrency(feeAmount)}</span>
+                </div>
+                {event.status === 'REGISTRATION_OPEN' && (
+                  <div className="mt-5">
+                    <Link to={`/app/registrations/new?eventId=${id}`}>
+                      <Button variant="primary" size="lg">
+                        Register Now
                       </Button>
                     </Link>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {sessions.slice(0, 5).map((session) => (
-                    <div key={session.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-                      <Clock className="w-5 h-5 text-gray-400 mt-1" />
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-900">{session.title}</p>
-                        <div className="flex items-center gap-3 mt-1 text-sm text-gray-600">
-                          <span>{new Date(session.date).toLocaleDateString('en-RW')}</span>
-                          <span>{session.startTime} - {session.endTime}</span>
-                          {session.speaker && (
-                            <>
-                              <span>•</span>
-                              <span>Speaker: {session.speaker.firstName} {session.speaker.lastName}</span>
-                            </>
-                          )}
+                  </div>
+                )}
+              </CardBody>
+            </Card>
+          ) : (
+            <>
+              {/* Accommodation Card for Registered Participant */}
+              {isParticipant && isRegistered && (
+                <Card className="border-primary-200 bg-primary-50/20">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Home className="w-5 h-5 text-primary-600" />
+                      My Accommodation Assignment
+                    </CardTitle>
+                  </CardHeader>
+                  <CardBody>
+                    {accommodationAssignment ? (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-white p-4 rounded-lg border border-gray-200">
+                          <p className="text-xs text-gray-500 uppercase font-semibold">Building / Venue</p>
+                          <p className="text-base font-semibold text-gray-900 mt-1">
+                            {accommodationAssignment.room?.accommodation?.name || 'Main Campsite Block'}
+                          </p>
+                        </div>
+                        <div className="bg-white p-4 rounded-lg border border-gray-200">
+                          <p className="text-xs text-gray-500 uppercase font-semibold">Room Number</p>
+                          <p className="text-base font-semibold text-gray-900 mt-1">
+                            Room {accommodationAssignment.room?.roomNumber || 'Assigned on arrival'}
+                          </p>
+                        </div>
+                        <div className="bg-white p-4 rounded-lg border border-gray-200">
+                          <p className="text-xs text-gray-500 uppercase font-semibold">Bed / Spot</p>
+                          <p className="text-base font-semibold text-gray-900 mt-1">
+                            {accommodationAssignment.bedNumber ? `Bed #${accommodationAssignment.bedNumber}` : 'Standard Spot'}
+                          </p>
                         </div>
                       </div>
-                      <Badge variant="info" size="sm">{session.type}</Badge>
-                    </div>
-                  ))}
-                  {sessions.length > 5 && (
-                    <Link to={`/events/${id}/sessions`}>
-                      <Button variant="ghost" size="sm" className="w-full">
-                        View all {sessions.length} sessions
-                      </Button>
-                    </Link>
-                  )}
-                </div>
+                    ) : userRegistration.accommodation ? (
+                      <div className="p-4 bg-white rounded-lg border border-gray-200 flex items-center gap-3">
+                        <Home className="w-5 h-5 text-primary-600 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{userRegistration.accommodation}</p>
+                          <p className="text-xs text-gray-500">Your room and bed assignment</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-white rounded-lg border border-gray-200 text-center">
+                        <Home className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                        <p className="text-sm font-medium text-gray-800">Accommodation Assignment Pending</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          The event coordinator is finalizing room assignments. Your room details will appear here once assigned.
+                        </p>
+                      </div>
+                    )}
+                  </CardBody>
+                </Card>
               )}
-            </CardBody>
-          </Card>
 
-          {/* Staff Assignments */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Event Staff</CardTitle>
-                {canManage && (
-                  <Link to={`/events/${id}/staff`}>
+              {/* Sessions */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Event Sessions ({sessions.length})</CardTitle>
+                    {canManage && (
+                      <Link to={`/app/events/${id}/sessions`}>
+                        <Button variant="ghost" size="sm" icon={<ClipboardList className="w-4 h-4" />}>
+                          Manage Sessions
+                        </Button>
+                      </Link>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardBody>
+                  {sessions.length === 0 ? (
+                    <div className="text-center py-8">
+                      <ClipboardList className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-gray-600">No sessions scheduled yet</p>
+                      {canManage && (
+                        <Link to={`/app/events/${id}/sessions`}>
+                          <Button variant="primary" size="sm" className="mt-3">
+                            Create First Session
+                          </Button>
+                        </Link>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {sessions.map((session) => (
+                        <div key={session.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100 hover:bg-white hover:shadow-sm transition-all">
+                          <Clock className="w-5 h-5 text-gray-400 mt-1 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="font-medium text-gray-900">{session.title}</p>
+                            {session.description && (
+                              <p className="text-xs text-gray-600 mt-0.5">{session.description}</p>
+                            )}
+                            <div className="flex items-center gap-3 mt-2 text-sm text-gray-600 flex-wrap">
+                              <span>{formatDate(session.date)}</span>
+                              {session.startTime && <span>{session.startTime} - {session.endTime}</span>}
+                              {session.speaker && (
+                                <>
+                                  <span>•</span>
+                                  <span>Speaker: {session.speaker.firstName} {session.speaker.lastName}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <Badge variant="info" size="sm">{session.type || 'SESSION'}</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardBody>
+              </Card>
+            </>
+          )}
+
+          {/* Staff Assignments (Coordinators / Admins view) */}
+          {canManage && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Event Staff</CardTitle>
+                  <Link to={`/app/events/${id}/staff`}>
                     <Button variant="ghost" size="sm" icon={<UserPlus className="w-4 h-4" />}>
                       Manage Staff
                     </Button>
                   </Link>
-                )}
-              </div>
-            </CardHeader>
-            <CardBody>
-              {(!event.staffAssignments || event.staffAssignments.length === 0) ? (
-                <div className="text-center py-8">
-                  <UserPlus className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-600">No staff assigned yet</p>
-                  {canManage && (
-                    <Link to={`/events/${id}/staff`}>
+                </div>
+              </CardHeader>
+              <CardBody>
+                {(!event.staffAssignments || event.staffAssignments.length === 0) ? (
+                  <div className="text-center py-8">
+                    <UserPlus className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                    <p className="text-gray-600">No staff assigned yet</p>
+                    <Link to={`/app/events/${id}/staff`}>
                       <Button variant="primary" size="sm" className="mt-3">
                         Assign Staff
                       </Button>
                     </Link>
-                  )}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {event.staffAssignments.map((assignment) => (
-                    <div key={assignment.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                      <div className="bg-primary-100 p-2 rounded-full">
-                        <User className="w-4 h-4 text-primary-600" />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {event.staffAssignments.map((assignment) => (
+                      <div key={assignment.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                        <div className="bg-primary-100 p-2 rounded-full">
+                          <User className="w-4 h-4 text-primary-600" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {assignment.staff?.firstName} {assignment.staff?.lastName}
+                          </p>
+                          <p className="text-sm text-gray-600">{assignment.position}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {assignment.staff.firstName} {assignment.staff.lastName}
-                        </p>
-                        <p className="text-sm text-gray-600">{assignment.position}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardBody>
-          </Card>
+                    ))}
+                  </div>
+                )}
+              </CardBody>
+            </Card>
+          )}
         </div>
 
         {/* Sidebar */}
         <div className="space-y-6">
+          {/* Quick Payment Info Card for Participant */}
+          {isParticipant && isRegistered && (
+            <Card className="border-blue-200 bg-blue-50/50">
+              <CardHeader>
+                <CardTitle className="text-blue-900 flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-blue-600" />
+                  My Registration Details
+                </CardTitle>
+              </CardHeader>
+              <CardBody>
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Registration ID:</span>
+                    <span className="font-mono font-medium">#{userRegistration.id}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Fee Amount:</span>
+                    <span className="font-bold text-gray-900">{formatCurrency(feeAmount)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">Status:</span>
+                    <Badge variant={userRegistration.status === 'CONFIRMED' ? 'success' : 'warning'}>
+                      {userRegistration.status}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-blue-200 space-y-2">
+                  <Link to={`/app/registrations/${userRegistration.id}`} className="block">
+                    <Button variant="primary" size="sm" className="w-full">
+                      View Ticket & QR Code
+                    </Button>
+                  </Link>
+                  {userRegistration.paymentStatus !== 'PAID' && (
+                    <Link to={`/app/payments/new?registrationId=${userRegistration.id}`} className="block">
+                      <Button variant="outline" size="sm" className="w-full">
+                        Submit Payment Proof
+                      </Button>
+                    </Link>
+                  )}
+                </div>
+              </CardBody>
+            </Card>
+          )}
+
           {/* Event Details Card */}
           <Card>
             <CardHeader>
@@ -488,143 +690,52 @@ export default function EventDetail() {
 
                 <div>
                   <p className="text-sm text-gray-600">Department</p>
-                  <p className="font-medium text-gray-900">{event.department?.name}</p>
+                  <p className="font-medium text-gray-900">{event.department?.name || 'N/A'}</p>
                 </div>
 
                 <div>
                   <p className="text-sm text-gray-600">Event Type</p>
-                  <p className="font-medium text-gray-900">{event.type}</p>
+                  <p className="font-medium text-gray-900">{event.type || 'N/A'}</p>
                 </div>
 
                 <div>
-                  <p className="text-sm text-gray-600">Created</p>
-                  <p className="font-medium text-gray-900">
-                    {new Date(event.createdAt).toLocaleDateString('en-RW')}
-                  </p>
-                </div>
-
-                {event.updatedAt && (
-                  <div>
-                    <p className="text-sm text-gray-600">Last Updated</p>
-                    <p className="font-medium text-gray-900">
-                      {new Date(event.updatedAt).toLocaleDateString('en-RW')}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </CardBody>
-          </Card>
-
-          {/* Quick Stats */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Statistics</CardTitle>
-            </CardHeader>
-            <CardBody>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Total Registrations</span>
-                  <span className="font-semibold text-gray-900">{event.registrationCount || 0}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Confirmed</span>
-                  <span className="font-semibold text-green-600">{event.confirmedCount || 0}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Pending</span>
-                  <span className="font-semibold text-amber-600">{event.pendingCount || 0}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Sessions</span>
-                  <span className="font-semibold text-gray-900">{sessions.length}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Staff Assigned</span>
-                  <span className="font-semibold text-gray-900">
-                    {event.staffAssignments?.length || 0}
-                  </span>
+                  <p className="text-sm text-gray-600">Registration Fee</p>
+                  <p className="font-bold text-gray-900">{formatCurrency(feeAmount)}</p>
                 </div>
               </div>
             </CardBody>
           </Card>
 
-          {/* Status Timeline */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Event Progress</CardTitle>
-            </CardHeader>
-            <CardBody>
-              <div className="space-y-4">
-                <div className="flex items-start gap-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                    event.status !== 'DRAFT' ? 'bg-green-500' : 'bg-gray-200'
-                  }`}>
-                    {event.status !== 'DRAFT' && <CheckCircle2 className="w-5 h-5 text-white" />}
+          {/* Quick Stats (for Admins / Coordinators) */}
+          {canManage && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Statistics</CardTitle>
+              </CardHeader>
+              <CardBody>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">Total Registrations</span>
+                    <span className="font-semibold text-gray-900">{event.registrationCount || 0}</span>
                   </div>
-                  <div>
-                    <p className="font-medium text-gray-900">Planning</p>
-                    <p className="text-xs text-gray-500">Event created & configured</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">Confirmed</span>
+                    <span className="font-semibold text-green-600">{event.confirmedCount || 0}</span>
                   </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                    ['REGISTRATION_OPEN', 'REGISTRATION_CLOSED', 'IN_PROGRESS', 'COMPLETED'].includes(event.status)
-                      ? 'bg-green-500'
-                      : event.status === 'PLANNING'
-                      ? 'bg-blue-500'
-                      : 'bg-gray-200'
-                  }`}>
-                    {['REGISTRATION_OPEN', 'REGISTRATION_CLOSED', 'IN_PROGRESS', 'COMPLETED'].includes(event.status) && (
-                      <CheckCircle2 className="w-5 h-5 text-white" />
-                    )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">Pending</span>
+                    <span className="font-semibold text-amber-600">{event.pendingCount || 0}</span>
                   </div>
-                  <div>
-                    <p className="font-medium text-gray-900">Registration</p>
-                    <p className="text-xs text-gray-500">Open for participants</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">Sessions</span>
+                    <span className="font-semibold text-gray-900">{sessions.length}</span>
                   </div>
                 </div>
+              </CardBody>
+            </Card>
+          )}
 
-                <div className="flex items-start gap-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                    ['IN_PROGRESS', 'COMPLETED'].includes(event.status)
-                      ? 'bg-green-500'
-                      : 'bg-gray-200'
-                  }`}>
-                    {['IN_PROGRESS', 'COMPLETED'].includes(event.status) && (
-                      <CheckCircle2 className="w-5 h-5 text-white" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900">In Progress</p>
-                    <p className="text-xs text-gray-500">Event is running</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                    event.status === 'COMPLETED'
-                      ? 'bg-green-500'
-                      : event.status === 'CANCELLED'
-                      ? 'bg-red-500'
-                      : 'bg-gray-200'
-                  }`}>
-                    {event.status === 'COMPLETED' && <CheckCircle2 className="w-5 h-5 text-white" />}
-                    {event.status === 'CANCELLED' && <XCircle className="w-5 h-5 text-white" />}
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900">
-                      {event.status === 'COMPLETED' ? 'Completed' : 
-                       event.status === 'CANCELLED' ? 'Cancelled' : 'Completion'}
-                    </p>
-                    <p className="text-xs text-gray-500">Final status</p>
-                  </div>
-                </div>
-              </div>
-            </CardBody>
-          </Card>
-
-          {/* Quick Actions */}
+          {/* Quick Actions (Coordinators / Admins) */}
           {canManage && (
             <Card>
               <CardHeader>
@@ -632,22 +743,22 @@ export default function EventDetail() {
               </CardHeader>
               <CardBody>
                 <div className="space-y-2">
-                  <Link to={`/events/${id}/sessions`} className="block">
+                  <Link to={`/app/events/${id}/sessions`} className="block">
                     <Button variant="ghost" className="w-full justify-start" icon={<ClipboardList className="w-4 h-4" />}>
                       Manage Sessions
                     </Button>
                   </Link>
-                  <Link to={`/events/${id}/staff`} className="block">
+                  <Link to={`/app/events/${id}/staff`} className="block">
                     <Button variant="ghost" className="w-full justify-start" icon={<UserPlus className="w-4 h-4" />}>
                       Assign Staff
                     </Button>
                   </Link>
-                  <Link to={`/registrations?eventId=${id}`} className="block">
+                  <Link to={`/app/registrations?eventId=${id}`} className="block">
                     <Button variant="ghost" className="w-full justify-start" icon={<Users className="w-4 h-4" />}>
                       View Registrations
                     </Button>
                   </Link>
-                  <Link to={`/accommodation?eventId=${id}`} className="block">
+                  <Link to={`/app/accommodation?eventId=${id}`} className="block">
                     <Button variant="ghost" className="w-full justify-start" icon={<Building2 className="w-4 h-4" />}>
                       Manage Accommodation
                     </Button>

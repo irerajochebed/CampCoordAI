@@ -73,6 +73,23 @@ public class NotificationController {
         return ResponseEntity.ok(ApiResponse.success("Notification marked as read", response));
     }
     
+    @PatchMapping("/{id}/unread")
+    public ResponseEntity<ApiResponse<NotificationResponse>> markAsUnread(@PathVariable Long id) {
+        NotificationResponse response = notificationService.markAsUnread(id);
+        return ResponseEntity.ok(ApiResponse.success("Notification marked as unread", response));
+    }
+
+    @PostMapping("/{id}/reply")
+    public ResponseEntity<ApiResponse<NotificationResponse>> replyToNotification(
+            @PathVariable Long id,
+            @RequestBody java.util.Map<String, String> body,
+            Authentication authentication) {
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        String message = body != null ? body.get("message") : "";
+        NotificationResponse response = notificationService.replyToNotification(id, message, userDetails.getId());
+        return ResponseEntity.ok(ApiResponse.success("Reply sent successfully", response));
+    }
+    
     @PatchMapping("/mark-all-read")
     public ResponseEntity<ApiResponse<String>> markAllAsRead(Authentication authentication) {
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();

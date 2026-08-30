@@ -22,10 +22,12 @@ import Alert from '../../components/ui/Alert';
 import Badge from '../../components/ui/Badge';
 import { PageSpinner } from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
+import { useTranslation } from '../../contexts/LanguageContext';
 
 export default function RegistrationList() {
   const navigate = useNavigate();
   const { user, isAdmin, isCoordinator, isParticipant } = useAuth();
+  const { t } = useTranslation();
   
   const [registrations, setRegistrations] = useState([]);
   const [events, setEvents] = useState([]);
@@ -82,7 +84,7 @@ export default function RegistrationList() {
       console.error('Error fetching registrations:', error);
       setAlert({
         type: 'error',
-        message: error.response?.data?.message || 'Failed to fetch registrations'
+        message: error.response?.data?.message || t('common.error', 'Failed to fetch registrations')
       });
     } finally {
       setLoading(false);
@@ -92,69 +94,69 @@ export default function RegistrationList() {
   const handleQuickCheckIn = async (registrationId) => {
     try {
       await registrationApi.checkIn(registrationId);
-      setAlert({ type: 'success', message: 'Participant checked in successfully' });
+      setAlert({ type: 'success', message: t('common.success', 'Participant checked in successfully') });
       fetchRegistrations();
     } catch (error) {
       setAlert({
         type: 'error',
-        message: error.response?.data?.message || 'Failed to check in participant'
+        message: error.response?.data?.message || t('common.error', 'Failed to check in participant')
       });
     }
   };
 
   const handleConfirm = async (registrationId) => {
-    if (!confirm('Confirm this registration?')) return;
+    if (!confirm(t('common.confirm', 'Confirm this registration?'))) return;
 
     try {
       await registrationApi.confirm(registrationId);
-      setAlert({ type: 'success', message: 'Registration confirmed successfully' });
+      setAlert({ type: 'success', message: t('common.success', 'Registration confirmed successfully') });
       fetchRegistrations();
     } catch (error) {
       setAlert({
         type: 'error',
-        message: error.response?.data?.message || 'Failed to confirm registration'
+        message: error.response?.data?.message || t('common.error', 'Failed to confirm registration')
       });
     }
   };
 
   const handleCancel = async (registrationId) => {
-    if (!confirm('Are you sure you want to cancel this registration?')) return;
+    if (!confirm(t('common.confirm', 'Are you sure you want to cancel this registration?'))) return;
 
     try {
       await registrationApi.cancel(registrationId);
-      setAlert({ type: 'success', message: 'Registration cancelled successfully' });
+      setAlert({ type: 'success', message: t('common.success', 'Registration cancelled successfully') });
       fetchRegistrations();
     } catch (error) {
       setAlert({
         type: 'error',
-        message: error.response?.data?.message || 'Failed to cancel registration'
+        message: error.response?.data?.message || t('common.error', 'Failed to cancel registration')
       });
     }
   };
 
   const getStatusBadge = (status) => {
     const variants = {
-      PENDING: { variant: 'warning', label: 'Pending' },
-      PAYMENT_SUBMITTED: { variant: 'info', label: 'Payment Submitted' },
-      PAYMENT_VERIFIED: { variant: 'success', label: 'Payment Verified' },
-      CONFIRMED: { variant: 'success', label: 'Confirmed' },
-      CANCELLED: { variant: 'error', label: 'Cancelled' },
-      CHECKED_IN: { variant: 'success', label: 'Checked In' },
+      PENDING: { variant: 'warning', label: t('status.PENDING', 'Pending') },
+      PAYMENT_SUBMITTED: { variant: 'info', label: t('status.PAYMENT_SUBMITTED', 'Payment Submitted') },
+      PAYMENT_VERIFIED: { variant: 'success', label: t('status.PAYMENT_VERIFIED', 'Payment Verified') },
+      CONFIRMED: { variant: 'success', label: t('status.CONFIRMED', 'Confirmed') },
+      CANCELLED: { variant: 'error', label: t('status.CANCELLED', 'Cancelled') },
+      CHECKED_IN: { variant: 'success', label: t('status.CHECKED_IN', 'Checked In') },
     };
-    const config = variants[status] || { variant: 'default', label: status };
+    const config = variants[status] || { variant: 'default', label: t(`status.${status}`, status) };
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
   const getPaymentStatusBadge = (payment) => {
     if (!payment) {
-      return <Badge variant="error">No Payment</Badge>;
+      return <Badge variant="error">{t('common.error', 'No Payment')}</Badge>;
     }
     const variants = {
-      PENDING: { variant: 'warning', label: 'Pending' },
-      VERIFIED: { variant: 'success', label: 'Verified' },
-      REJECTED: { variant: 'error', label: 'Rejected' },
+      PENDING: { variant: 'warning', label: t('status.PENDING', 'Pending') },
+      VERIFIED: { variant: 'success', label: t('status.CONFIRMED', 'Verified') },
+      REJECTED: { variant: 'error', label: t('status.REJECTED', 'Rejected') },
     };
-    const config = variants[payment.status] || { variant: 'default', label: payment.status };
+    const config = variants[payment.status] || { variant: 'default', label: t(`status.${payment.status}`, payment.status) };
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
@@ -182,17 +184,17 @@ export default function RegistrationList() {
   });
 
   const statusOptions = [
-    { value: '', label: 'All Statuses' },
-    { value: 'PENDING', label: 'Pending' },
-    { value: 'PAYMENT_SUBMITTED', label: 'Payment Submitted' },
-    { value: 'PAYMENT_VERIFIED', label: 'Payment Verified' },
-    { value: 'CONFIRMED', label: 'Confirmed' },
-    { value: 'CANCELLED', label: 'Cancelled' },
-    { value: 'CHECKED_IN', label: 'Checked In' },
+    { value: '', label: t('proposals.allStatuses', 'All Statuses') },
+    { value: 'PENDING', label: t('status.PENDING', 'Pending') },
+    { value: 'PAYMENT_SUBMITTED', label: t('status.PAYMENT_SUBMITTED', 'Payment Submitted') },
+    { value: 'PAYMENT_VERIFIED', label: t('status.PAYMENT_VERIFIED', 'Payment Verified') },
+    { value: 'CONFIRMED', label: t('status.CONFIRMED', 'Confirmed') },
+    { value: 'CANCELLED', label: t('status.CANCELLED', 'Cancelled') },
+    { value: 'CHECKED_IN', label: t('status.CHECKED_IN', 'Checked In') },
   ];
 
   const eventOptions = [
-    { value: '', label: 'All Events' },
+    { value: '', label: t('registrations.allEvents', 'All Events') },
     ...events.map(event => ({ value: event.id.toString(), label: event.name }))
   ];
 
@@ -201,23 +203,23 @@ export default function RegistrationList() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Registrations</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('registrations.title', 'Registrations')}</h1>
           <p className="text-gray-600 mt-1">
             {isParticipant 
-              ? 'Your event registrations' 
-              : 'Manage event registrations and participant information'}
+              ? t('registrations.mySubtitle', 'Your event registrations') 
+              : t('registrations.subtitle', 'Manage event registrations and participant information')}
           </p>
         </div>
 
-        {isParticipant && (
-          <Button
-            variant="primary"
-            icon={<Plus className="w-4 h-4" />}
-            onClick={() => navigate('/registrations/new')}
-          >
-            Register for Event
-          </Button>
-        )}
+        <Button
+          variant="primary"
+          icon={<Plus className="w-4 h-4" />}
+          onClick={() => navigate('/app/registrations/new')}
+        >
+          {isParticipant 
+            ? t('registrations.registerForEvent', 'Register for Event') 
+            : t('registrations.registerParticipant', 'Register Participant')}
+        </Button>
       </div>
 
       {alert && (
@@ -235,7 +237,7 @@ export default function RegistrationList() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <Input
-                placeholder="Search by participant or event..."
+                placeholder={t('registrations.searchPlaceholder', 'Search by participant or event...')}
                 value={filters.search}
                 onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
                 className="pl-10"
@@ -258,14 +260,14 @@ export default function RegistrationList() {
           {(filters.event || filters.status || filters.search) && (
             <div className="mt-4 flex items-center justify-between">
               <p className="text-sm text-gray-600">
-                Showing {filteredRegistrations.length} of {registrations.length} registrations
+                Showing {filteredRegistrations.length} of {registrations.length} {t('registrations.title', 'registrations')}
               </p>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setFilters({ event: '', status: '', search: '' })}
               >
-                Clear Filters
+                {t('registrations.clearFilters', 'Clear Filters')}
               </Button>
             </div>
           )}
@@ -279,7 +281,7 @@ export default function RegistrationList() {
             <div className="text-center py-8 text-gray-500">
               <div className="flex items-center justify-center gap-2">
                 <div className="w-5 h-5 border-2 border-primary-600 border-t-transparent rounded-full animate-spin"></div>
-                <span>Fetching registrations...</span>
+                <span>{t('common.loading', 'Fetching registrations...')}</span>
               </div>
             </div>
           </CardBody>
@@ -289,19 +291,19 @@ export default function RegistrationList() {
           <CardBody>
             <EmptyState
               icon={<Calendar className="w-12 h-12" />}
-              title="No registrations found"
+              title={t('registrations.noRegistrationsFound', 'No registrations found')}
               description={
                 isParticipant
-                  ? "You haven't registered for any events yet"
-                  : "No registrations match your filters"
+                  ? t('registrations.noRegistrationsYet', "You haven't registered for any events yet")
+                  : t('registrations.noRegistrationsMatchFilters', "No registrations match your filters")
               }
               action={
                 isParticipant && (
                   <Button
                     variant="primary"
-                    onClick={() => navigate('/registrations/new')}
+                    onClick={() => navigate('/app/registrations/new')}
                   >
-                    Register for Event
+                    {t('registrations.registerForEvent', 'Register for Event')}
                   </Button>
                 )
               }
@@ -316,22 +318,22 @@ export default function RegistrationList() {
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Participant
+                      {t('registrations.participant', 'Participant')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Event
+                      {t('registrations.event', 'Event')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Registration Date
+                      {t('registrations.registrationDate', 'Registration Date')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
+                      {t('common.status', 'Status')}
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Payment
+                      {t('registrations.payment', 'Payment')}
                     </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
+                      {t('common.actions', 'Actions')}
                     </th>
                   </tr>
                 </thead>
@@ -386,7 +388,7 @@ export default function RegistrationList() {
                             variant="ghost"
                             size="sm"
                             icon={<Eye className="w-4 h-4" />}
-                            onClick={() => navigate(`/registrations/${registration.id}`)}
+                            onClick={() => navigate(`/app/registrations/${registration.id}`)}
                             title="View details"
                           />
 
@@ -437,7 +439,7 @@ export default function RegistrationList() {
             <CardBody>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Total</p>
+                  <p className="text-sm text-gray-600">{t('common.all', 'Total')}</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {filteredRegistrations.length}
                   </p>
@@ -451,7 +453,7 @@ export default function RegistrationList() {
             <CardBody>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Confirmed</p>
+                  <p className="text-sm text-gray-600">{t('status.CONFIRMED', 'Confirmed')}</p>
                   <p className="text-2xl font-bold text-green-600">
                     {filteredRegistrations.filter(r => r.status === 'CONFIRMED').length}
                   </p>
@@ -465,7 +467,7 @@ export default function RegistrationList() {
             <CardBody>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Checked In</p>
+                  <p className="text-sm text-gray-600">{t('status.CHECKED_IN', 'Checked In')}</p>
                   <p className="text-2xl font-bold text-primary-600">
                     {filteredRegistrations.filter(r => r.status === 'CHECKED_IN').length}
                   </p>
@@ -479,7 +481,7 @@ export default function RegistrationList() {
             <CardBody>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Pending</p>
+                  <p className="text-sm text-gray-600">{t('status.PENDING', 'Pending')}</p>
                   <p className="text-2xl font-bold text-yellow-600">
                     {filteredRegistrations.filter(r => r.status === 'PENDING' || r.status === 'PAYMENT_SUBMITTED').length}
                   </p>

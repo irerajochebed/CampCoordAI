@@ -19,6 +19,12 @@ public interface NotificationService {
     
     NotificationResponse markAsRead(Long id);
     
+    NotificationResponse markAsUnread(Long id);
+    
+    NotificationResponse replyToNotification(Long notificationId, String replyMessage, Long senderUserId);
+    
+    void notifyUnionLeadersForFieldScope(String title, String message, String actionUrl, Long senderUserId, com.example.Camp.entity.Event event);
+    
     void markAllAsRead(Long recipientId);
     
     Long getUnreadCount(Long recipientId);

@@ -39,5 +39,9 @@ public interface RegistrationService {
     
     Registration getRegistrationEntity(Long id);
     
+    List<RegistrationResponse> getAllRegistrations();
+
+    List<RegistrationResponse> getMyRegistrations(Long userId);
+
     String generateRegistrationNumber();
 }

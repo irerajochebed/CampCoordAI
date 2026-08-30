@@ -22,6 +22,19 @@ public class RegistrationController {
     
     private final RegistrationService registrationService;
     
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<RegistrationResponse>>> getAllRegistrations() {
+        List<RegistrationResponse> response = registrationService.getAllRegistrations();
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/my-registrations")
+    public ResponseEntity<ApiResponse<List<RegistrationResponse>>> getMyRegistrations(Authentication authentication) {
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        List<RegistrationResponse> response = registrationService.getMyRegistrations(userDetails.getId());
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
     @PostMapping
     public ResponseEntity<ApiResponse<RegistrationResponse>> registerParticipant(
             @Valid @RequestBody RegistrationRequest request,

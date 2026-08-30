@@ -209,7 +209,7 @@ export default function EventForm() {
         <Button
           variant="ghost"
           icon={<ArrowLeft className="w-4 h-4" />}
-          onClick={() => navigate(`/events/${id}`)}
+          onClick={() => navigate(`/app/events/${id}`)}
         >
           Back to Event
         </Button>

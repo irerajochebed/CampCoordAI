@@ -72,13 +72,34 @@ public interface ProposalRepository extends JpaRepository<Proposal, Long> {
 
     // ── Scope-based routing queries ──────────────────────────────────────────
 
-    // FIELD scope: proposals targeting a specific field unit, pending Field Leader review
+    // Role-scoped visibility queries
+    @Query("SELECT p FROM Proposal p WHERE p.deleted = false ORDER BY p.createdAt DESC")
+    List<Proposal> findAllActiveProposals();
+
+    @Query("SELECT p FROM Proposal p WHERE p.deleted = false AND p.scope = 'UNION' AND p.department.id = :departmentId ORDER BY p.createdAt DESC")
+    List<Proposal> findProposalsForUnionLeader(@Param("departmentId") Long departmentId);
+
+    @Query("SELECT p FROM Proposal p WHERE p.deleted = false AND (p.targetOrganizationUnit.id = :fieldUnitId OR (p.targetOrganizationUnit.parent IS NOT NULL AND p.targetOrganizationUnit.parent.id = :fieldUnitId)) ORDER BY p.createdAt DESC")
+    List<Proposal> findProposalsForFieldLeader(@Param("fieldUnitId") Long fieldUnitId);
+
+    @Query("SELECT p FROM Proposal p WHERE p.deleted = false AND p.proposedBy.id = :userId ORDER BY p.createdAt DESC")
+    List<Proposal> findProposalsForCoordinator(@Param("userId") Long userId);
+
+    // FIELD scope: proposals targeting a specific field unit or child district, pending Field Leader review
     @Query("SELECT p FROM Proposal p WHERE p.deleted = false " +
            "AND p.scope = 'FIELD' " +
-           "AND p.targetOrganizationUnit.id = :fieldUnitId " +
+           "AND (p.targetOrganizationUnit.id = :fieldUnitId OR (p.targetOrganizationUnit.parent IS NOT NULL AND p.targetOrganizationUnit.parent.id = :fieldUnitId)) " +
            "AND p.status IN ('SUBMITTED', 'PENDING_LEADER_REVIEW', 'UNDER_REVIEW') " +
            "ORDER BY p.createdAt ASC")
     List<Proposal> findPendingForFieldLeader(@Param("fieldUnitId") Long fieldUnitId);
+
+    // DISTRICT scope: proposals targeting a specific district unit, pending District Pastor review
+    @Query("SELECT p FROM Proposal p WHERE p.deleted = false " +
+           "AND p.scope = 'DISTRICT' " +
+           "AND p.targetOrganizationUnit.id = :districtId " +
+           "AND p.status IN ('SUBMITTED', 'PENDING_LEADER_REVIEW', 'UNDER_REVIEW') " +
+           "ORDER BY p.createdAt ASC")
+    List<Proposal> findPendingForDistrictPastor(@Param("districtId") Long districtId);
 
     // UNION scope step-1: pending Dept Leader endorsement (not yet endorsed)
     @Query("SELECT p FROM Proposal p WHERE p.deleted = false " +
@@ -98,7 +119,7 @@ public interface ProposalRepository extends JpaRepository<Proposal, Long> {
     // Count helpers for dashboard badges
     @Query("SELECT COUNT(p) FROM Proposal p WHERE p.deleted = false " +
            "AND p.scope = 'FIELD' " +
-           "AND p.targetOrganizationUnit.id = :fieldUnitId " +
+           "AND (p.targetOrganizationUnit.id = :fieldUnitId OR (p.targetOrganizationUnit.parent IS NOT NULL AND p.targetOrganizationUnit.parent.id = :fieldUnitId)) " +
            "AND p.status IN ('SUBMITTED', 'PENDING_LEADER_REVIEW', 'UNDER_REVIEW')")
     Long countPendingForFieldLeader(@Param("fieldUnitId") Long fieldUnitId);
 

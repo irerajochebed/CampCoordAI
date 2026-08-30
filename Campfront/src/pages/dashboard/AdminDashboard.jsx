@@ -28,6 +28,8 @@ import { eventApi } from '../../api';
 
 import { useTranslation } from '../../contexts/LanguageContext';
 
+import MasterScheduleCalendar from '../../components/calendar/MasterScheduleCalendar';
+
 export default function AdminDashboard() {
   const { t } = useTranslation();
   const [filterUnit, setFilterUnit] = useState({ fieldId: '', districtId: '' });
@@ -287,6 +289,9 @@ export default function AdminDashboard() {
           </CardBody>
         </Card>
       </div>
+
+      {/* RUM Master Schedule & Conflict Visualizer */}
+      <MasterScheduleCalendar />
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { eventApi, departmentApi } from '../../api';
+import { eventApi, departmentApi, registrationApi } from '../../api';
 import { 
   Calendar, 
   Search, 
@@ -13,7 +13,10 @@ import {
   CheckCircle2,
   XCircle,
   UserPlus,
-  ClipboardList
+  ClipboardList,
+  Plus,
+  DollarSign,
+  UserCheck
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/Table';
@@ -22,28 +25,45 @@ import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Badge from '../../components/ui/Badge';
 import Alert from '../../components/ui/Alert';
-import { PageSpinner } from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
+import { useTranslation } from '../../contexts/LanguageContext';
 
 export default function EventList() {
+  const navigate = useNavigate();
   const { user, isAdmin } = useAuth();
+  const { t } = useTranslation();
   const [events, setEvents] = useState([]);
   const [filteredEvents, setFilteredEvents] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [myRegistrations, setMyRegistrations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [departmentFilter, setDepartmentFilter] = useState('ALL');
   const [alert, setAlert] = useState(null);
 
-  // Check if user is Event Coordinator
+  // Check user role
+  const isParticipant = user?.role === 'PARTICIPANT';
   const isEventCoordinator = user?.position === 'DEPARTMENT_LEADER' || user?.role === 'COORDINATOR';
   const isUnionAdmin = isAdmin || user?.position === 'UNION_ADMINISTRATOR';
 
   useEffect(() => {
     fetchDepartments();
     fetchEvents();
+    fetchMyRegistrations();
   }, []);
+
+  const fetchMyRegistrations = async () => {
+    try {
+      const response = await registrationApi.getMyRegistrations();
+      const regs = response.data?.data || response.data || [];
+      if (Array.isArray(regs)) {
+        setMyRegistrations(regs);
+      }
+    } catch (error) {
+      console.error('Error fetching my registrations:', error);
+    }
+  };
 
   useEffect(() => {
     filterEvents();
@@ -52,7 +72,7 @@ export default function EventList() {
   const fetchDepartments = async () => {
     try {
       const response = await departmentApi.getAll();
-      if (response.data.success) {
+      if (response.data?.success) {
         setDepartments(response.data.data || []);
       }
     } catch (error) {
@@ -67,23 +87,30 @@ export default function EventList() {
       let response;
       
       if (isUnionAdmin) {
-        // Union Admin sees all events
         response = await eventApi.getAll();
       } else if (isEventCoordinator) {
-        // Coordinators see events they're managing
-        response = await eventApi.getMyEvents();
+        try {
+          response = await eventApi.getMyEvents();
+          const list = response.data?.data || response.data || [];
+          if (Array.isArray(list) && list.length === 0) {
+            response = await eventApi.getAll();
+          }
+        } catch (e) {
+          response = await eventApi.getAll();
+        }
       } else {
-        // Participants see all events (for registration)
         response = await eventApi.getAll();
       }
       
-      if (response.data.success) {
+      if (response.data?.success) {
         setEvents(response.data.data || []);
+      } else if (Array.isArray(response.data)) {
+        setEvents(response.data);
       }
     } catch (error) {
       console.error('Error fetching events:', error);
       
-      let errorMessage = 'An unexpected error occurred';
+      let errorMessage = 'An unexpected error occurred while fetching events';
       if (error.response) {
         if (error.response.status === 401) {
           errorMessage = 'Session expired. Redirecting to login...';
@@ -158,7 +185,7 @@ export default function EventList() {
           break;
       }
 
-      if (response.data.success) {
+      if (response.data?.success) {
         setAlert({ type: 'success', message: 'Event status updated successfully' });
         fetchEvents();
       }
@@ -171,6 +198,7 @@ export default function EventList() {
   };
 
   const getStatusBadge = (status) => {
+    if (!status) return <Badge variant="default">UNKNOWN</Badge>;
     const variants = {
       DRAFT: 'default',
       PLANNING: 'info',
@@ -188,23 +216,38 @@ export default function EventList() {
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-RW', {
-      style: 'currency',
-      currency: 'RWF',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(amount);
+    if (amount == null) return 'N/A';
+    try {
+      return new Intl.NumberFormat('en-RW', {
+        style: 'currency',
+        currency: 'RWF',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(amount);
+    } catch (e) {
+      return `${amount} RWF`;
+    }
+  };
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return 'N/A';
+    try {
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString();
+    } catch (e) {
+      return 'N/A';
+    }
   };
 
   const statusOptions = [
-    { value: 'ALL', label: 'All Statuses' },
-    { value: 'DRAFT', label: 'Draft' },
-    { value: 'PLANNING', label: 'Planning' },
-    { value: 'REGISTRATION_OPEN', label: 'Registration Open' },
-    { value: 'REGISTRATION_CLOSED', label: 'Registration Closed' },
-    { value: 'IN_PROGRESS', label: 'In Progress' },
-    { value: 'COMPLETED', label: 'Completed' },
-    { value: 'CANCELLED', label: 'Cancelled' },
+    { value: 'ALL', label: t('proposals.allStatuses', 'All Statuses') },
+    { value: 'DRAFT', label: t('status.DRAFT', 'Draft') },
+    { value: 'PLANNING', label: t('status.UNDER_REVIEW', 'Planning') },
+    { value: 'REGISTRATION_OPEN', label: t('status.REGISTRATION_OPEN', 'Registration Open') },
+    { value: 'REGISTRATION_CLOSED', label: t('status.REGISTRATION_CLOSED', 'Registration Closed') },
+    { value: 'IN_PROGRESS', label: t('status.IN_PROGRESS', 'In Progress') },
+    { value: 'COMPLETED', label: t('status.COMPLETED', 'Completed') },
+    { value: 'CANCELLED', label: t('status.CANCELLED', 'Cancelled') },
   ];
 
   return (
@@ -212,13 +255,9 @@ export default function EventList() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Events</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('events.title', 'Events & Camps')}</h1>
           <p className="text-gray-600 mt-1">
-            {isUnionAdmin 
-              ? 'Manage all camps and conferences' 
-              : isEventCoordinator
-              ? 'Manage your events and coordinate activities'
-              : 'View upcoming camps and conferences'}
+            {t('events.subtitle', 'Manage all camps, retreats, and conferences across the union')}
           </p>
         </div>
       </div>
@@ -237,7 +276,7 @@ export default function EventList() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="md:col-span-2">
               <Input
-                placeholder="Search by event name, venue, or ministry / department..."
+                placeholder={t('proposals.searchPlaceholder', 'Search by event name, venue, or ministry...')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 icon={<Search className="w-5 h-5" />}
@@ -252,8 +291,8 @@ export default function EventList() {
               value={departmentFilter}
               onChange={(e) => setDepartmentFilter(e.target.value)}
               options={[
-                { value: 'ALL', label: 'All Ministries / Departments' },
-                ...departments.map(dept => ({ value: dept.id, label: dept.name }))
+                { value: 'ALL', label: t('events.allMinistries', 'All Ministries / Departments') },
+                ...departments.map(dept => ({ value: dept.id, label: t(`ministries.${dept.type}`, dept.name) }))
               ]}
             />
           </div>
@@ -263,199 +302,221 @@ export default function EventList() {
       {/* Events Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Events ({filteredEvents.length})</CardTitle>
+          <CardTitle>{t('events.title', 'Events')} ({filteredEvents.length})</CardTitle>
         </CardHeader>
         <CardBody>
           {loading ? (
             <div className="text-center py-8 text-gray-500">
               <div className="flex items-center justify-center gap-2">
                 <div className="w-5 h-5 border-2 border-primary-600 border-t-transparent rounded-full animate-spin"></div>
-                <span>Fetching events...</span>
+                <span>{t('common.loading', 'Fetching events...')}</span>
               </div>
             </div>
           ) : filteredEvents.length === 0 ? (
             <EmptyState
-              icon={<Calendar className="w-12 h-12" />}
-              title="No events found"
-              message={
-                searchTerm || statusFilter !== 'ALL' || departmentFilter !== 'ALL'
-                  ? 'Try adjusting your search or filter criteria'
-                  : 'No active events found'
-              }
-              action={
-                (isEventCoordinator || isAdmin) && (
-                  <Link to="/events/new">
-                    <Button variant="primary" icon={<Plus className="w-4 h-4" />}>
-                      Create Event
-                    </Button>
-                  </Link>
-                )
-              }
+              icon={<Calendar className="w-12 h-12 text-gray-400" />}
+              title={t('events.noEventsFound', 'No events found')}
+              message={t('events.noEventsFound', 'No active events found in the system.')}
             />
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Event Name</TableHead>
-                  <TableHead>Ministry / Department</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Dates</TableHead>
-                  <TableHead>Venue</TableHead>
-                  <TableHead>Registrations</TableHead>
-                  <TableHead>Budget</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead>{t('proposals.eventName', 'Event Name')}</TableHead>
+                  <TableHead>{t('proposals.hostingMinistry', 'Ministry / Department')}</TableHead>
+                  <TableHead>{t('proposals.eventType', 'Type')}</TableHead>
+                  <TableHead>{t('proposals.startDate', 'Dates')}</TableHead>
+                  <TableHead>{t('proposals.venue', 'Venue')}</TableHead>
+                  <TableHead>{t('registrations.title', 'Registrations')}</TableHead>
+                  <TableHead>{isParticipant ? 'Amount to Pay' : t('proposals.estimatedBudget', 'Budget')}</TableHead>
+                  <TableHead>{t('common.status', 'Status')}</TableHead>
+                  <TableHead>{t('common.actions', 'Actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredEvents.map((event) => (
-                  <TableRow key={event.id}>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium text-gray-900">{event.name}</p>
-                        <p className="text-xs text-gray-500">
-                          Coordinator: {event.coordinator?.firstName} {event.coordinator?.lastName}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell>{event.department?.name || 'N/A'}</TableCell>
-                    <TableCell>
-                      <Badge variant="info">{event.type}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        <p>{new Date(event.startDate).toLocaleDateString('en-RW')}</p>
-                        <p className="text-gray-500">to {new Date(event.endDate).toLocaleDateString('en-RW')}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell>{event.venue}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Users className="w-4 h-4 text-gray-400" />
-                        <span>{event.registrationCount || 0}</span>
-                        {event.capacity && (
-                          <span className="text-gray-500">/ {event.capacity}</span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {event.budget ? formatCurrency(event.budget) : 'N/A'}
-                    </TableCell>
-                    <TableCell>{getStatusBadge(event.status)}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Link to={`/events/${event.id}`}>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            icon={<Eye className="w-4 h-4" />}
-                            title="View details"
-                          >
-                            View
-                          </Button>
-                        </Link>
-                        
-                        {(isUnionAdmin || event.coordinator?.id === user.userId) && (
-                          <>
-                            {(event.status === 'DRAFT' || event.status === 'PLANNING') && (
-                              <Link to={`/events/${event.id}/edit`}>
+                {filteredEvents.map((event) => {
+                  const coordinatorName = event.coordinator 
+                    ? `${event.coordinator.firstName || ''} ${event.coordinator.lastName || ''}`.trim()
+                    : 'System User';
+
+                  const canUserEdit = !isParticipant && (isUnionAdmin || (user && (event.coordinator?.id === user.id || event.coordinator?.id === user.userId)));
+                  
+                  const isRegistered = myRegistrations.some(
+                    r => (r.event?.id === event.id || r.eventId === event.id) && r.status !== 'CANCELLED'
+                  );
+                  const feeAmount = event.registrationFee ?? event.amountPerPerson ?? 0;
+
+                  return (
+                    <TableRow key={event.id}>
+                      <TableCell>
+                        <div>
+                          <p className="font-semibold text-gray-900">{event.name || t('events.unnamedEvent', 'Unnamed Event')}</p>
+                          <p className="text-xs text-gray-500">{t('events.coordinator', 'Coordinator')}: {coordinatorName}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>{t(`ministries.${event.department?.type}`, event.department?.name || 'N/A')}</TableCell>
+                      <TableCell>
+                        <Badge variant="info">{event.type || 'EVENT'}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          <p>{formatDate(event.startDate)}</p>
+                          <p className="text-gray-500 text-xs">to {formatDate(event.endDate)}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>{event.venue || 'N/A'}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Users className="w-4 h-4 text-gray-400" />
+                          <span>{event.registrationCount || 0}</span>
+                          {event.maxParticipants && (
+                            <span className="text-gray-500 text-xs">/ {event.maxParticipants}</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-medium text-gray-900">
+                          {isParticipant ? formatCurrency(feeAmount) : formatCurrency(event.budget)}
+                        </span>
+                      </TableCell>
+                      <TableCell>{getStatusBadge(event.status)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {isRegistered ? (
+                            <div className="flex items-center gap-2">
+                              <Badge variant="success" className="py-1 px-2">
+                                <UserCheck className="w-3.5 h-3.5 inline mr-1" />
+                                Registered
+                              </Badge>
+                              <Link to={`/app/events/${event.id}`}>
+                                <Button variant="outline" size="sm">
+                                  {t('common.viewDetails', 'View Event')}
+                                </Button>
+                              </Link>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              {event.status === 'REGISTRATION_OPEN' && (
+                                <Link to={`/app/registrations/new?eventId=${event.id}`}>
+                                  <Button variant="primary" size="sm" icon={<UserPlus className="w-3.5 h-3.5" />}>
+                                    {isParticipant ? 'Register Now' : 'Register Participant'}
+                                  </Button>
+                                </Link>
+                              )}
+                              <Link to={`/app/events/${event.id}`}>
                                 <Button 
                                   variant="ghost" 
                                   size="sm" 
-                                  icon={<Edit className="w-4 h-4" />}
-                                  title="Edit event"
+                                  icon={<Eye className="w-4 h-4" />}
                                 >
-                                  Edit
+                                  {t('common.view', 'View')}
                                 </Button>
                               </Link>
-                            )}
+                            </div>
+                          )}
+                          
+                          {canUserEdit && (
+                            <>
+                              {(event.status === 'DRAFT' || event.status === 'PLANNING') && (
+                                <Link to={`/app/events/${event.id}/edit`}>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    icon={<Edit className="w-4 h-4" />}
+                                    title="Edit event"
+                                  >
+                                    Edit
+                                  </Button>
+                                </Link>
+                              )}
 
-                            {event.status === 'PLANNING' && (
-                              <Button
-                                variant="success"
-                                size="sm"
-                                icon={<PlayCircle className="w-4 h-4" />}
-                                onClick={() => handleStatusChange(event.id, 'openRegistration')}
-                                title="Open registration"
-                              >
-                                Open Reg.
-                              </Button>
-                            )}
-
-                            {event.status === 'REGISTRATION_OPEN' && (
-                              <>
+                              {event.status === 'PLANNING' && (
                                 <Button
-                                  variant="warning"
+                                  variant="success"
                                   size="sm"
-                                  icon={<StopCircle className="w-4 h-4" />}
-                                  onClick={() => handleStatusChange(event.id, 'closeRegistration')}
-                                  title="Close registration"
+                                  icon={<PlayCircle className="w-4 h-4" />}
+                                  onClick={() => handleStatusChange(event.id, 'openRegistration')}
+                                  title="Open registration"
                                 >
-                                  Close Reg.
+                                  Open Reg.
                                 </Button>
+                              )}
+
+                              {event.status === 'REGISTRATION_OPEN' && (
+                                <>
+                                  <Button
+                                    variant="warning"
+                                    size="sm"
+                                    icon={<StopCircle className="w-4 h-4" />}
+                                    onClick={() => handleStatusChange(event.id, 'closeRegistration')}
+                                    title="Close registration"
+                                  >
+                                    Close Reg.
+                                  </Button>
+                                  <Button
+                                    variant="primary"
+                                    size="sm"
+                                    icon={<PlayCircle className="w-4 h-4" />}
+                                    onClick={() => handleStatusChange(event.id, 'start')}
+                                    title="Start event"
+                                  >
+                                    Start
+                                  </Button>
+                                </>
+                              )}
+
+                              {(event.status === 'REGISTRATION_CLOSED' || event.status === 'IN_PROGRESS') && (
                                 <Button
                                   variant="primary"
                                   size="sm"
-                                  icon={<PlayCircle className="w-4 h-4" />}
-                                  onClick={() => handleStatusChange(event.id, 'start')}
-                                  title="Start event"
+                                  icon={<CheckCircle2 className="w-4 h-4" />}
+                                  onClick={() => handleStatusChange(event.id, event.status === 'REGISTRATION_CLOSED' ? 'start' : 'complete')}
+                                  title={event.status === 'REGISTRATION_CLOSED' ? 'Start event' : 'Complete event'}
                                 >
-                                  Start
+                                  {event.status === 'REGISTRATION_CLOSED' ? 'Start' : 'Complete'}
                                 </Button>
-                              </>
-                            )}
+                              )}
 
-                            {(event.status === 'REGISTRATION_CLOSED' || event.status === 'IN_PROGRESS') && (
-                              <Button
-                                variant="primary"
-                                size="sm"
-                                icon={<CheckCircle2 className="w-4 h-4" />}
-                                onClick={() => handleStatusChange(event.id, event.status === 'REGISTRATION_CLOSED' ? 'start' : 'complete')}
-                                title={event.status === 'REGISTRATION_CLOSED' ? 'Start event' : 'Complete event'}
-                              >
-                                {event.status === 'REGISTRATION_CLOSED' ? 'Start' : 'Complete'}
-                              </Button>
-                            )}
+                              <Link to={`/app/events/${event.id}/sessions`}>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  icon={<ClipboardList className="w-4 h-4" />}
+                                  title="Manage sessions"
+                                >
+                                  Sessions
+                                </Button>
+                              </Link>
 
-                            <Link to={`/events/${event.id}/sessions`}>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                icon={<ClipboardList className="w-4 h-4" />}
-                                title="Manage sessions"
-                              >
-                                Sessions
-                              </Button>
-                            </Link>
+                              <Link to={`/app/events/${event.id}/staff`}>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  icon={<UserPlus className="w-4 h-4" />}
+                                  title="Assign staff"
+                                >
+                                  Staff
+                                </Button>
+                              </Link>
 
-                            <Link to={`/events/${event.id}/staff`}>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                icon={<UserPlus className="w-4 h-4" />}
-                                title="Assign staff"
-                              >
-                                Staff
-                              </Button>
-                            </Link>
-
-                            {(event.status === 'DRAFT' || event.status === 'PLANNING') && (
-                              <Button
-                                variant="danger"
-                                size="sm"
-                                icon={<XCircle className="w-4 h-4" />}
-                                onClick={() => handleStatusChange(event.id, 'cancel')}
-                                title="Cancel event"
-                              >
-                                Cancel
-                              </Button>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                              {(event.status === 'DRAFT' || event.status === 'PLANNING') && (
+                                <Button
+                                  variant="danger"
+                                  size="sm"
+                                  icon={<XCircle className="w-4 h-4" />}
+                                  onClick={() => handleStatusChange(event.id, 'cancel')}
+                                  title="Cancel event"
+                                >
+                                  Cancel
+                                </Button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}

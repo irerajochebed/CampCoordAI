@@ -20,6 +20,14 @@ public class Notification extends BaseEntity {
     private User recipient;
     
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sender_id")
+    private User sender;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_notification_id")
+    private Notification parentNotification;
+    
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "event_id")
     private Event event;
     

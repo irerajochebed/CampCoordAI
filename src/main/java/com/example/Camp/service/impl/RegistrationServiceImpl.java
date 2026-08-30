@@ -176,6 +176,22 @@ public class RegistrationServiceImpl implements RegistrationService {
     
     @Override
     @Transactional(readOnly = true)
+    public List<RegistrationResponse> getAllRegistrations() {
+        return registrationRepository.findAllActive().stream()
+                .map(dtoMapper::toRegistrationResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RegistrationResponse> getMyRegistrations(Long userId) {
+        return registrationRepository.findActiveByParticipant(userId).stream()
+                .map(dtoMapper::toRegistrationResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Registration getRegistrationEntity(Long id) {
         return registrationRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Registration not found with id: " + id));

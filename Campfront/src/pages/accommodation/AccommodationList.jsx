@@ -20,10 +20,12 @@ import Alert from '../../components/ui/Alert';
 import Badge from '../../components/ui/Badge';
 import { PageSpinner } from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
+import { useTranslation } from '../../contexts/LanguageContext';
 
 export default function AccommodationList() {
   const navigate = useNavigate();
   const { user, isAdmin, isCoordinator } = useAuth();
+  const { t } = useTranslation();
   
   const [accommodations, setAccommodations] = useState([]);
   const [events, setEvents] = useState([]);

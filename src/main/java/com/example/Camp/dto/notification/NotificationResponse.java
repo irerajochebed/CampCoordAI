@@ -17,6 +17,11 @@ public class NotificationResponse {
     private Long id;
     private Long recipientId;
     private String recipientName;
+    private Long senderId;
+    private String senderName;
+    private String senderEmail;
+    private Long parentNotificationId;
+    private String parentNotificationTitle;
     private Long eventId;
     private String eventName;
     private NotificationType type;

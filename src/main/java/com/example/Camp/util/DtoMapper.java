@@ -223,6 +223,12 @@ public class DtoMapper {
                 .recipientId(notification.getRecipient().getId())
                 .recipientName(notification.getRecipient().getFirstName() + " " + 
                         notification.getRecipient().getLastName())
+                .senderId(notification.getSender() != null ? notification.getSender().getId() : null)
+                .senderName(notification.getSender() != null ? 
+                        notification.getSender().getFirstName() + " " + notification.getSender().getLastName() : "System")
+                .senderEmail(notification.getSender() != null ? notification.getSender().getEmail() : null)
+                .parentNotificationId(notification.getParentNotification() != null ? notification.getParentNotification().getId() : null)
+                .parentNotificationTitle(notification.getParentNotification() != null ? notification.getParentNotification().getTitle() : null)
                 .eventId(notification.getEvent() != null ? notification.getEvent().getId() : null)
                 .eventName(notification.getEvent() != null ? notification.getEvent().getName() : null)
                 .type(notification.getType())

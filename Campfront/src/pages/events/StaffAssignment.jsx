@@ -237,7 +237,7 @@ export default function StaffAssignment() {
           <Button
             variant="ghost"
             icon={<ArrowLeft className="w-4 h-4" />}
-            onClick={() => navigate(`/events/${eventId}`)}
+            onClick={() => navigate(`/app/events/${eventId}`)}
             className="mb-4"
           >
             Back to Event

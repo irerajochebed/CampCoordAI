@@ -226,7 +226,7 @@ export default function RegistrationDetail() {
       <div className="text-center py-12">
         <h1 className="text-2xl font-bold text-gray-800">Registration Not Found</h1>
         <p className="text-gray-600 mt-2">The registration you're looking for doesn't exist.</p>
-        <Button onClick={() => navigate('/registrations')} className="mt-4">
+        <Button onClick={() => navigate('/app/registrations')} className="mt-4">
           Back to Registrations
         </Button>
       </div>
@@ -244,7 +244,7 @@ export default function RegistrationDetail() {
           <Button
             variant="ghost"
             icon={<ArrowLeft className="w-4 h-4" />}
-            onClick={() => navigate('/registrations')}
+            onClick={() => navigate('/app/registrations')}
             className="mb-4"
           >
             Back to Registrations

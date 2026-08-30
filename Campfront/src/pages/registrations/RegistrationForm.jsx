@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { registrationApi, eventApi } from '../../api';
 import { 
@@ -24,6 +24,8 @@ import EmptyState from '../../components/ui/EmptyState';
 
 export default function RegistrationForm() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const paramEventId = searchParams.get('eventId');
   const { user } = useAuth();
   
   const [availableEvents, setAvailableEvents] = useState([]);
@@ -33,7 +35,7 @@ export default function RegistrationForm() {
   const [alert, setAlert] = useState(null);
   
   const [formData, setFormData] = useState({
-    eventId: '',
+    eventId: paramEventId || '',
     participantFirstName: user?.firstName || '',
     participantLastName: user?.lastName || '',
     participantEmail: user?.email || '',
@@ -54,8 +56,18 @@ export default function RegistrationForm() {
       setLoading(true);
       // Fetch events with REGISTRATION_OPEN status
       const response = await eventApi.getByStatus('REGISTRATION_OPEN');
-      if (response.data.success) {
-        setAvailableEvents(response.data.data || []);
+      const eventsList = response.data?.data || response.data || [];
+      if (Array.isArray(eventsList)) {
+        setAvailableEvents(eventsList);
+        
+        // If eventId param was passed, select it
+        if (paramEventId) {
+          const match = eventsList.find(e => e.id.toString() === paramEventId.toString());
+          if (match) {
+            setSelectedEvent(match);
+            setFormData(prev => ({ ...prev, eventId: match.id.toString() }));
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching events:', error);
@@ -202,7 +214,7 @@ export default function RegistrationForm() {
         <Button
           variant="ghost"
           icon={<ArrowLeft className="w-4 h-4" />}
-          onClick={() => navigate('/registrations')}
+          onClick={() => navigate('/app/registrations')}
           className="mb-4"
         >
           Back to Registrations
@@ -232,7 +244,7 @@ export default function RegistrationForm() {
               action={
                 <Button
                   variant="primary"
-                  onClick={() => navigate('/events')}
+                  onClick={() => navigate('/app/events')}
                 >
                   View All Events
                 </Button>

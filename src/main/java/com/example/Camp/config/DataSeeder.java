@@ -283,6 +283,20 @@ public class DataSeeder implements CommandLineRunner {
         log.info("Created Pastor: {}", pastor.getEmail());
         
         // Create Sample Participants
+        User defaultParticipant = User.builder()
+                .firstName("Sample")
+                .lastName("Participant")
+                .email("participant@campcoordai.rw")
+                .phoneNumber("+250788999888")
+                .password(passwordEncoder.encode("Part@2026"))
+                .role(Role.PARTICIPANT)
+                .gender(Gender.FEMALE)
+                .dateOfBirth(LocalDate.of(1998, 5, 20))
+                .organizationUnit(musanzeDistrict)
+                .active(true)
+                .build();
+        userRepository.save(defaultParticipant);
+
         User participant1 = User.builder()
                 .firstName("Grace")
                 .lastName("Uwera")

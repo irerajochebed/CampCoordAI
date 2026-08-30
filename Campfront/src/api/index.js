@@ -116,6 +116,7 @@ export const eventApi = {
   getByStatus: (status) => api.get(`/events/status/${status}`),
   getUpcoming: () => api.get('/events/upcoming'),
   getMyEvents: () => api.get('/events/my-events'),
+  checkConflicts: (params) => api.get('/events/check-conflicts', { params }),
   create: (data) => api.post('/events', data),
   createFromProposal: (proposalId, coordinatorId) => 
     api.post(`/events/from-proposal/${proposalId}?coordinatorId=${coordinatorId}`),
@@ -261,6 +262,8 @@ export const notificationApi = {
   create: (data) => api.post('/notifications', data),
   createBulk: (data) => api.post('/notifications/bulk', data),
   markAsRead: (id) => api.patch(`/notifications/${id}/read`),
+  markAsUnread: (id) => api.patch(`/notifications/${id}/unread`),
+  reply: (id, message) => api.post(`/notifications/${id}/reply`, { message }),
   markAllAsRead: () => api.patch('/notifications/mark-all-read'),
   delete: (id) => api.delete(`/notifications/${id}`),
 };

@@ -30,7 +30,6 @@ public class ProposalCreateRequest {
     @NotNull(message = "Proposal scope is required")
     private ProposalScope scope;
 
-    @NotNull(message = "Target organization unit is required")
     private Long targetOrganizationUnitId;
     
     @NotBlank(message = "Objectives are required")
