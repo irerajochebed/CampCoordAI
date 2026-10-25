@@ -2,6 +2,7 @@ package com.example.Camp.dto.event;
 
 import com.example.Camp.enums.EventStatus;
 import com.example.Camp.enums.EventType;
+import com.example.Camp.dto.department.DepartmentResponse;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -31,8 +32,12 @@ public class EventResponse {
     private LocalDate registrationEndDate;
     private Integer maxParticipants;
     private BigDecimal budget;
+    private DepartmentResponse department;
     private Long coordinatorId;
     private String coordinatorName;
     private Long totalRegistrations;
     private Long confirmedRegistrations;
+    private Integer minAge;
+    private Integer maxAge;
+    private com.example.Camp.enums.Gender targetGender;
 }

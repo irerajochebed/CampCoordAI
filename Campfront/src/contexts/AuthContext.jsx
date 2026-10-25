@@ -89,9 +89,11 @@ export function AuthProvider({ children }) {
   };
 
   const updateUser = (updatedData) => {
-    const updatedUser = { ...user, ...updatedData };
-    setUser(updatedUser);
-    localStorage.setItem('user', JSON.stringify(updatedUser));
+    setUser((prevUser) => {
+      const updatedUser = { ...(prevUser || {}), ...updatedData };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      return updatedUser;
+    });
   };
 
   // Helper functions for role checking

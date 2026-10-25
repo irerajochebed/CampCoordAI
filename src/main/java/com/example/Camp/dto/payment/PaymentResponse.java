@@ -19,8 +19,13 @@ public class PaymentResponse {
     private Long id;
     private String transactionReference;
     private Long registrationId;
-    private String participantName;
+    private String registrationNumber;
+    private Long eventId;
     private String eventName;
+    private String participantName;
+    private String participantEmail;
+    private String participantPhone;
+    private String churchName;
     private BigDecimal amount;
     private PaymentMethod paymentMethod;
     private PaymentStatus status;
@@ -30,4 +35,5 @@ public class PaymentResponse {
     private LocalDateTime verifiedAt;
     private String notes;
     private String receiptUrl;
+    private LocalDateTime createdAt;
 }

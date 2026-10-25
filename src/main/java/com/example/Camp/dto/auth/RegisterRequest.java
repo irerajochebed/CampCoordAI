@@ -40,6 +40,7 @@ public class RegisterRequest {
     
     private Gender gender;
     
+    @jakarta.validation.constraints.Past(message = "Date of birth cannot be in the future")
     private LocalDate dateOfBirth;
     
     private Long organizationUnitId;

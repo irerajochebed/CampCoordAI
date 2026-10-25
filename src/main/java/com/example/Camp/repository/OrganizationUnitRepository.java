@@ -36,4 +36,21 @@ public interface OrganizationUnitRepository extends JpaRepository<OrganizationUn
     List<OrganizationUnit> searchByName(@Param("keyword") String keyword);
     
     boolean existsByCode(String code);
+
+    /**
+     * Retrieves all OrganizationUnit IDs under a Field (the Field itself + all districts + all churches under those districts).
+     */
+    @Query("SELECT o.id FROM OrganizationUnit o WHERE o.deleted = false AND (" +
+           "o.id = :fieldId OR " +
+           "o.parent.id = :fieldId OR " +
+           "o.parent.id IN (SELECT d.id FROM OrganizationUnit d WHERE d.deleted = false AND d.parent.id = :fieldId))")
+    List<Long> findUnitIdsUnderField(@Param("fieldId") Long fieldId);
+
+    /**
+     * Retrieves all OrganizationUnit IDs under a District (the District itself + all child churches).
+     */
+    @Query("SELECT o.id FROM OrganizationUnit o WHERE o.deleted = false AND (" +
+           "o.id = :districtId OR " +
+           "o.parent.id = :districtId)")
+    List<Long> findUnitIdsUnderDistrict(@Param("districtId") Long districtId);
 }

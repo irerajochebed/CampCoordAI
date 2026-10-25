@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { accommodationApi } from '../../api';
@@ -9,13 +9,12 @@ import {
   Bed,
   Users,
   DoorOpen,
-  AlertCircle
+  Info,
+  CheckCircle2
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
-import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
-import Textarea from '../../components/ui/Textarea';
 import Alert from '../../components/ui/Alert';
 import { PageSpinner } from '../../components/ui/Spinner';
 
@@ -31,7 +30,7 @@ export default function RoomForm() {
   
   const [formData, setFormData] = useState({
     roomNumber: '',
-    capacity: '',
+    capacity: '2',
     genderRestriction: '',
     floor: '',
     amenities: ''
@@ -39,7 +38,6 @@ export default function RoomForm() {
 
   const [errors, setErrors] = useState({});
 
-  const isUnionAdmin = isAdmin || user?.position === 'UNION_ADMINISTRATOR';
   const isEditMode = !!roomId;
 
   useEffect(() => {
@@ -52,10 +50,12 @@ export default function RoomForm() {
   const fetchAccommodation = async () => {
     try {
       const response = await accommodationApi.getById(accommodationId);
-      if (response.data.success) {
-        setAccommodation(response.data.data);
+      const acc = response.data?.data || response.data;
+      if (acc) {
+        setAccommodation(acc);
       }
     } catch (error) {
+      console.error('Failed to fetch accommodation:', error);
       setAlert({
         type: 'error',
         message: 'Failed to fetch accommodation details'
@@ -67,17 +67,18 @@ export default function RoomForm() {
     try {
       setLoading(true);
       const response = await accommodationApi.getRoomById(roomId);
-      if (response.data.success) {
-        const room = response.data.data;
+      const room = response.data?.data || response.data;
+      if (room) {
         setFormData({
           roomNumber: room.roomNumber || '',
-          capacity: room.capacity?.toString() || '',
+          capacity: room.capacity?.toString() || '2',
           genderRestriction: room.genderRestriction || '',
           floor: room.floor || '',
           amenities: room.amenities || ''
         });
       }
     } catch (error) {
+      console.error('Failed to fetch room:', error);
       setAlert({
         type: 'error',
         message: error.response?.data?.message || 'Failed to fetch room details'
@@ -94,12 +95,11 @@ export default function RoomForm() {
       newErrors.roomNumber = 'Room number is required';
     }
 
-    if (!formData.capacity) {
-      newErrors.capacity = 'Capacity is required';
-    } else if (parseInt(formData.capacity) < 1) {
-      newErrors.capacity = 'Capacity must be at least 1';
-    } else if (parseInt(formData.capacity) > 50) {
-      newErrors.capacity = 'Capacity cannot exceed 50 beds';
+    const capNum = parseInt(formData.capacity);
+    if (!formData.capacity || isNaN(capNum) || capNum < 1) {
+      newErrors.capacity = 'Capacity must be at least 1 bed';
+    } else if (capNum > 100) {
+      newErrors.capacity = 'Capacity cannot exceed 100 beds';
     }
 
     setErrors(newErrors);
@@ -115,6 +115,8 @@ export default function RoomForm() {
     }
 
     setSubmitting(true);
+    setAlert(null);
+
     try {
       const payload = {
         roomNumber: formData.roomNumber.trim(),
@@ -131,15 +133,16 @@ export default function RoomForm() {
         response = await accommodationApi.createRoom(accommodationId, payload);
       }
 
-      if (response.data.success) {
-        setAlert({
-          type: 'success',
-          message: `Room ${isEditMode ? 'updated' : 'created'} successfully`
-        });
-        
-        setTimeout(() => navigate(`/accommodation/${accommodationId}`), 1500);
-      }
+      setAlert({
+        type: 'success',
+        message: `Room ${isEditMode ? 'updated' : 'created'} successfully!`
+      });
+      
+      setTimeout(() => {
+        navigate(`/app/accommodation/${accommodationId}`);
+      }, 1000);
     } catch (error) {
+      console.error('Failed to save room:', error);
       setAlert({
         type: 'error',
         message: error.response?.data?.message || `Failed to ${isEditMode ? 'update' : 'create'} room`
@@ -152,17 +155,16 @@ export default function RoomForm() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    // Clear error for this field
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
 
   const genderOptions = [
-    { value: '', label: 'No Restriction' },
+    { value: '', label: 'No Restriction (Any Gender)' },
     { value: 'MALE', label: 'Male Only' },
     { value: 'FEMALE', label: 'Female Only' },
-    { value: 'MIXED', label: 'Mixed (Families)' }
+    { value: 'MIXED', label: 'Mixed / Family' }
   ];
 
   if (loading) {
@@ -170,24 +172,24 @@ export default function RoomForm() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-2xl mx-auto space-y-6">
       {/* Header */}
       <div>
         <Button
           variant="ghost"
-          icon={<ArrowLeft className="w-4 h-4" />}
-          onClick={() => navigate(`/accommodation/${accommodationId}`)}
-          className="mb-4"
+          icon={<ArrowLeft className="w-4 h-4 mr-1.5" />}
+          onClick={() => navigate(`/app/accommodation/${accommodationId}`)}
+          className="mb-3 text-xs font-semibold"
         >
-          Back to {accommodation?.buildingName || 'Accommodation'}
+          Back to {accommodation?.buildingName || accommodation?.name || 'Accommodation'}
         </Button>
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
           {isEditMode ? 'Edit Room' : 'Add New Room'}
         </h1>
-        <p className="text-gray-600 mt-1">
+        <p className="text-gray-600 dark:text-gray-400 mt-1">
           {isEditMode 
-            ? 'Update room information and settings' 
-            : `Add a room to ${accommodation?.buildingName || accommodation?.name || 'accommodation'}`
+            ? `Update details for Room ${formData.roomNumber}` 
+            : `Add a room to ${accommodation?.buildingName || accommodation?.name || 'this building'}`
           }
         </p>
       </div>
@@ -197,213 +199,146 @@ export default function RoomForm() {
           type={alert.type}
           message={alert.message}
           onClose={() => setAlert(null)}
+          dismissible
         />
       )}
 
-      <form onSubmit={handleSubmit}>
-        <div className="space-y-6">
-          {/* Room Basic Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Room Information</CardTitle>
-            </CardHeader>
-            <CardBody>
-              <div className="space-y-4">
-                {/* Accommodation Info (read-only) */}
-                {accommodation && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Accommodation Building
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={accommodation.buildingName || accommodation.name}
-                        disabled
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 cursor-not-allowed"
-                      />
-                      {accommodation.location && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          {accommodation.location}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <Card className="dark:bg-slate-900 dark:border-slate-800">
+          <CardHeader>
+            <CardTitle className="text-base font-bold text-gray-900 dark:text-white">
+              Room Configuration
+            </CardTitle>
+          </CardHeader>
+          <CardBody className="p-6 space-y-5">
+            {/* Building Reference */}
+            {accommodation && (
+              <div className="p-3 bg-gray-50 dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-400 font-medium uppercase">Building</p>
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">
+                    {accommodation.buildingName || accommodation.name}
+                  </p>
+                </div>
+                {accommodation.location && (
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    {accommodation.location}
+                  </span>
                 )}
+              </div>
+            )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input
-                    label="Room Number"
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                  Room Number / Identifier <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Home className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                  <input
+                    type="text"
                     name="roomNumber"
+                    required
+                    placeholder="e.g., 101, A-12, Ground-01"
                     value={formData.roomNumber}
                     onChange={handleChange}
-                    error={errors.roomNumber}
-                    required
-                    placeholder="e.g., 101, A1, Ground-1"
-                    icon={<Home className="w-5 h-5" />}
+                    className="w-full pl-9 pr-3.5 py-2 text-sm bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition"
                   />
+                </div>
+                {errors.roomNumber && (
+                  <p className="text-xs text-red-500 mt-1">{errors.roomNumber}</p>
+                )}
+              </div>
 
-                  <Input
-                    label="Capacity (Number of Beds)"
-                    name="capacity"
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                  Bed Capacity <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Bed className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                  <input
                     type="number"
+                    name="capacity"
+                    min="1"
+                    max="100"
+                    required
+                    placeholder="Number of beds"
                     value={formData.capacity}
                     onChange={handleChange}
-                    error={errors.capacity}
-                    required
-                    placeholder="Number of beds in this room"
-                    min="1"
-                    max="50"
-                    icon={<Bed className="w-5 h-5" />}
+                    className="w-full pl-9 pr-3.5 py-2 text-sm bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition"
                   />
                 </div>
+                {errors.capacity && (
+                  <p className="text-xs text-red-500 mt-1">{errors.capacity}</p>
+                )}
+              </div>
+            </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Select
-                    label="Gender Restriction"
-                    name="genderRestriction"
-                    value={formData.genderRestriction}
-                    onChange={handleChange}
-                    options={genderOptions}
-                    icon={<Users className="w-5 h-5" />}
-                  />
-
-                  <Input
-                    label="Floor (Optional)"
-                    name="floor"
-                    value={formData.floor}
-                    onChange={handleChange}
-                    placeholder="e.g., Ground, 1st, 2nd"
-                    icon={<DoorOpen className="w-5 h-5" />}
-                  />
-                </div>
-
-                <Textarea
-                  label="Amenities (Optional)"
-                  name="amenities"
-                  value={formData.amenities}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                  Gender Restriction
+                </label>
+                <Select
+                  name="genderRestriction"
+                  value={formData.genderRestriction}
                   onChange={handleChange}
-                  rows={3}
-                  placeholder="List amenities: e.g., Air conditioning, Private bathroom, Wi-Fi, TV, etc."
+                  options={genderOptions}
                 />
               </div>
-            </CardBody>
-          </Card>
 
-          {/* Guidelines */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Room Guidelines</CardTitle>
-            </CardHeader>
-            <CardBody>
-              <div className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-blue-900">Room Number</p>
-                    <p className="text-xs text-blue-700 mt-1">
-                      Choose a unique room number that's easy to identify. This will help participants 
-                      find their assigned rooms easily.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <Bed className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-blue-900">Capacity</p>
-                    <p className="text-xs text-blue-700 mt-1">
-                      Specify the total number of beds in this room. Each bed can be assigned to one participant. 
-                      The system will track occupancy automatically.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <Users className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-blue-900">Gender Restriction</p>
-                    <p className="text-xs text-blue-700 mt-1">
-                      Set gender restrictions to ensure appropriate room assignments. "Mixed" is typically 
-                      used for family rooms. The system will validate assignments based on this setting.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <DoorOpen className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-blue-900">Floor & Amenities</p>
-                    <p className="text-xs text-blue-700 mt-1">
-                      Specify the floor and amenities to help participants understand what to expect. 
-                      This information is displayed when assigning rooms.
-                    </p>
-                  </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                  Floor Level (Optional)
+                </label>
+                <div className="relative">
+                  <DoorOpen className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                  <input
+                    type="text"
+                    name="floor"
+                    placeholder="e.g., Ground Floor, 1st Floor, 2nd Floor"
+                    value={formData.floor}
+                    onChange={handleChange}
+                    className="w-full pl-9 pr-3.5 py-2 text-sm bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition"
+                  />
                 </div>
               </div>
-            </CardBody>
-          </Card>
+            </div>
 
-          {/* Preview */}
-          {formData.roomNumber && formData.capacity && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Room Preview</CardTitle>
-              </CardHeader>
-              <CardBody>
-                <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <h3 className="font-semibold text-gray-900">Room {formData.roomNumber}</h3>
-                      {formData.floor && (
-                        <p className="text-sm text-gray-500">Floor {formData.floor}</p>
-                      )}
-                    </div>
-                    {formData.genderRestriction && (
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        formData.genderRestriction === 'MALE' ? 'bg-blue-100 text-blue-700' :
-                        formData.genderRestriction === 'FEMALE' ? 'bg-pink-100 text-pink-700' :
-                        'bg-gray-100 text-gray-700'
-                      }`}>
-                        {genderOptions.find(opt => opt.value === formData.genderRestriction)?.label}
-                      </span>
-                    )}
-                  </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                Amenities & Features (Optional)
+              </label>
+              <textarea
+                name="amenities"
+                rows={3}
+                placeholder="e.g., Attached bathroom, Wi-Fi, Balcony, Electricity outlets, Desk..."
+                value={formData.amenities}
+                onChange={handleChange}
+                className="w-full px-3.5 py-2 text-sm bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition"
+              />
+            </div>
+          </CardBody>
+        </Card>
 
-                  <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
-                    <Bed className="w-4 h-4" />
-                    <span>Capacity: {formData.capacity} beds</span>
-                  </div>
-
-                  {formData.amenities && (
-                    <div className="text-sm text-gray-600">
-                      <p className="font-medium mb-1">Amenities:</p>
-                      <p>{formData.amenities}</p>
-                    </div>
-                  )}
-                </div>
-              </CardBody>
-            </Card>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex justify-end gap-4">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => navigate(`/accommodation/${accommodationId}`)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              icon={<Save className="w-4 h-4" />}
-              loading={submitting}
-            >
-              {isEditMode ? 'Update Room' : 'Create Room'}
-            </Button>
-          </div>
+        {/* Action Buttons */}
+        <div className="flex justify-end gap-3">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => navigate(`/app/accommodation/${accommodationId}`)}
+            disabled={submitting}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            icon={<Save className="w-4 h-4 mr-1.5" />}
+            loading={submitting}
+          >
+            {isEditMode ? 'Update Room' : 'Save Room'}
+          </Button>
         </div>
       </form>
     </div>

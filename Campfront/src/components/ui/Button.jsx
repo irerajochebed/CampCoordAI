@@ -12,24 +12,24 @@ const Button = forwardRef(({
   type = 'button',
   ...props 
 }, ref) => {
-  const baseStyles = 'inline-flex items-center justify-center font-medium rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
+  const baseStyles = 'inline-flex items-center justify-center font-semibold rounded-xl transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer';
   
   const variants = {
-    primary: 'bg-primary-600 text-white hover:bg-primary-700 focus:ring-4 focus:ring-primary-200',
-    secondary: 'bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-4 focus:ring-gray-100',
-    success: 'bg-green-600 text-white hover:bg-green-700 focus:ring-4 focus:ring-green-200',
-    danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-4 focus:ring-red-200',
-    warning: 'bg-yellow-500 text-white hover:bg-yellow-600 focus:ring-4 focus:ring-yellow-200',
-    outline: 'border-2 border-primary-600 text-primary-600 hover:bg-primary-50 focus:ring-4 focus:ring-primary-200',
-    ghost: 'text-gray-700 hover:bg-gray-100 focus:ring-4 focus:ring-gray-100',
+    primary: 'bg-primary-600 text-white hover:bg-primary-700 focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 shadow-xs',
+    secondary: 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700',
+    success: 'bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-2 focus:ring-emerald-500 shadow-xs',
+    danger: 'bg-rose-600 text-white hover:bg-rose-700 focus:ring-2 focus:ring-rose-500 shadow-xs',
+    warning: 'bg-amber-600 text-white hover:bg-amber-700 focus:ring-2 focus:ring-amber-500 shadow-xs',
+    outline: 'border border-primary-600 dark:border-primary-400 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-950/40',
+    ghost: 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800',
   };
   
   const sizes = {
-    xs: 'px-2.5 py-1.5 text-xs',
-    sm: 'px-3 py-2 text-sm',
-    md: 'px-4 py-2.5 text-sm',
-    lg: 'px-5 py-3 text-base',
-    xl: 'px-6 py-3.5 text-base',
+    xs: 'px-2.5 py-1 text-xs',
+    sm: 'px-3 py-1.5 text-xs',
+    md: 'px-4 py-2 text-sm',
+    lg: 'px-5 py-2.5 text-base',
+    xl: 'px-6 py-3 text-base',
   };
 
   return (
@@ -37,7 +37,7 @@ const Button = forwardRef(({
       ref={ref}
       type={type}
       disabled={disabled || loading}
-      className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`${baseStyles} ${variants[variant] || variants.primary} ${sizes[size]} ${className}`}
       {...props}
     >
       {loading && (

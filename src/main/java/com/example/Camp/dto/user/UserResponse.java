@@ -1,6 +1,7 @@
 package com.example.Camp.dto.user;
 
 import com.example.Camp.enums.Gender;
+import com.example.Camp.enums.OrganizationLevel;
 import com.example.Camp.enums.Position;
 import com.example.Camp.enums.Role;
 import lombok.AllArgsConstructor;
@@ -27,6 +28,11 @@ public class UserResponse {
     private LocalDate dateOfBirth;
     private Long organizationUnitId;
     private String organizationUnitName;
+    private OrganizationLevel organizationLevel;
+    private Long departmentId;
+    private String departmentName;
+    private String governmentDistrict;
+    private String sdaDistrict;
     private Boolean active;
     private String profileImageUrl;
     private String preferredLanguage;

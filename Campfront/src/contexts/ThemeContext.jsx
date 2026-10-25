@@ -3,53 +3,76 @@ import { createContext, useContext, useState, useEffect } from 'react';
 const ThemeContext = createContext(null);
 
 export function ThemeProvider({ children }) {
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window !== 'undefined' && window.matchMedia) {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const [theme, setThemeState] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('theme');
+      if (stored === 'light' || stored === 'dark') {
+        return stored;
+      }
+      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        return 'dark';
+      }
     }
-    return false;
+    return 'light';
   });
 
+  const isDark = theme === 'dark';
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+      root.classList.remove('light');
+    } else {
+      root.classList.remove('dark');
+      root.classList.add('light');
+    }
+    try {
+      localStorage.setItem('theme', theme);
+    } catch (e) {
+      // Storage might be blocked
+    }
+  }, [theme]);
+
+  // Listen for OS system theme changes if no explicit preference stored
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;
 
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-
-    const applyTheme = (e) => {
-      const darkActive = e.matches;
-      setIsDark(darkActive);
-      const root = document.documentElement;
-      if (darkActive) {
-        root.classList.add('dark');
-        root.classList.remove('light');
-      } else {
-        root.classList.remove('dark');
-        root.classList.add('light');
+    const handleSystemChange = (e) => {
+      const stored = localStorage.getItem('theme');
+      if (!stored) {
+        setThemeState(e.matches ? 'dark' : 'light');
       }
     };
 
-    // Apply initially
-    applyTheme(mediaQuery);
-
-    // Event listener for OS/Browser theme changes
     try {
-      mediaQuery.addEventListener('change', applyTheme);
+      mediaQuery.addEventListener('change', handleSystemChange);
     } catch (err) {
-      // Fallback for legacy browsers
-      mediaQuery.addListener(applyTheme);
+      mediaQuery.addListener(handleSystemChange);
     }
 
     return () => {
       try {
-        mediaQuery.removeEventListener('change', applyTheme);
+        mediaQuery.removeEventListener('change', handleSystemChange);
       } catch (err) {
-        mediaQuery.removeListener(applyTheme);
+        mediaQuery.removeListener(handleSystemChange);
       }
     };
   }, []);
 
+  const toggleTheme = () => {
+    setThemeState((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
+  const setTheme = (newTheme) => {
+    if (newTheme === 'dark' || newTheme === 'light') {
+      setThemeState(newTheme);
+    }
+  };
+
   return (
-    <ThemeContext.Provider value={{ isDark, theme: isDark ? 'dark' : 'light' }}>
+    <ThemeContext.Provider value={{ isDark, theme, toggleTheme, setTheme }}>
       {children}
     </ThemeContext.Provider>
   );

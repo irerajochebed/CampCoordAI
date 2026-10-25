@@ -1,10 +1,13 @@
 package com.example.Camp.controller;
 
+import com.example.Camp.dto.analytics.AIInsightsResponse;
 import com.example.Camp.dto.analytics.AdminDashboardResponse;
 import com.example.Camp.dto.analytics.CoordinatorDashboardResponse;
 import com.example.Camp.dto.common.ApiResponse;
 import com.example.Camp.security.UserDetailsImpl;
 import com.example.Camp.service.AnalyticsService;
+import com.example.Camp.entity.User;
+import com.example.Camp.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AnalyticsController {
 
     private final AnalyticsService analyticsService;
+    private final UserService userService;
 
     @GetMapping({"/dashboard/admin", "/admin/dashboard"})
     @PreAuthorize("hasRole('ADMINISTRATOR')")
@@ -33,5 +37,16 @@ public class AnalyticsController {
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
         CoordinatorDashboardResponse response = analyticsService.getCoordinatorDashboardStats(userDetails.getId());
         return ResponseEntity.ok(ApiResponse.success("Coordinator dashboard statistics retrieved successfully", response));
+    }
+
+    @GetMapping({"/ai-insights", "/ai/insights"})
+    @PreAuthorize("hasRole('COORDINATOR') or hasRole('ADMINISTRATOR')")
+    public ResponseEntity<ApiResponse<AIInsightsResponse>> getAIInsights(Authentication authentication) {
+        User currentUser = null;
+        if (authentication != null && authentication.getPrincipal() instanceof UserDetailsImpl userDetails) {
+            currentUser = userService.getUserById(userDetails.getId());
+        }
+        AIInsightsResponse response = analyticsService.getAIInsightsStats(currentUser);
+        return ResponseEntity.ok(ApiResponse.success("AI predictive insights retrieved successfully", response));
     }
 }

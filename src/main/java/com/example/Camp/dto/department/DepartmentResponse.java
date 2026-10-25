@@ -17,4 +17,7 @@ public class DepartmentResponse {
     private String description;
     private Long leaderId;
     private String leaderName;
+    private String leaderEmail;
+    private String leaderPhone;
+    private String leaderPosition;
 }

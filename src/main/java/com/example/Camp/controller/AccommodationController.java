@@ -154,4 +154,14 @@ public class AccommodationController {
         
         return ResponseEntity.ok(ApiResponse.success(capacity));
     }
+
+    @PostMapping("/event/{eventId}/auto-assign")
+    @PreAuthorize("hasRole('COORDINATOR') or hasRole('ADMINISTRATOR')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> autoAssignEventParticipants(@PathVariable Long eventId) {
+        List<RoomAssignment> assignments = accommodationService.autoAssignEventParticipants(eventId);
+        return ResponseEntity.ok(ApiResponse.success(
+                "Successfully assigned " + assignments.size() + " participants to rooms by gender without mixing.",
+                Map.of("assignedCount", assignments.size())
+        ));
+    }
 }

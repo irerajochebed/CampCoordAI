@@ -116,7 +116,7 @@ export default function SessionManagement() {
   const resetForm = () => {
     setFormData({
       title: '',
-      type: 'GENERAL',
+      type: 'GENERAL_SESSION',
       date: '',
       startTime: '',
       endTime: '',
@@ -132,21 +132,35 @@ export default function SessionManagement() {
     resetForm();
     // Pre-fill date with event start date
     if (event?.startDate) {
-      setFormData(prev => ({ ...prev, date: event.startDate }));
+      const dt = event.startDate.split('T')[0];
+      setFormData(prev => ({ ...prev, date: dt, type: 'GENERAL_SESSION' }));
     }
     setShowModal(true);
   };
 
   const handleEdit = (session) => {
     setEditingSession(session);
+    
+    let dateVal = '';
+    let startTimeVal = '';
+    let endTimeVal = '';
+
+    if (session.startTime) {
+      dateVal = session.startTime.split('T')[0] || '';
+      startTimeVal = session.startTime.split('T')[1]?.substring(0, 5) || '';
+    }
+    if (session.endTime) {
+      endTimeVal = session.endTime.split('T')[1]?.substring(0, 5) || '';
+    }
+
     setFormData({
       title: session.title || '',
-      type: session.type || 'GENERAL',
-      date: session.date || '',
-      startTime: session.startTime || '',
-      endTime: session.endTime || '',
+      type: session.type || 'GENERAL_SESSION',
+      date: dateVal || session.date || '',
+      startTime: startTimeVal || session.startTime || '',
+      endTime: endTimeVal || session.endTime || '',
       venue: session.venue || '',
-      speakerId: session.speaker?.id || '',
+      speakerId: session.speakerId || session.speaker?.id || '',
       description: session.description || ''
     });
     setShowModal(true);
@@ -186,7 +200,7 @@ export default function SessionManagement() {
       const eventStart = new Date(event?.startDate);
       const eventEnd = new Date(event?.endDate);
       
-      if (sessionDate < eventStart || sessionDate > eventEnd) {
+      if (event?.startDate && event?.endDate && (sessionDate < eventStart || sessionDate > eventEnd)) {
         newErrors.date = `Date must be between ${eventStart.toLocaleDateString()} and ${eventEnd.toLocaleDateString()}`;
       }
     }
@@ -211,6 +225,13 @@ export default function SessionManagement() {
     return Object.keys(newErrors).length === 0;
   };
 
+  const formatToDateTime = (dateStr, timeStr) => {
+    if (!timeStr) return null;
+    if (timeStr.includes('T')) return timeStr;
+    const timeFormatted = timeStr.length === 5 ? `${timeStr}:00` : timeStr;
+    return `${dateStr}T${timeFormatted}`;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -223,9 +244,8 @@ export default function SessionManagement() {
       const payload = {
         title: formData.title.trim(),
         type: formData.type,
-        date: formData.date,
-        startTime: formData.startTime,
-        endTime: formData.endTime,
+        startTime: formatToDateTime(formData.date, formData.startTime),
+        endTime: formatToDateTime(formData.date, formData.endTime),
         venue: formData.venue.trim(),
         speakerId: formData.speakerId ? parseInt(formData.speakerId) : null,
         description: formData.description.trim() || null
@@ -266,31 +286,45 @@ export default function SessionManagement() {
   };
 
   const sessionTypeOptions = [
-    { value: 'GENERAL', label: 'General Session' },
-    { value: 'WORSHIP', label: 'Worship' },
+    { value: 'WORSHIP', label: 'Worship / Praise' },
+    { value: 'MORNING_DEVOTION', label: 'Morning Devotion' },
+    { value: 'PLENARY_SESSION', label: 'Plenary Session' },
     { value: 'SEMINAR', label: 'Seminar' },
     { value: 'WORKSHOP', label: 'Workshop' },
-    { value: 'BREAK', label: 'Break/Meal' },
-    { value: 'RECREATION', label: 'Recreation' },
+    { value: 'BREAKOUT_SESSION', label: 'Breakout Session' },
     { value: 'PRAYER', label: 'Prayer Session' },
+    { value: 'EVENING_PROGRAM', label: 'Evening Program' },
+    { value: 'SPECIAL_SESSION', label: 'Special Session' },
+    { value: 'RECREATION', label: 'Recreation' },
+    { value: 'BREAK', label: 'Break / Meal' },
+    { value: 'GENERAL_SESSION', label: 'General Session' },
   ];
 
   const getSessionTypeBadge = (type) => {
     const variants = {
-      GENERAL: 'default',
+      MORNING_DEVOTION: 'primary',
       WORSHIP: 'info',
+      PLENARY_SESSION: 'default',
       SEMINAR: 'success',
       WORKSHOP: 'warning',
-      BREAK: 'default',
-      RECREATION: 'info',
+      BREAKOUT_SESSION: 'info',
       PRAYER: 'success',
+      EVENING_PROGRAM: 'primary',
+      SPECIAL_SESSION: 'warning',
+      RECREATION: 'info',
+      BREAK: 'default',
+      GENERAL_SESSION: 'default',
+      GENERAL: 'default'
     };
-    return <Badge variant={variants[type] || 'default'}>{type}</Badge>;
+    const label = type ? type.replace(/_/g, ' ') : 'Session';
+    return <Badge variant={variants[type] || 'default'}>{label}</Badge>;
   };
 
   // Group sessions by date
   const groupedSessions = sessions.reduce((acc, session) => {
-    const date = session.date;
+    const date = session.startTime 
+      ? session.startTime.split('T')[0] 
+      : (session.date || 'Scheduled Sessions');
     if (!acc[date]) {
       acc[date] = [];
     }

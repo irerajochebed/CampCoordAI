@@ -2,17 +2,16 @@ package com.example.Camp.controller;
 
 import com.example.Camp.dto.common.ApiResponse;
 import com.example.Camp.entity.OrganizationUnit;
+import com.example.Camp.entity.User;
 import com.example.Camp.enums.OrganizationLevel;
 import com.example.Camp.exception.ResourceNotFoundException;
 import com.example.Camp.repository.OrganizationUnitRepository;
+import com.example.Camp.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @RestController
 @RequestMapping({"/api/v1/org-units", "/api/v1/organization-units", "/api/organization-units"})
@@ -20,6 +19,7 @@ import java.util.Map;
 public class OrganizationUnitController {
 
     private final OrganizationUnitRepository organizationUnitRepository;
+    private final UserRepository userRepository;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAll() {
@@ -29,6 +29,45 @@ public class OrganizationUnitController {
                 .map(this::mapToDto)
                 .toList();
         return ResponseEntity.ok(ApiResponse.success(units));
+    }
+
+    @GetMapping("/tree")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getOrganizationTree() {
+        List<OrganizationUnit> allUnits = organizationUnitRepository.findAll().stream()
+                .filter(u -> !Boolean.TRUE.equals(u.getDeleted()))
+                .toList();
+
+        OrganizationUnit union = allUnits.stream()
+                .filter(u -> u.getLevel() == OrganizationLevel.UNION)
+                .findFirst()
+                .orElse(null);
+
+        if (union == null) {
+            List<OrganizationUnit> fields = allUnits.stream()
+                    .filter(u -> u.getLevel() == OrganizationLevel.FIELD)
+                    .toList();
+            if (!fields.isEmpty()) {
+                union = fields.get(0);
+            }
+        }
+
+        if (union == null) {
+            return ResponseEntity.ok(ApiResponse.success(Collections.emptyMap()));
+        }
+
+        Map<String, Object> tree = buildSubTree(union, allUnits);
+        return ResponseEntity.ok(ApiResponse.success(tree));
+    }
+
+    private Map<String, Object> buildSubTree(OrganizationUnit unit, List<OrganizationUnit> allUnits) {
+        Map<String, Object> node = mapToDto(unit);
+        List<Map<String, Object>> children = allUnits.stream()
+                .filter(u -> u.getParent() != null && Objects.equals(u.getParent().getId(), unit.getId()))
+                .sorted(Comparator.comparing(OrganizationUnit::getName))
+                .map(child -> buildSubTree(child, allUnits))
+                .toList();
+        node.put("children", children);
+        return node;
     }
 
     @GetMapping("/fields")
@@ -93,11 +132,48 @@ public class OrganizationUnitController {
         Map<String, Object> map = new HashMap<>();
         map.put("id", u.getId());
         map.put("name", u.getName());
+        map.put("type", u.getLevel() != null ? u.getLevel().name() : "DISTRICT");
         map.put("level", u.getLevel() != null ? u.getLevel().name() : "");
         map.put("code", u.getCode() != null ? u.getCode() : "");
         map.put("location", u.getLocation() != null ? u.getLocation() : "");
+        map.put("address", u.getLocation() != null ? u.getLocation() : "");
+        map.put("contactEmail", u.getContactEmail() != null ? u.getContactEmail() : "");
+        map.put("contactPhone", u.getContactPhone() != null ? u.getContactPhone() : "");
         map.put("parentId", u.getParent() != null ? u.getParent().getId() : null);
         map.put("isCustom", Boolean.TRUE.equals(u.getIsCustom()));
+
+        // Find primary leader
+        List<User> users = userRepository.findActiveByOrganizationUnitId(u.getId());
+        User primaryLeader = users.stream()
+                .filter(user -> user.getPosition() != null && (
+                        user.getPosition().name().contains("LEADER") ||
+                        user.getPosition().name().contains("PASTOR") ||
+                        user.getPosition().name().contains("ADMINISTRATOR")
+                ))
+                .findFirst()
+                .orElse(users.isEmpty() ? null : users.get(0));
+
+        if (primaryLeader != null) {
+            String leaderTitle = (primaryLeader.getPosition() != null && primaryLeader.getPosition().name().contains("PASTOR")) ? "Pr. " : "";
+            map.put("leader", leaderTitle + primaryLeader.getFirstName() + " " + primaryLeader.getLastName());
+            map.put("leaderPosition", primaryLeader.getPosition() != null ? primaryLeader.getPosition().name() : "");
+            if (u.getContactEmail() == null || u.getContactEmail().isBlank()) {
+                map.put("contactEmail", primaryLeader.getEmail());
+            }
+            if (u.getContactPhone() == null || u.getContactPhone().isBlank()) {
+                map.put("contactPhone", primaryLeader.getPhoneNumber());
+            }
+        } else {
+            map.put("leader", "");
+            map.put("leaderPosition", "");
+        }
+
+        // Estimate member count or calculate user count
+        int memberCount = Math.max(users.size(), u.getLevel() == OrganizationLevel.UNION ? 125000 : 
+                                               u.getLevel() == OrganizationLevel.FIELD ? 18000 : 
+                                               u.getLevel() == OrganizationLevel.DISTRICT ? 3200 : 450);
+        map.put("memberCount", memberCount);
+
         return map;
     }
 }

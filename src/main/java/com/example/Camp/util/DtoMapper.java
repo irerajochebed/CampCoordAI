@@ -9,6 +9,7 @@ import com.example.Camp.dto.registration.RegistrationResponse;
 import com.example.Camp.dto.session.SessionResponse;
 import com.example.Camp.dto.user.UserResponse;
 import com.example.Camp.entity.*;
+import com.example.Camp.enums.*;
 import org.springframework.stereotype.Component;
 
 import java.util.stream.Collectors;
@@ -31,6 +32,11 @@ public class DtoMapper {
                 .dateOfBirth(user.getDateOfBirth())
                 .organizationUnitId(user.getOrganizationUnit() != null ? user.getOrganizationUnit().getId() : null)
                 .organizationUnitName(user.getOrganizationUnit() != null ? user.getOrganizationUnit().getName() : null)
+                .organizationLevel(user.getOrganizationUnit() != null ? user.getOrganizationUnit().getLevel() : null)
+                .departmentId(user.getDepartment() != null ? user.getDepartment().getId() : null)
+                .departmentName(user.getDepartment() != null ? user.getDepartment().getName() : null)
+                .governmentDistrict(user.getGovernmentDistrict())
+                .sdaDistrict(user.getSdaDistrict())
                 .active(user.getActive())
                 .profileImageUrl(user.getProfileImageUrl())
                 .preferredLanguage(user.getPreferredLanguage() != null ? user.getPreferredLanguage() : "en")
@@ -40,14 +46,35 @@ public class DtoMapper {
     public ProposalResponse toProposalResponse(Proposal proposal) {
         if (proposal == null) return null;
         
+        String proposedByName = null;
+        if (proposal.getProposedBy() != null) {
+            String first = proposal.getProposedBy().getFirstName() != null ? proposal.getProposedBy().getFirstName().trim() : "";
+            String last = proposal.getProposedBy().getLastName() != null ? proposal.getProposedBy().getLastName().trim() : "";
+            proposedByName = (first + " " + last).trim();
+            if (proposedByName.isEmpty()) {
+                proposedByName = proposal.getProposedBy().getEmail();
+            }
+        }
+        if (proposedByName == null || proposedByName.isEmpty()) {
+            proposedByName = "District / Field Organizer";
+        }
+
+        String departmentName = (proposal.getDepartment() != null && proposal.getDepartment().getName() != null)
+                ? proposal.getDepartment().getName()
+                : "General Ministries";
+
+        String targetOrgUnitName = (proposal.getTargetOrganizationUnit() != null && proposal.getTargetOrganizationUnit().getName() != null)
+                ? proposal.getTargetOrganizationUnit().getName()
+                : (proposal.getScope() == ProposalScope.UNION ? "Rwanda Union Mission (RUM)" : "Local Field / District");
+
         return ProposalResponse.builder()
                 .id(proposal.getId())
                 .eventName(proposal.getEventName())
                 .eventType(proposal.getEventType())
-                .departmentId(proposal.getDepartment().getId())
-                .departmentName(proposal.getDepartment().getName())
-                .proposedById(proposal.getProposedBy().getId())
-                .proposedByName(proposal.getProposedBy().getFirstName() + " " + proposal.getProposedBy().getLastName())
+                .departmentId(proposal.getDepartment() != null ? proposal.getDepartment().getId() : null)
+                .departmentName(departmentName)
+                .proposedById(proposal.getProposedBy() != null ? proposal.getProposedBy().getId() : null)
+                .proposedByName(proposedByName)
                 .objectives(proposal.getObjectives())
                 .startDate(proposal.getStartDate())
                 .endDate(proposal.getEndDate())
@@ -58,12 +85,12 @@ public class DtoMapper {
                 .status(proposal.getStatus())
                 .scope(proposal.getScope())
                 .targetOrganizationUnitId(proposal.getTargetOrganizationUnit() != null ? proposal.getTargetOrganizationUnit().getId() : null)
-                .targetOrganizationUnitName(proposal.getTargetOrganizationUnit() != null ? proposal.getTargetOrganizationUnit().getName() : null)
+                .targetOrganizationUnitName(targetOrgUnitName)
                 .deptLeaderEndorsed(proposal.getDeptLeaderEndorsed())
                 .reviewComments(proposal.getReviewComments())
                 .reviewedById(proposal.getReviewedBy() != null ? proposal.getReviewedBy().getId() : null)
                 .reviewedByName(proposal.getReviewedBy() != null ?
-                        proposal.getReviewedBy().getFirstName() + " " + proposal.getReviewedBy().getLastName() : null)
+                        (proposal.getReviewedBy().getFirstName() + " " + proposal.getReviewedBy().getLastName()).trim() : null)
                 // Level 1 Leader Review
                 .leaderReviewedById(proposal.getLeaderReviewedBy() != null ? proposal.getLeaderReviewedBy().getId() : null)
                 .leaderReviewedByName(proposal.getLeaderReviewedBy() != null ?
@@ -109,6 +136,21 @@ public class DtoMapper {
     public EventResponse toEventResponse(Event event, Long totalRegistrations, Long confirmedRegistrations) {
         if (event == null) return null;
         
+        com.example.Camp.dto.department.DepartmentResponse deptResponse = null;
+        if (event.getDepartment() != null) {
+            deptResponse = com.example.Camp.dto.department.DepartmentResponse.builder()
+                    .id(event.getDepartment().getId())
+                    .name(event.getDepartment().getName())
+                    .type(event.getDepartment().getType())
+                    .build();
+        } else if (event.getProposal() != null && event.getProposal().getDepartment() != null) {
+            deptResponse = com.example.Camp.dto.department.DepartmentResponse.builder()
+                    .id(event.getProposal().getDepartment().getId())
+                    .name(event.getProposal().getDepartment().getName())
+                    .type(event.getProposal().getDepartment().getType())
+                    .build();
+        }
+
         return EventResponse.builder()
                 .id(event.getId())
                 .eventCode(event.getEventCode())
@@ -125,10 +167,14 @@ public class DtoMapper {
                 .registrationEndDate(event.getRegistrationEndDate())
                 .maxParticipants(event.getMaxParticipants())
                 .budget(event.getBudget())
+                .department(deptResponse)
                 .coordinatorId(event.getCoordinator().getId())
                 .coordinatorName(event.getCoordinator().getFirstName() + " " + event.getCoordinator().getLastName())
                 .totalRegistrations(totalRegistrations)
                 .confirmedRegistrations(confirmedRegistrations)
+                .minAge(event.getMinAge())
+                .maxAge(event.getMaxAge())
+                .targetGender(event.getTargetGender())
                 .build();
     }
     
@@ -157,51 +203,88 @@ public class DtoMapper {
         if (registration == null) return null;
         
         String roomDetails = null;
-        if (!registration.getRoomAssignments().isEmpty()) {
+        if (registration.getRoomAssignments() != null && !registration.getRoomAssignments().isEmpty()) {
             RoomAssignment assignment = registration.getRoomAssignments().stream()
                     .filter(RoomAssignment::getActive)
                     .findFirst()
                     .orElse(null);
-            if (assignment != null) {
+            if (assignment != null && assignment.getRoom() != null) {
                 Room room = assignment.getRoom();
-                roomDetails = room.getAccommodation().getBuildingName() + 
-                        " - Room " + room.getRoomNumber() + 
-                        " - Bed " + assignment.getBedNumber();
+                String building = room.getAccommodation() != null ? room.getAccommodation().getBuildingName() : "Main";
+                roomDetails = building + " - Room " + room.getRoomNumber() + " - Bed " + assignment.getBedNumber();
             }
         }
+        
+        PaymentResponse latestPayment = null;
+        if (registration.getPayments() != null && !registration.getPayments().isEmpty()) {
+            latestPayment = registration.getPayments().stream()
+                    .filter(p -> p != null && !p.getDeleted())
+                    .reduce((first, second) -> second)
+                    .map(this::toPaymentResponse)
+                    .orElse(null);
+        }
+
+        Event event = registration.getEvent();
+        User participant = registration.getParticipant();
+        String church = (participant != null && participant.getOrganizationUnit() != null) 
+                ? participant.getOrganizationUnit().getName() 
+                : "N/A";
         
         return RegistrationResponse.builder()
                 .id(registration.getId())
                 .registrationNumber(registration.getRegistrationNumber())
-                .eventId(registration.getEvent().getId())
-                .eventName(registration.getEvent().getName())
-                .participantId(registration.getParticipant().getId())
-                .participantName(registration.getParticipant().getFirstName() + " " + 
-                        registration.getParticipant().getLastName())
-                .participantEmail(registration.getParticipant().getEmail())
-                .participantPhone(registration.getParticipant().getPhoneNumber())
-                .churchName(registration.getParticipant().getOrganizationUnit().getName())
+                .eventId(event != null ? event.getId() : null)
+                .eventName(event != null ? event.getName() : null)
+                .eventStartDate(event != null ? event.getStartDate() : null)
+                .eventEndDate(event != null ? event.getEndDate() : null)
+                .eventVenue(event != null ? event.getVenue() : null)
+                .eventRegistrationFee(event != null ? event.getRegistrationFee() : null)
+                .event(event != null ? toEventResponse(event, null, null) : null)
+                .participantId(participant != null ? participant.getId() : null)
+                .participantName(participant != null ? (participant.getFirstName() + " " + participant.getLastName()) : null)
+                .participantFirstName(participant != null ? participant.getFirstName() : null)
+                .participantLastName(participant != null ? participant.getLastName() : null)
+                .participantEmail(participant != null ? participant.getEmail() : null)
+                .participantPhone(participant != null ? participant.getPhoneNumber() : null)
+                .participantGender(participant != null ? participant.getGender() : null)
+                .gender(participant != null && participant.getGender() != null ? participant.getGender().name() : null)
+                .churchName(church)
                 .status(registration.getStatus())
                 .specialRequirements(registration.getSpecialRequirements())
                 .emergencyContactName(registration.getEmergencyContactName())
                 .emergencyContactPhone(registration.getEmergencyContactPhone())
                 .qrCode(registration.getQrCode())
                 .checkedInAt(registration.getCheckedInAt())
+                .checkedOutAt(registration.getCheckedOutAt())
                 .roomDetails(roomDetails)
                 .createdAt(registration.getCreatedAt())
+                .registrationDate(registration.getCreatedAt())
+                .payment(latestPayment)
                 .build();
     }
+
     
     public PaymentResponse toPaymentResponse(Payment payment) {
         if (payment == null) return null;
         
+        Registration registration = payment.getRegistration();
+        User participant = registration != null ? registration.getParticipant() : null;
+        Event event = registration != null ? registration.getEvent() : null;
+        String church = (participant != null && participant.getOrganizationUnit() != null) 
+                ? participant.getOrganizationUnit().getName() 
+                : "N/A";
+        
         return PaymentResponse.builder()
                 .id(payment.getId())
                 .transactionReference(payment.getTransactionReference())
-                .registrationId(payment.getRegistration().getId())
-                .participantName(payment.getRegistration().getParticipant().getFirstName() + " " + 
-                        payment.getRegistration().getParticipant().getLastName())
-                .eventName(payment.getRegistration().getEvent().getName())
+                .registrationId(registration != null ? registration.getId() : null)
+                .registrationNumber(registration != null ? registration.getRegistrationNumber() : null)
+                .eventId(event != null ? event.getId() : null)
+                .eventName(event != null ? event.getName() : null)
+                .participantName(participant != null ? (participant.getFirstName() + " " + participant.getLastName()) : "Participant")
+                .participantEmail(participant != null ? participant.getEmail() : null)
+                .participantPhone(participant != null ? participant.getPhoneNumber() : null)
+                .churchName(church)
                 .amount(payment.getAmount())
                 .paymentMethod(payment.getPaymentMethod())
                 .status(payment.getStatus())
@@ -212,6 +295,7 @@ public class DtoMapper {
                 .verifiedAt(payment.getVerifiedAt())
                 .notes(payment.getNotes())
                 .receiptUrl(payment.getReceiptUrl())
+                .createdAt(payment.getCreatedAt())
                 .build();
     }
     

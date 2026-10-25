@@ -25,7 +25,7 @@ public class ResourceController {
     private final ResourceService resourceService;
     
     @PostMapping
-    @PreAuthorize("hasRole('ADMINISTRATOR')")
+    @PreAuthorize("hasRole('ADMINISTRATOR') or hasRole('COORDINATOR')")
     public ResponseEntity<ApiResponse<Resource>> createResource(@Valid @RequestBody ResourceRequest request) {
         Resource resource = resourceService.createResource(request);
         return ResponseEntity.ok(ApiResponse.success("Resource created successfully", resource));
@@ -77,7 +77,7 @@ public class ResourceController {
     }
     
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMINISTRATOR')")
+    @PreAuthorize("hasRole('ADMINISTRATOR') or hasRole('COORDINATOR')")
     public ResponseEntity<ApiResponse<String>> deleteResource(@PathVariable Long id) {
         resourceService.deleteResource(id);
         return ResponseEntity.ok(ApiResponse.success("Resource deleted successfully", null));

@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { paymentApi, eventApi } from '../../api';
+import { paymentApi, eventApi, getCachedData } from '../../api';
 import { 
   ArrowLeft,
   Search,
@@ -29,9 +29,25 @@ export default function PaymentVerification() {
   const navigate = useNavigate();
   const { user, isAdmin, isCoordinator } = useAuth();
   
-  const [pendingPayments, setPendingPayments] = useState([]);
-  const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Instant In-Memory Cache Initialization
+  const cachedPayments = useMemo(() => {
+    const cached = getCachedData('/payments');
+    const list = cached?.data || cached || [];
+    if (Array.isArray(list)) {
+      return list.filter(p => p.status === 'PENDING');
+    }
+    return [];
+  }, []);
+
+  const cachedEvents = useMemo(() => {
+    const cached = getCachedData('/events');
+    const list = cached?.data || cached || [];
+    return Array.isArray(list) ? list : [];
+  }, []);
+
+  const [pendingPayments, setPendingPayments] = useState(cachedPayments);
+  const [events, setEvents] = useState(cachedEvents);
+  const [loading, setLoading] = useState(cachedPayments.length === 0);
   const [alert, setAlert] = useState(null);
   const [selectedPayments, setSelectedPayments] = useState([]);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
@@ -39,6 +55,7 @@ export default function PaymentVerification() {
   const [currentPayment, setCurrentPayment] = useState(null);
   const [verificationNotes, setVerificationNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [previewReceiptUrl, setPreviewReceiptUrl] = useState(null);
   
   const [filters, setFilters] = useState({
     event: '',
@@ -51,7 +68,7 @@ export default function PaymentVerification() {
 
   useEffect(() => {
     fetchEvents();
-    fetchPendingPayments();
+    fetchPendingPayments(cachedPayments.length > 0);
   }, []);
 
   const fetchEvents = async () => {
@@ -68,25 +85,30 @@ export default function PaymentVerification() {
     }
   };
 
-  const fetchPendingPayments = async () => {
+  const fetchPendingPayments = async (isBackground = false) => {
     try {
-      setLoading(true);
-      // Fetch pending payments - adjust based on your API
-      const response = filters.event 
-        ? await paymentApi.getPending(filters.event)
-        : await paymentApi.getAll?.() || { data: { success: true, data: [] } };
-      
-      if (response.data.success) {
-        // Filter for PENDING status
-        const pending = (response.data.data || []).filter(p => p.status === 'PENDING');
-        setPendingPayments(pending);
+      if (!isBackground && pendingPayments.length === 0) setLoading(true);
+      let list = [];
+      if (filters.event) {
+        const response = await paymentApi.getPending(filters.event);
+        list = response.data?.data || response.data || [];
+      } else {
+        const response = await paymentApi.getByStatus('PENDING').catch(async () => {
+          return await paymentApi.getAll();
+        });
+        list = response.data?.data || response.data || [];
       }
+      
+      const pending = Array.isArray(list) ? list.filter(p => p.status === 'PENDING') : [];
+      setPendingPayments(pending);
     } catch (error) {
       console.error('Error fetching pending payments:', error);
-      setAlert({
-        type: 'error',
-        message: 'Failed to fetch pending payments'
-      });
+      if (pendingPayments.length === 0) {
+        setAlert({
+          type: 'error',
+          message: 'Failed to fetch pending payments'
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -217,13 +239,15 @@ export default function PaymentVerification() {
 
   // Apply filters
   const filteredPayments = pendingPayments.filter(payment => {
-    if (filters.event && payment.registration.event.id.toString() !== filters.event) return false;
+    const eventId = payment.registration?.event?.id || payment.eventId;
+    if (filters.event && eventId && eventId.toString() !== filters.event) return false;
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
-      const participantName = `${payment.registration.participantFirstName} ${payment.registration.participantLastName}`.toLowerCase();
-      const reference = (payment.transactionReference || '').toLowerCase();
+      const participantName = (payment.participantName || `${payment.registration?.participantFirstName || ''} ${payment.registration?.participantLastName || ''}`).toLowerCase();
+      const reference = (payment.transactionReference || payment.referenceNumber || '').toLowerCase();
+      const eventTitle = (payment.eventName || payment.registration?.event?.name || '').toLowerCase();
       
-      if (!participantName.includes(searchLower) && !reference.includes(searchLower)) {
+      if (!participantName.includes(searchLower) && !reference.includes(searchLower) && !eventTitle.includes(searchLower)) {
         return false;
       }
     }
@@ -254,7 +278,7 @@ export default function PaymentVerification() {
           <Button
             variant="ghost"
             icon={<ArrowLeft className="w-4 h-4" />}
-            onClick={() => navigate('/payments')}
+            onClick={() => navigate('/app/payments')}
             className="mb-4"
           >
             Back to Payments
@@ -391,7 +415,7 @@ export default function PaymentVerification() {
           <CardBody className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold text-xs uppercase tracking-wider">
                   <tr>
                     <th className="px-6 py-3 text-left">
                       <input
@@ -401,103 +425,111 @@ export default function PaymentVerification() {
                         className="w-4 h-4 text-primary-600 rounded"
                       />
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    <th className="px-6 py-3 text-left">
                       Participant & Event
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    <th className="px-6 py-3 text-left">
                       Amount
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    <th className="px-6 py-3 text-left">
                       Transaction Ref
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    <th className="px-6 py-3 text-left">
                       Submitted
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    <th className="px-6 py-3 text-left">
                       Receipt
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                    <th className="px-6 py-3 text-right">
                       Actions
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredPayments.map(payment => (
-                    <tr key={payment.id} className={`hover:bg-gray-50 ${selectedPayments.includes(payment.id) ? 'bg-primary-50' : ''}`}>
-                      <td className="px-6 py-4">
-                        <input
-                          type="checkbox"
-                          checked={selectedPayments.includes(payment.id)}
-                          onChange={() => handleSelectPayment(payment.id)}
-                          className="w-4 h-4 text-primary-600 rounded"
-                        />
-                      </td>
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="font-medium text-gray-900">
-                            {payment.registration.participantFirstName} {payment.registration.participantLastName}
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-800 bg-transparent">
+                  {filteredPayments.map(payment => {
+                    const participantName = payment.participantName || 
+                      `${payment.registration?.participantFirstName || ''} ${payment.registration?.participantLastName || ''}`.trim() || 'Participant';
+                    const eventTitle = payment.eventName || payment.registration?.event?.name || 'Event';
+                    const email = payment.participantEmail || payment.registration?.participantEmail || '';
+                    const regId = payment.registrationId || payment.registration?.id;
+
+                    return (
+                      <tr key={payment.id} className={`transition-colors hover:bg-slate-50/60 dark:hover:bg-slate-800/40 ${selectedPayments.includes(payment.id) ? 'bg-primary-500/10' : ''}`}>
+                        <td className="px-6 py-4">
+                          <input
+                            type="checkbox"
+                            checked={selectedPayments.includes(payment.id)}
+                            onChange={() => handleSelectPayment(payment.id)}
+                            className="w-4 h-4 text-primary-600 rounded"
+                          />
+                        </td>
+                        <td className="px-6 py-4">
+                          <div>
+                            <p className="font-semibold text-slate-900 dark:text-white">{participantName}</p>
+                            {email && <p className="text-xs text-slate-500 dark:text-slate-400">{email}</p>}
+                            <p className="text-xs font-medium text-primary-600 dark:text-primary-400 mt-1">{eventTitle}</p>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <p className="text-base font-bold text-gray-900">
+                            {formatCurrency(payment.amount)}
                           </p>
-                          <p className="text-sm text-gray-500">{payment.registration.participantEmail}</p>
-                          <p className="text-sm text-gray-600 mt-1">{payment.registration.event.name}</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <p className="text-lg font-bold text-gray-900">
-                          {formatCurrency(payment.amount)}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {payment.paymentMethod?.replace(/_/g, ' ')}
-                        </p>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <p className="font-mono text-sm text-gray-900">
-                          {payment.transactionReference}
-                        </p>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatDateTime(payment.paidAt || payment.createdAt)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {payment.receiptUrl ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            icon={<Eye className="w-4 h-4" />}
-                            onClick={() => window.open(payment.receiptUrl, '_blank')}
-                          >
-                            View
-                          </Button>
-                        ) : (
-                          <span className="text-sm text-gray-400">No receipt</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            icon={<Eye className="w-4 h-4" />}
-                            onClick={() => navigate(`/payments/${payment.id}`)}
-                            title="View details"
-                          />
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            icon={<CheckCircle className="w-4 h-4 text-green-600" />}
-                            onClick={() => handleVerifySingle(payment)}
-                            title="Verify"
-                          />
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            icon={<XCircle className="w-4 h-4 text-red-600" />}
-                            onClick={() => handleRejectSingle(payment)}
-                            title="Reject"
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                          <p className="text-xs text-gray-500">
+                            {payment.paymentMethod?.replace(/_/g, ' ')}
+                          </p>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <p className="font-mono text-xs font-semibold text-gray-900 bg-gray-100 px-2 py-1 rounded inline-block">
+                            {payment.transactionReference || payment.referenceNumber || 'N/A'}
+                          </p>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-700">
+                          {formatDateTime(payment.paidAt || payment.createdAt)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {payment.receiptUrl ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              icon={<Eye className="w-3.5 h-3.5" />}
+                              onClick={() => setPreviewReceiptUrl(payment.receiptUrl)}
+                            >
+                              View Proof
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-gray-400">No file</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {regId && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                icon={<Eye className="w-4 h-4" />}
+                                onClick={() => navigate(`/app/registrations/${regId}`)}
+                                title="View registration"
+                              />
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              icon={<CheckCircle className="w-4 h-4 text-green-600" />}
+                              onClick={() => handleVerifySingle(payment)}
+                              title="Verify & Confirm"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              icon={<XCircle className="w-4 h-4 text-red-600" />}
+                              onClick={() => handleRejectSingle(payment)}
+                              title="Reject"
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -540,7 +572,7 @@ export default function PaymentVerification() {
         <div className="space-y-4">
           {currentPayment ? (
             <p className="text-gray-700">
-              Confirm verification of payment <strong>{formatCurrency(currentPayment.amount)}</strong> from <strong>{currentPayment.registration.participantFirstName} {currentPayment.registration.participantLastName}</strong>.
+              Confirm verification of payment <strong>{formatCurrency(currentPayment.amount)}</strong> from <strong>{currentPayment.participantName || `${currentPayment.registration?.participantFirstName || ''} ${currentPayment.registration?.participantLastName || ''}`.trim() || 'Participant'}</strong>.
             </p>
           ) : (
             <p className="text-gray-700">
@@ -603,7 +635,7 @@ export default function PaymentVerification() {
 
           {currentPayment && (
             <p className="text-gray-700">
-              Payment from <strong>{currentPayment.registration.participantFirstName} {currentPayment.registration.participantLastName}</strong> for <strong>{formatCurrency(currentPayment.amount)}</strong>
+              Payment from <strong>{currentPayment.participantName || `${currentPayment.registration?.participantFirstName || ''} ${currentPayment.registration?.participantLastName || ''}`}</strong> for <strong>{formatCurrency(currentPayment.amount)}</strong>
             </p>
           )}
 
@@ -617,6 +649,24 @@ export default function PaymentVerification() {
           />
         </div>
       </Modal>
+
+      {/* Receipt Image Preview Modal */}
+      {previewReceiptUrl && (
+        <Modal
+          isOpen={!!previewReceiptUrl}
+          onClose={() => setPreviewReceiptUrl(null)}
+          title="Payment Proof Receipt"
+          size="lg"
+        >
+          <div className="space-y-4">
+            <img 
+              src={previewReceiptUrl} 
+              alt="Receipt Preview" 
+              className="w-full max-h-[70vh] object-contain rounded border border-gray-200"
+            />
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

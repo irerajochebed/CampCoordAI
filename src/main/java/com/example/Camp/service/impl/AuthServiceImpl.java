@@ -79,13 +79,23 @@ public class AuthServiceImpl implements AuthService {
                 .token(jwt)
                 .type("Bearer")
                 .userId(user.getId())
+                .id(user.getId())
                 .email(user.getEmail())
                 .firstName(user.getFirstName())
                 .lastName(user.getLastName())
+                .phoneNumber(user.getPhoneNumber())
                 .role(user.getRole())
                 .position(user.getPosition())
-                .organizationUnitId(user.getOrganizationUnit().getId())
-                .organizationUnitName(user.getOrganizationUnit().getName())
+                .gender(user.getGender())
+                .dateOfBirth(user.getDateOfBirth())
+                .organizationUnitId(user.getOrganizationUnit() != null ? user.getOrganizationUnit().getId() : null)
+                .organizationUnitName(user.getOrganizationUnit() != null ? user.getOrganizationUnit().getName() : null)
+                .organizationLevel(user.getOrganizationUnit() != null ? user.getOrganizationUnit().getLevel() : null)
+                .departmentId(user.getDepartment() != null ? user.getDepartment().getId() : null)
+                .departmentName(user.getDepartment() != null ? user.getDepartment().getName() : null)
+                .governmentDistrict(user.getGovernmentDistrict())
+                .sdaDistrict(user.getSdaDistrict())
+                .profileImageUrl(user.getProfileImageUrl())
                 .preferredLanguage(user.getPreferredLanguage() != null ? user.getPreferredLanguage() : "en")
                 .build();
     }
@@ -95,6 +105,11 @@ public class AuthServiceImpl implements AuthService {
         // Validate email uniqueness
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new DuplicateResourceException("User", "email", request.getEmail());
+        }
+        
+        // Validate date of birth is not in the future
+        if (request.getDateOfBirth() != null && request.getDateOfBirth().isAfter(java.time.LocalDate.now())) {
+            throw new BadRequestException("Date of birth cannot be in the future");
         }
         
         // Validate phone number uniqueness

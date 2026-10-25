@@ -70,5 +70,17 @@ logging:
     com.example.Camp: DEBUG
     org.springframework.web: INFO
     org.springframework.security: DEBUG
-    org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+# CampCoordAI Application Properties
+camp:
+  scheduler:
+    upcoming-events:
+      cron: ${UPCOMING_EVENTS_CRON:0 0 5 * * ?}
+      enabled: ${UPCOMING_EVENTS_ENABLED:true}
+  ai:
+    llm:
+      api-key: ${AI_API_KEY:}
+      api-url: ${AI_API_URL:https://api.openai.com/v1/chat/completions}
+      model: ${AI_MODEL:gpt-4o-mini}
+      timeout-seconds: ${AI_TIMEOUT_SECONDS:3}

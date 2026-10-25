@@ -43,4 +43,10 @@ public class EventRequest {
     private Integer maxParticipants;
     
     private BigDecimal budget;
+    
+    private Integer minAge;
+    
+    private Integer maxAge;
+    
+    private com.example.Camp.enums.Gender targetGender;
 }

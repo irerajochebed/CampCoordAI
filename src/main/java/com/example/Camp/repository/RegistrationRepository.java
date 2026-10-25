@@ -25,19 +25,19 @@ public interface RegistrationRepository extends JpaRepository<Registration, Long
     
     List<Registration> findByEventIdAndStatus(Long eventId, RegistrationStatus status);
     
-    @Query("SELECT r FROM Registration r WHERE r.deleted = false AND r.event.id = :eventId")
+    @Query("SELECT r FROM Registration r WHERE r.deleted = false AND r.event.id = :eventId ORDER BY r.createdAt DESC")
     List<Registration> findActiveByEvent(@Param("eventId") Long eventId);
     
-    @Query("SELECT r FROM Registration r WHERE r.deleted = false AND r.participant.id = :participantId")
+    @Query("SELECT r FROM Registration r WHERE r.deleted = false AND r.participant.id = :participantId ORDER BY r.createdAt DESC")
     List<Registration> findActiveByParticipant(@Param("participantId") Long participantId);
     
     @Query("SELECT r FROM Registration r WHERE r.deleted = false AND " +
-           "r.event.id = :eventId AND r.status = :status")
+           "r.event.id = :eventId AND r.status = :status ORDER BY r.createdAt DESC")
     List<Registration> findActiveByEventAndStatus(@Param("eventId") Long eventId, 
                                                   @Param("status") RegistrationStatus status);
     
     @Query("SELECT r FROM Registration r WHERE r.deleted = false AND " +
-           "r.event.id = :eventId AND r.participant.organizationUnit.id = :organizationUnitId")
+           "r.event.id = :eventId AND r.participant.organizationUnit.id = :organizationUnitId ORDER BY r.createdAt DESC")
     List<Registration> findByEventAndOrganizationUnit(@Param("eventId") Long eventId, 
                                                       @Param("organizationUnitId") Long organizationUnitId);
     
@@ -64,4 +64,32 @@ public interface RegistrationRepository extends JpaRepository<Registration, Long
            "r.event.id = :eventId AND r.participant.id = :participantId")
     Optional<Registration> findByEventAndParticipant(@Param("eventId") Long eventId, 
                                                      @Param("participantId") Long participantId);
+
+    // ── SCOPED JURISDICTION QUERIES ───────────────────────────────────────────
+
+    @Query("SELECT r FROM Registration r WHERE r.deleted = false AND " +
+           "(r.participant.organizationUnit.id IN :orgUnitIds OR (r.registeredBy IS NOT NULL AND r.registeredBy.id = :userId)) " +
+           "ORDER BY r.createdAt DESC")
+    List<Registration> findActiveByOrgUnitIdsOrRegisteredBy(
+            @Param("orgUnitIds") List<Long> orgUnitIds,
+            @Param("userId") Long userId);
+
+    @Query("SELECT r FROM Registration r WHERE r.deleted = false AND " +
+           "r.event.id = :eventId AND " +
+           "(r.participant.organizationUnit.id IN :orgUnitIds OR (r.registeredBy IS NOT NULL AND r.registeredBy.id = :userId)) " +
+           "ORDER BY r.createdAt DESC")
+    List<Registration> findActiveByEventAndOrgUnitIdsOrRegisteredBy(
+            @Param("eventId") Long eventId,
+            @Param("orgUnitIds") List<Long> orgUnitIds,
+            @Param("userId") Long userId);
+
+    @Query("SELECT r FROM Registration r WHERE r.deleted = false AND " +
+           "r.event.id = :eventId AND r.status = :status AND " +
+           "(r.participant.organizationUnit.id IN :orgUnitIds OR (r.registeredBy IS NOT NULL AND r.registeredBy.id = :userId)) " +
+           "ORDER BY r.createdAt DESC")
+    List<Registration> findActiveByEventStatusAndOrgUnitIdsOrRegisteredBy(
+            @Param("eventId") Long eventId,
+            @Param("status") RegistrationStatus status,
+            @Param("orgUnitIds") List<Long> orgUnitIds,
+            @Param("userId") Long userId);
 }

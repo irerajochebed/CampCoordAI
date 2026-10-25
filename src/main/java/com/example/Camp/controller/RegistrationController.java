@@ -23,15 +23,16 @@ public class RegistrationController {
     private final RegistrationService registrationService;
     
     @GetMapping
-    public ResponseEntity<ApiResponse<List<RegistrationResponse>>> getAllRegistrations() {
-        List<RegistrationResponse> response = registrationService.getAllRegistrations();
+    public ResponseEntity<ApiResponse<List<RegistrationResponse>>> getAllRegistrations(Authentication authentication) {
+        Long currentUserId = getUserId(authentication);
+        List<RegistrationResponse> response = registrationService.getAllRegistrations(currentUserId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @GetMapping("/my-registrations")
     public ResponseEntity<ApiResponse<List<RegistrationResponse>>> getMyRegistrations(Authentication authentication) {
-        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-        List<RegistrationResponse> response = registrationService.getMyRegistrations(userDetails.getId());
+        Long currentUserId = getUserId(authentication);
+        List<RegistrationResponse> response = registrationService.getMyRegistrations(currentUserId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -39,14 +40,17 @@ public class RegistrationController {
     public ResponseEntity<ApiResponse<RegistrationResponse>> registerParticipant(
             @Valid @RequestBody RegistrationRequest request,
             Authentication authentication) {
-        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-        RegistrationResponse response = registrationService.registerParticipant(request, userDetails.getId());
+        Long currentUserId = getUserId(authentication);
+        RegistrationResponse response = registrationService.registerParticipant(request, currentUserId);
         return ResponseEntity.ok(ApiResponse.success("Registration created successfully", response));
     }
     
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<RegistrationResponse>> getRegistrationById(@PathVariable Long id) {
-        RegistrationResponse response = registrationService.getRegistrationById(id);
+    public ResponseEntity<ApiResponse<RegistrationResponse>> getRegistrationById(
+            @PathVariable Long id,
+            Authentication authentication) {
+        Long currentUserId = getUserId(authentication);
+        RegistrationResponse response = registrationService.getRegistrationById(id, currentUserId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
     
@@ -66,8 +70,10 @@ public class RegistrationController {
     
     @GetMapping("/event/{eventId}")
     public ResponseEntity<ApiResponse<List<RegistrationResponse>>> getRegistrationsByEvent(
-            @PathVariable Long eventId) {
-        List<RegistrationResponse> response = registrationService.getRegistrationsByEvent(eventId);
+            @PathVariable Long eventId,
+            Authentication authentication) {
+        Long currentUserId = getUserId(authentication);
+        List<RegistrationResponse> response = registrationService.getRegistrationsByEvent(eventId, currentUserId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
     
@@ -81,8 +87,10 @@ public class RegistrationController {
     @GetMapping("/event/{eventId}/status/{status}")
     public ResponseEntity<ApiResponse<List<RegistrationResponse>>> getRegistrationsByStatus(
             @PathVariable Long eventId,
-            @PathVariable RegistrationStatus status) {
-        List<RegistrationResponse> response = registrationService.getRegistrationsByStatus(eventId, status);
+            @PathVariable RegistrationStatus status,
+            Authentication authentication) {
+        Long currentUserId = getUserId(authentication);
+        List<RegistrationResponse> response = registrationService.getRegistrationsByStatus(eventId, status, currentUserId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
     
@@ -90,28 +98,40 @@ public class RegistrationController {
     @PreAuthorize("hasRole('COORDINATOR') or hasRole('ADMINISTRATOR')")
     public ResponseEntity<ApiResponse<RegistrationResponse>> updateRegistrationStatus(
             @PathVariable Long id,
-            @RequestParam RegistrationStatus status) {
-        RegistrationResponse response = registrationService.updateRegistrationStatus(id, status);
+            @RequestParam RegistrationStatus status,
+            Authentication authentication) {
+        Long currentUserId = getUserId(authentication);
+        RegistrationResponse response = registrationService.updateRegistrationStatus(id, status, currentUserId);
         return ResponseEntity.ok(ApiResponse.success("Registration status updated", response));
     }
     
     @PatchMapping("/{id}/confirm")
     @PreAuthorize("hasRole('COORDINATOR') or hasRole('ADMINISTRATOR')")
-    public ResponseEntity<ApiResponse<RegistrationResponse>> confirmRegistration(@PathVariable Long id) {
-        RegistrationResponse response = registrationService.confirmRegistration(id);
+    public ResponseEntity<ApiResponse<RegistrationResponse>> confirmRegistration(
+            @PathVariable Long id,
+            Authentication authentication) {
+        Long currentUserId = getUserId(authentication);
+        RegistrationResponse response = registrationService.confirmRegistration(id, currentUserId);
         return ResponseEntity.ok(ApiResponse.success("Registration confirmed", response));
     }
     
     @PatchMapping("/{id}/cancel")
-    public ResponseEntity<ApiResponse<RegistrationResponse>> cancelRegistration(@PathVariable Long id) {
-        RegistrationResponse response = registrationService.cancelRegistration(id);
+    @PreAuthorize("hasRole('COORDINATOR') or hasRole('ADMINISTRATOR')")
+    public ResponseEntity<ApiResponse<RegistrationResponse>> cancelRegistration(
+            @PathVariable Long id,
+            Authentication authentication) {
+        Long currentUserId = getUserId(authentication);
+        RegistrationResponse response = registrationService.cancelRegistration(id, currentUserId);
         return ResponseEntity.ok(ApiResponse.success("Registration cancelled", response));
     }
     
     @PostMapping("/{id}/check-in")
     @PreAuthorize("hasRole('COORDINATOR') or hasRole('ADMINISTRATOR')")
-    public ResponseEntity<ApiResponse<RegistrationResponse>> checkIn(@PathVariable Long id) {
-        RegistrationResponse response = registrationService.checkIn(id);
+    public ResponseEntity<ApiResponse<RegistrationResponse>> checkIn(
+            @PathVariable Long id,
+            Authentication authentication) {
+        Long currentUserId = getUserId(authentication);
+        RegistrationResponse response = registrationService.checkIn(id, currentUserId);
         return ResponseEntity.ok(ApiResponse.success("Participant checked in", response));
     }
     
@@ -120,6 +140,16 @@ public class RegistrationController {
     public ResponseEntity<ApiResponse<RegistrationResponse>> checkInByQrCode(@PathVariable String qrCode) {
         RegistrationResponse response = registrationService.checkInByQrCode(qrCode);
         return ResponseEntity.ok(ApiResponse.success("Participant checked in", response));
+    }
+
+    @PostMapping("/{id}/check-out")
+    @PreAuthorize("hasRole('COORDINATOR') or hasRole('ADMINISTRATOR')")
+    public ResponseEntity<ApiResponse<RegistrationResponse>> checkOut(
+            @PathVariable Long id,
+            Authentication authentication) {
+        Long currentUserId = getUserId(authentication);
+        RegistrationResponse response = registrationService.checkOut(id, currentUserId);
+        return ResponseEntity.ok(ApiResponse.success("Participant checked out successfully", response));
     }
     
     @PostMapping("/{id}/generate-qr")
@@ -134,5 +164,12 @@ public class RegistrationController {
     public ResponseEntity<ApiResponse<String>> deleteRegistration(@PathVariable Long id) {
         registrationService.deleteRegistration(id);
         return ResponseEntity.ok(ApiResponse.success("Registration deleted successfully", null));
+    }
+
+    private Long getUserId(Authentication authentication) {
+        if (authentication != null && authentication.getPrincipal() instanceof UserDetailsImpl) {
+            return ((UserDetailsImpl) authentication.getPrincipal()).getId();
+        }
+        return null;
     }
 }

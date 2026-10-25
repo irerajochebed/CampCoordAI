@@ -45,5 +45,6 @@ public class Resource extends BaseEntity {
     
     @OneToMany(mappedBy = "resource", cascade = CascadeType.ALL)
     @Builder.Default
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties({"resource", "hibernateLazyInitializer", "handler"})
     private List<ResourceAllocation> allocations = new ArrayList<>();
 }

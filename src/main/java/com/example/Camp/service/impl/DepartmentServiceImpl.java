@@ -42,6 +42,9 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .description(dept.getDescription())
                 .leaderId(dept.getLeader() != null ? dept.getLeader().getId() : null)
                 .leaderName(dept.getLeader() != null ? dept.getLeader().getFirstName() + " " + dept.getLeader().getLastName() : null)
+                .leaderEmail(dept.getLeader() != null ? dept.getLeader().getEmail() : null)
+                .leaderPhone(dept.getLeader() != null ? dept.getLeader().getPhoneNumber() : null)
+                .leaderPosition(dept.getLeader() != null && dept.getLeader().getPosition() != null ? dept.getLeader().getPosition().name() : null)
                 .build();
     }
 }

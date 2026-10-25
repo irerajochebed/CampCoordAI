@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { proposalApi } from '../../api';
+import { proposalApi, getCachedData } from '../../api';
 import { 
   FileText, 
   Plus, 
@@ -31,9 +31,17 @@ export default function ProposalList() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { user, isAdmin, isCoordinator } = useAuth();
-  const [proposals, setProposals] = useState([]);
-  const [filteredProposals, setFilteredProposals] = useState([]);
-  const [loading, setLoading] = useState(true);
+
+  const initialData = useMemo(() => {
+    const cached = getCachedData('/proposals');
+    if (cached?.data && Array.isArray(cached.data)) return cached.data;
+    if (Array.isArray(cached)) return cached;
+    return [];
+  }, []);
+
+  const [proposals, setProposals] = useState(initialData);
+  const [filteredProposals, setFilteredProposals] = useState(initialData);
+  const [loading, setLoading] = useState(initialData.length === 0);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState(isAdmin ? 'PENDING' : 'ALL'); // 'PENDING', 'APPROVED', 'REVISION', 'ALL'
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -44,34 +52,28 @@ export default function ProposalList() {
   const [submitting, setSubmitting] = useState(false);
   const [alert, setAlert] = useState(null);
 
-  // Check if user is Department Leader
+  // User position & role checks
   const isDepartmentLeader = user?.position === 'DEPARTMENT_LEADER';
-  // Check if user is Union Administrator
+  const isFieldLeader = user?.position === 'FIELD_LEADER';
+  const isDistrictPastor = user?.position === 'DISTRICT_PASTOR' || user?.position === 'PASTOR';
   const isUnionAdmin = isAdmin || user?.position === 'UNION_ADMINISTRATOR';
-  // Only Coordinators or Dept Leaders create proposals, pure Admins approve them
-  const canCreateProposal = isCoordinator || isDepartmentLeader;
+  const canCreateProposal = isCoordinator || isDepartmentLeader || isDistrictPastor || isFieldLeader || isUnionAdmin;
 
   useEffect(() => {
-    fetchProposals();
+    fetchProposals(initialData.length > 0);
   }, []);
 
   useEffect(() => {
     filterProposals();
   }, [searchTerm, statusFilter, activeTab, proposals]);
 
-  const fetchProposals = async () => {
+  const fetchProposals = async (isBackground = false) => {
     try {
-      setLoading(true);
-      setAlert(null);
-      let response;
-      
-      if (isUnionAdmin) {
-        response = await proposalApi.getAll();
-      } else if (isDepartmentLeader) {
-        response = await proposalApi.getMyProposals();
-      } else {
-        response = await proposalApi.getAll();
+      if (!isBackground && proposals.length === 0) {
+        setLoading(true);
       }
+      setAlert(null);
+      const response = await proposalApi.getAll();
       
       if (response.data?.success) {
         setProposals(response.data.data || []);
@@ -84,11 +86,13 @@ export default function ProposalList() {
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       }
-      setAlert({
-        type: 'error',
-        message: errorMessage
-      });
-      setProposals([]);
+      if (proposals.length === 0) {
+        setAlert({
+          type: 'error',
+          message: errorMessage
+        });
+        setProposals([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -115,10 +119,13 @@ export default function ProposalList() {
       filtered = filtered.filter(
         (p) =>
           p.eventName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          p.departmentName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           p.department?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           p.venue?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          p.proposedByName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           p.proposedBy?.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.proposedBy?.lastName?.toLowerCase().includes(searchTerm.toLowerCase())
+          p.proposedBy?.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          p.targetOrganizationUnitName?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -147,7 +154,15 @@ export default function ProposalList() {
     try {
       let response;
       if (reviewAction === 'approve') {
-        response = await proposalApi.adminApproval(selectedProposal.id, { comments: reviewComments });
+        const isDistrictOrField = selectedProposal.scope === 'DISTRICT' || selectedProposal.scope === 'FIELD';
+        if (isDistrictOrField || user?.position === 'DEPARTMENT_LEADER') {
+          response = await proposalApi.leaderReview(selectedProposal.id, {
+            recommendation: 'ENDORSED',
+            comments: reviewComments
+          });
+        } else {
+          response = await proposalApi.adminApproval(selectedProposal.id, { comments: reviewComments });
+        }
       } else if (reviewAction === 'reject') {
         response = await proposalApi.reject(selectedProposal.id, reviewComments);
       } else if (reviewAction === 'revision') {
@@ -380,7 +395,7 @@ export default function ProposalList() {
                 <TableRow>
                   <TableHead>{t('proposals.eventName', 'Event Name')}</TableHead>
                   <TableHead>{t('proposals.hostingMinistry', 'Ministry / Department')}</TableHead>
-                  <TableHead>{t('proposals.scope', 'Scope')}</TableHead>
+                  <TableHead>{t('proposals.scope', 'Scope & Jurisdiction')}</TableHead>
                   <TableHead>{t('proposals.startDate', 'Dates')}</TableHead>
                   <TableHead>{t('proposals.estimatedBudget', 'Budget')}</TableHead>
                   <TableHead>{t('common.status', 'Status')}</TableHead>
@@ -389,13 +404,35 @@ export default function ProposalList() {
               </TableHeader>
               <TableBody>
                 {filteredProposals.map((proposal) => {
-                  const creatorName = proposal.proposedBy 
-                    ? `${proposal.proposedBy.firstName} ${proposal.proposedBy.lastName}`
-                    : proposal.createdBy
-                    ? `${proposal.createdBy.firstName} ${proposal.createdBy.lastName}`
-                    : 'System User';
+                  const creatorName = proposal.proposedByName
+                    || (proposal.proposedBy ? `${proposal.proposedBy.firstName} ${proposal.proposedBy.lastName}` : null)
+                    || (proposal.createdBy ? `${proposal.createdBy.firstName} ${proposal.createdBy.lastName}` : null)
+                    || 'System User';
+
+                  const deptName = proposal.departmentName
+                    || proposal.department?.name
+                    || 'General Ministries';
+
+                  const targetUnitName = proposal.targetOrganizationUnitName
+                    || proposal.targetOrganizationUnit?.name
+                    || '';
 
                   const isPendingReview = ['SUBMITTED', 'PENDING_LEADER_REVIEW', 'RECOMMENDED_BY_LEADER', 'UNDER_REVIEW'].includes(proposal.status);
+
+                  const isAuthor = Boolean(
+                    (user?.id && (proposal.proposedById === user.id || proposal.proposedBy?.id === user.id || proposal.createdById === user.id)) ||
+                    (user?.email && (proposal.proposedBy?.email === user.email || proposal.createdBy?.email === user.email))
+                  );
+
+                  const isDistrictScope = proposal.scope === 'DISTRICT';
+                  const isFieldScope = proposal.scope === 'FIELD';
+                  const isUnionScope = proposal.scope === 'UNION' || !proposal.scope;
+
+                  const canApprove = !isAuthor && (
+                    (isDistrictScope && (isFieldLeader || isUnionAdmin)) ||
+                    (isFieldScope && (isFieldLeader || isUnionAdmin)) ||
+                    (isUnionScope && (isUnionAdmin || (isDepartmentLeader && proposal.status === 'SUBMITTED')))
+                  );
 
                   return (
                     <TableRow key={proposal.id}>
@@ -406,10 +443,15 @@ export default function ProposalList() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {t(`ministries.${proposal.department?.type}`, proposal.department?.name || 'N/A')}
+                        {deptName}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="info">{proposal.scope || 'FIELD'}</Badge>
+                        <Badge variant={proposal.scope === 'UNION' ? 'primary' : proposal.scope === 'FIELD' ? 'info' : 'warning'}>
+                          {proposal.scope || 'FIELD'}
+                        </Badge>
+                        {targetUnitName && (
+                          <span className="text-xs text-gray-500 block mt-0.5">{targetUnitName}</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">
@@ -427,7 +469,7 @@ export default function ProposalList() {
                       <TableCell>{getStatusBadge(proposal.status)}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <Link to={`/app/proposals/${proposal.id}`}>
+                          <Link to={`/app/proposals/${proposal.id}`} state={{ proposal }}>
                             <Button 
                               variant="ghost" 
                               size="sm" 
@@ -438,7 +480,7 @@ export default function ProposalList() {
                             </Button>
                           </Link>
                           
-                          {proposal.status === 'DRAFT' && canCreateProposal && (
+                          {proposal.status === 'DRAFT' && (isAuthor || canCreateProposal) && (
                             <>
                               <Link to={`/app/proposals/${proposal.id}/edit`}>
                                 <Button 
@@ -461,7 +503,7 @@ export default function ProposalList() {
                             </>
                           )}
 
-                          {isUnionAdmin && isPendingReview && (
+                          {canApprove && isPendingReview && (
                             <div className="flex gap-2 flex-wrap">
                               <Button
                                 variant="success"
@@ -469,7 +511,7 @@ export default function ProposalList() {
                                 icon={<CheckCircle2 className="w-4 h-4" />}
                                 onClick={() => handleReviewAction(proposal, 'approve')}
                               >
-                                {t('proposals.approveAndCreate', 'Approve')}
+                                {isUnionScope && isDepartmentLeader ? t('proposals.endorse', 'Endorse') : t('proposals.approveAndCreate', 'Approve')}
                               </Button>
                               <Button
                                 variant="warning"
@@ -504,7 +546,7 @@ export default function ProposalList() {
       <Modal
         isOpen={showReviewModal}
         onClose={() => setShowReviewModal(false)}
-        title={`${reviewAction === 'approve' ? t('proposals.approveAndCreate', 'Approve') : reviewAction === 'reject' ? t('proposals.rejectProposal', 'Reject') : t('proposals.requestRevision', 'Request Revision')} ${t('proposals.title', 'Proposal')}`}
+        title={`${reviewAction === 'approve' ? (selectedProposal?.scope === 'UNION' && isDepartmentLeader ? t('proposals.endorse', 'Endorse') : t('proposals.approveAndCreate', 'Approve')) : reviewAction === 'reject' ? t('proposals.rejectProposal', 'Reject') : t('proposals.requestRevision', 'Request Revision')} ${t('proposals.title', 'Proposal')}`}
         footer={
           <>
             <Button variant="ghost" onClick={() => setShowReviewModal(false)}>
@@ -515,7 +557,7 @@ export default function ProposalList() {
               onClick={submitReview}
               loading={submitting}
             >
-              {reviewAction === 'approve' ? t('proposals.approveAndCreate', 'Approve & Create Event') : reviewAction === 'reject' ? t('proposals.rejectProposal', 'Reject') : t('proposals.requestRevision', 'Request Revision')}
+              {reviewAction === 'approve' ? (selectedProposal?.scope === 'UNION' && isDepartmentLeader ? t('proposals.endorse', 'Endorse Proposal') : t('proposals.approveAndCreate', 'Approve & Create Event')) : reviewAction === 'reject' ? t('proposals.rejectProposal', 'Reject') : t('proposals.requestRevision', 'Request Revision')}
             </Button>
           </>
         }
@@ -537,7 +579,15 @@ export default function ProposalList() {
           {reviewAction === 'approve' && (
             <Alert
               type="info"
-              message="Approving this proposal will officially approve it, auto-create the official Event record, and send a notification to the coordinator."
+              message={
+                selectedProposal?.scope === 'DISTRICT'
+                  ? "Approving this District proposal will officially approve it and create the official District event."
+                  : selectedProposal?.scope === 'FIELD'
+                  ? "Approving this Field proposal will officially approve it, auto-create the official event, and notify Rwanda Union Mission (RUM) Administration."
+                  : isDepartmentLeader
+                  ? "Endorsing this Union proposal will advance it to Tier 2 (Union Administrator) for final approval."
+                  : "Approving this Union proposal will give final authorization and auto-create the official Union event."
+              }
             />
           )}
         </div>
@@ -545,3 +595,4 @@ export default function ProposalList() {
     </div>
   );
 }
+

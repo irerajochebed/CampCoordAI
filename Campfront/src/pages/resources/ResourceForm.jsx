@@ -1,15 +1,19 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
   Save,
-  X,
+  ArrowLeft,
   Package,
-  AlertCircle,
+  Layers,
+  Sparkles,
+  Tag,
+  Hash,
+  FileText,
   Truck,
   Wifi,
   Music,
-  Utensils,
-  Bed
+  Bed,
+  CheckCircle2
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -18,104 +22,78 @@ import Select from '../../components/ui/Select';
 import Textarea from '../../components/ui/Textarea';
 import { PageSpinner } from '../../components/ui/Spinner';
 import Alert from '../../components/ui/Alert';
-import { resourceApi, eventApi } from '../../api';
+import { resourceApi } from '../../api';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function ResourceForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEditMode = Boolean(id);
+  const { user, isAdmin, isCoordinator } = useAuth();
 
   const [loading, setLoading] = useState(isEditMode);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-
-  const [events, setEvents] = useState([]);
+  const [success, setSuccess] = useState(null);
 
   const [formData, setFormData] = useState({
     name: '',
-    category: 'AUDIO_VISUAL',
-    description: '',
-    serialNumber: '',
-    quantity: 1,
-    unit: 'unit',
-    status: 'AVAILABLE',
-    eventId: '',
-    notes: '',
-    purchaseDate: '',
-    purchaseCost: '',
-    supplier: '',
-    warrantyExpiryDate: '',
-    maintenanceSchedule: ''
+    type: 'PROJECTOR',
+    code: '',
+    quantity: '1',
+    condition: 'EXCELLENT',
+    description: ''
   });
 
   const [errors, setErrors] = useState({});
 
-  const resourceCategories = [
-    { value: 'AUDIO_VISUAL', label: 'Audio/Visual Equipment', icon: Music },
-    { value: 'TRANSPORTATION', label: 'Transportation', icon: Truck },
-    { value: 'ACCOMMODATION', label: 'Accommodation Supplies', icon: Bed },
-    { value: 'CATERING', label: 'Catering Equipment', icon: Utensils },
-    { value: 'TECHNOLOGY', label: 'Technology/IT', icon: Wifi },
-    { value: 'OTHER', label: 'Other Resources', icon: Package }
+  const resourceTypes = [
+    { value: 'PROJECTOR', label: 'Projector (Audio/Visual)' },
+    { value: 'MICROPHONE', label: 'Microphone & Wireless Audio' },
+    { value: 'SOUND_SYSTEM', label: 'Sound System / PA Equipment' },
+    { value: 'GENERATOR', label: 'Power Generator' },
+    { value: 'VEHICLE', label: 'Vehicle / Transportation' },
+    { value: 'TENT', label: 'Tent & Canopies' },
+    { value: 'CHAIR', label: 'Chairs & Seating' },
+    { value: 'TABLE', label: 'Tables & Desks' },
+    { value: 'STAGE_EQUIPMENT', label: 'Stage & Platform Equipment' },
+    { value: 'LIGHTING', label: 'Stage & Flood Lighting' },
+    { value: 'OTHER', label: 'Other General Resource' }
   ];
 
-  const statusOptions = [
-    { value: 'AVAILABLE', label: 'Available', description: 'Ready for allocation' },
-    { value: 'ALLOCATED', label: 'Allocated', description: 'Currently assigned to an event' },
-    { value: 'MAINTENANCE', label: 'Under Maintenance', description: 'Being serviced or repaired' },
-    { value: 'UNAVAILABLE', label: 'Unavailable', description: 'Out of service or retired' }
-  ];
-
-  const unitOptions = [
-    'unit', 'piece', 'set', 'box', 'pack', 'kg', 'liter', 'meter'
+  const conditionOptions = [
+    { value: 'EXCELLENT', label: 'Excellent (Like New / Pristine)' },
+    { value: 'GOOD', label: 'Good (Fully Functional)' },
+    { value: 'FAIR', label: 'Fair (Minor Wear & Tear)' },
+    { value: 'POOR', label: 'Poor (Functional with Limitations)' },
+    { value: 'UNDER_MAINTENANCE', label: 'Under Maintenance (Needs Servicing)' }
   ];
 
   useEffect(() => {
-    fetchEvents();
     if (isEditMode) {
       fetchResource();
     }
   }, [id]);
 
-  const fetchEvents = async () => {
-    try {
-      const response = await eventApi.getAll();
-      if (response.data.success) {
-        setEvents(response.data.data || []);
-      }
-    } catch (err) {
-      console.error('Error fetching events:', err);
-    }
-  };
-
   const fetchResource = async () => {
     try {
       setLoading(true);
       setError(null);
-
       const response = await resourceApi.getById(id);
-      if (response.data.success) {
-        const resource = response.data.data;
+      const resource = response.data?.data || response.data;
+      if (resource) {
         setFormData({
           name: resource.name || '',
-          category: resource.category || 'AUDIO_VISUAL',
-          description: resource.description || '',
-          serialNumber: resource.serialNumber || '',
-          quantity: resource.quantity || 1,
-          unit: resource.unit || 'unit',
-          status: resource.status || 'AVAILABLE',
-          eventId: resource.eventId?.toString() || '',
-          notes: resource.notes || '',
-          purchaseDate: resource.purchaseDate ? resource.purchaseDate.split('T')[0] : '',
-          purchaseCost: resource.purchaseCost || '',
-          supplier: resource.supplier || '',
-          warrantyExpiryDate: resource.warrantyExpiryDate ? resource.warrantyExpiryDate.split('T')[0] : '',
-          maintenanceSchedule: resource.maintenanceSchedule || ''
+          type: resource.type || 'PROJECTOR',
+          code: resource.code || '',
+          quantity: resource.quantity?.toString() || '1',
+          condition: resource.condition || 'EXCELLENT',
+          description: resource.description || ''
         });
       }
     } catch (err) {
       console.error('Error fetching resource:', err);
-      setError(err.response?.data?.message || 'Failed to load resource');
+      setError(err.response?.data?.message || 'Failed to load resource details');
     } finally {
       setLoading(false);
     }
@@ -128,20 +106,13 @@ export default function ResourceForm() {
       newErrors.name = 'Resource name is required';
     }
 
-    if (!formData.category) {
-      newErrors.category = 'Category is required';
+    if (!formData.type) {
+      newErrors.type = 'Resource type is required';
     }
 
-    if (formData.quantity < 1) {
-      newErrors.quantity = 'Quantity must be at least 1';
-    }
-
-    if (formData.status === 'ALLOCATED' && !formData.eventId) {
-      newErrors.eventId = 'Event is required when status is Allocated';
-    }
-
-    if (formData.purchaseCost && isNaN(formData.purchaseCost)) {
-      newErrors.purchaseCost = 'Purchase cost must be a valid number';
+    const qty = parseInt(formData.quantity);
+    if (!formData.quantity || isNaN(qty) || qty < 1) {
+      newErrors.quantity = 'Quantity must be at least 1 unit';
     }
 
     setErrors(newErrors);
@@ -160,22 +131,28 @@ export default function ResourceForm() {
       setError(null);
 
       const submitData = {
-        ...formData,
-        eventId: formData.eventId ? parseInt(formData.eventId) : null,
+        name: formData.name.trim(),
+        type: formData.type,
+        code: formData.code.trim() || null,
         quantity: parseInt(formData.quantity),
-        purchaseCost: formData.purchaseCost ? parseFloat(formData.purchaseCost) : null
+        condition: formData.condition || 'EXCELLENT',
+        description: formData.description.trim() || null
       };
 
       if (isEditMode) {
         await resourceApi.update(id, submitData);
+        setSuccess('Resource updated successfully!');
       } else {
         await resourceApi.create(submitData);
+        setSuccess('Resource created successfully!');
       }
 
-      navigate('/resources');
+      setTimeout(() => {
+        navigate('/app/resources');
+      }, 800);
     } catch (err) {
       console.error('Error saving resource:', err);
-      setError(err.response?.data?.message || 'Failed to save resource');
+      setError(err.response?.data?.message || `Failed to ${isEditMode ? 'update' : 'create'} resource`);
     } finally {
       setSaving(false);
     }
@@ -183,35 +160,35 @@ export default function ResourceForm() {
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    // Clear error for this field
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
   };
 
   if (loading) {
-    return <PageSpinner message="Loading resource..." />;
+    return <PageSpinner message="Loading resource details..." />;
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {isEditMode ? 'Edit Resource' : 'Add New Resource'}
-          </h1>
-          <p className="text-gray-600 mt-1">
-            {isEditMode ? 'Update resource information' : 'Add equipment, materials, or supplies to your inventory'}
-          </p>
-        </div>
+      <div>
         <Button
-          variant="outline"
-          onClick={() => navigate('/resources')}
-          icon={<X className="w-4 h-4" />}
+          variant="ghost"
+          icon={<ArrowLeft className="w-4 h-4 mr-1.5" />}
+          onClick={() => navigate('/app/resources')}
+          className="mb-3 text-xs font-semibold"
         >
-          Cancel
+          Back to Resources
         </Button>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
+          {isEditMode ? 'Edit Resource' : 'Add New Resource'}
+        </h1>
+        <p className="text-gray-600 dark:text-gray-400 mt-1">
+          {isEditMode 
+            ? 'Update equipment details, quantity, or maintenance condition' 
+            : 'Register new equipment, materials, or vehicles into the inventory system'}
+        </p>
       </div>
 
       {error && (
@@ -219,286 +196,141 @@ export default function ResourceForm() {
           type="error"
           message={error}
           onClose={() => setError(null)}
+          dismissible
+        />
+      )}
+
+      {success && (
+        <Alert
+          type="success"
+          message={success}
+          onClose={() => setSuccess(null)}
+          dismissible
         />
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Basic Information */}
-        <Card>
+        <Card className="dark:bg-slate-900 dark:border-slate-800">
           <CardHeader>
-            <CardTitle>Basic Information</CardTitle>
+            <CardTitle className="text-base font-bold text-gray-900 dark:text-white">
+              Resource Information
+            </CardTitle>
           </CardHeader>
-          <CardBody>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Resource Name *
-                </label>
-                <Input
+          <CardBody className="p-6 space-y-5">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                Resource / Equipment Name <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <Package className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                <input
+                  type="text"
+                  required
                   value={formData.name}
                   onChange={(e) => handleChange('name', e.target.value)}
-                  placeholder="e.g., Wireless Microphone, Projector, Bus"
-                  error={errors.name}
+                  placeholder="e.g., Yamaha Sound Mixer, Optoma 4K Projector, Big Camp Tent"
+                  className="w-full pl-9 pr-3.5 py-2 text-sm bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition"
                 />
-                {errors.name && (
-                  <p className="text-sm text-red-600 mt-1">{errors.name}</p>
-                )}
               </div>
+              {errors.name && (
+                <p className="text-xs text-red-500 mt-1">{errors.name}</p>
+              )}
+            </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Category *
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                  Resource Type <span className="text-red-500">*</span>
                 </label>
                 <Select
-                  value={formData.category}
-                  onChange={(e) => handleChange('category', e.target.value)}
-                  error={errors.category}
-                >
-                  {resourceCategories.map(cat => (
-                    <option key={cat.value} value={cat.value}>{cat.label}</option>
-                  ))}
-                </Select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Serial Number
-                </label>
-                <Input
-                  value={formData.serialNumber}
-                  onChange={(e) => handleChange('serialNumber', e.target.value)}
-                  placeholder="e.g., SN-12345"
+                  value={formData.type}
+                  onChange={(e) => handleChange('type', e.target.value)}
+                  options={resourceTypes}
+                  error={errors.type}
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Quantity *
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                  Code / Asset Tag / Serial (Optional)
                 </label>
-                <Input
+                <div className="relative">
+                  <Hash className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                  <input
+                    type="text"
+                    value={formData.code}
+                    onChange={(e) => handleChange('code', e.target.value)}
+                    placeholder="e.g., RES-AV-001, SN-987654"
+                    className="w-full pl-9 pr-3.5 py-2 text-sm bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                  Total Inventory Quantity <span className="text-red-500">*</span>
+                </label>
+                <input
                   type="number"
+                  min="1"
+                  required
                   value={formData.quantity}
                   onChange={(e) => handleChange('quantity', e.target.value)}
-                  min="1"
-                  error={errors.quantity}
+                  className="w-full px-3.5 py-2 text-sm bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition"
                 />
                 {errors.quantity && (
-                  <p className="text-sm text-red-600 mt-1">{errors.quantity}</p>
+                  <p className="text-xs text-red-500 mt-1">{errors.quantity}</p>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Unit
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                  Current Condition
                 </label>
                 <Select
-                  value={formData.unit}
-                  onChange={(e) => handleChange('unit', e.target.value)}
-                >
-                  {unitOptions.map(unit => (
-                    <option key={unit} value={unit}>{unit}</option>
-                  ))}
-                </Select>
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description
-                </label>
-                <Textarea
-                  value={formData.description}
-                  onChange={(e) => handleChange('description', e.target.value)}
-                  placeholder="Describe the resource, its specifications, or special features..."
-                  rows={3}
+                  value={formData.condition}
+                  onChange={(e) => handleChange('condition', e.target.value)}
+                  options={conditionOptions}
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                Description, Specifications & Accessories (Optional)
+              </label>
+              <textarea
+                rows={3}
+                value={formData.description}
+                onChange={(e) => handleChange('description', e.target.value)}
+                placeholder="Include cables, carrying cases, storage location, or special operating notes..."
+                className="w-full px-3.5 py-2 text-sm bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition"
+              />
             </div>
           </CardBody>
         </Card>
 
-        {/* Status & Allocation */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Status & Allocation</CardTitle>
-          </CardHeader>
-          <CardBody>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Status *
-                </label>
-                <Select
-                  value={formData.status}
-                  onChange={(e) => handleChange('status', e.target.value)}
-                >
-                  {statusOptions.map(status => (
-                    <option key={status.value} value={status.value}>
-                      {status.label}
-                    </option>
-                  ))}
-                </Select>
-                <p className="text-xs text-gray-500 mt-1">
-                  {statusOptions.find(s => s.value === formData.status)?.description}
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Allocated Event {formData.status === 'ALLOCATED' && '*'}
-                </label>
-                <Select
-                  value={formData.eventId}
-                  onChange={(e) => handleChange('eventId', e.target.value)}
-                  disabled={formData.status !== 'ALLOCATED'}
-                  error={errors.eventId}
-                >
-                  <option value="">Not allocated to any event</option>
-                  {events.map(event => (
-                    <option key={event.id} value={event.id}>
-                      {event.name} - {new Date(event.startDate).toLocaleDateString('en-RW')}
-                    </option>
-                  ))}
-                </Select>
-                {errors.eventId && (
-                  <p className="text-sm text-red-600 mt-1">{errors.eventId}</p>
-                )}
-                {formData.status === 'ALLOCATED' && (
-                  <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" />
-                    Event selection is required for allocated resources
-                  </p>
-                )}
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Notes
-                </label>
-                <Textarea
-                  value={formData.notes}
-                  onChange={(e) => handleChange('notes', e.target.value)}
-                  placeholder="Add any special notes, usage instructions, or important information..."
-                  rows={2}
-                />
-              </div>
-            </div>
-          </CardBody>
-        </Card>
-
-        {/* Purchase & Maintenance Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Purchase & Maintenance (Optional)</CardTitle>
-          </CardHeader>
-          <CardBody>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Purchase Date
-                </label>
-                <Input
-                  type="date"
-                  value={formData.purchaseDate}
-                  onChange={(e) => handleChange('purchaseDate', e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Purchase Cost (RWF)
-                </label>
-                <Input
-                  type="number"
-                  value={formData.purchaseCost}
-                  onChange={(e) => handleChange('purchaseCost', e.target.value)}
-                  placeholder="0"
-                  min="0"
-                  step="1"
-                  error={errors.purchaseCost}
-                />
-                {errors.purchaseCost && (
-                  <p className="text-sm text-red-600 mt-1">{errors.purchaseCost}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Supplier
-                </label>
-                <Input
-                  value={formData.supplier}
-                  onChange={(e) => handleChange('supplier', e.target.value)}
-                  placeholder="Supplier or vendor name"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Warranty Expiry Date
-                </label>
-                <Input
-                  type="date"
-                  value={formData.warrantyExpiryDate}
-                  onChange={(e) => handleChange('warrantyExpiryDate', e.target.value)}
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Maintenance Schedule
-                </label>
-                <Input
-                  value={formData.maintenanceSchedule}
-                  onChange={(e) => handleChange('maintenanceSchedule', e.target.value)}
-                  placeholder="e.g., Every 6 months, Annual servicing required"
-                />
-              </div>
-            </div>
-          </CardBody>
-        </Card>
-
-        {/* Helper Information */}
-        <Card className="border-2 border-blue-200 bg-blue-50">
-          <CardBody>
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-              <div className="text-sm text-blue-900">
-                <p className="font-medium mb-2">Resource Management Tips:</p>
-                <ul className="space-y-1 list-disc list-inside">
-                  <li>Keep serial numbers up to date for tracking and insurance purposes</li>
-                  <li>Set status to "Allocated" when assigning resources to specific events</li>
-                  <li>Use "Maintenance" status for resources undergoing repairs or servicing</li>
-                  <li>Record purchase information to track asset value and warranty periods</li>
-                  <li>Add detailed notes for special handling or usage instructions</li>
-                </ul>
-              </div>
-            </div>
-          </CardBody>
-        </Card>
-
-        {/* Form Actions */}
-        <Card>
-          <CardBody>
-            <div className="flex items-center justify-end gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => navigate('/resources')}
-                disabled={saving}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                icon={<Save className="w-4 h-4" />}
-                disabled={saving}
-              >
-                {saving ? 'Saving...' : isEditMode ? 'Update Resource' : 'Add Resource'}
-              </Button>
-            </div>
-          </CardBody>
-        </Card>
+        {/* Action Buttons */}
+        <div className="flex justify-end gap-3">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => navigate('/app/resources')}
+            disabled={saving}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            icon={<Save className="w-4 h-4 mr-1.5" />}
+            loading={saving}
+          >
+            {saving ? 'Saving...' : isEditMode ? 'Update Resource' : 'Save Resource'}
+          </Button>
+        </div>
       </form>
     </div>
   );

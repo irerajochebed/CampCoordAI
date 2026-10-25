@@ -23,9 +23,59 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor - Handle errors globally
+// In-memory cache for ultra-fast instant UI rendering
+const memoryCache = new Map();
+const CACHE_TTL = 60 * 1000; // 60 seconds
+
+export const getCachedData = (key) => {
+  if (!key) return null;
+  const entry = memoryCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > CACHE_TTL) {
+    memoryCache.delete(key);
+    return null;
+  }
+  return entry.data;
+};
+
+export const setCachedData = (key, data) => {
+  if (!key) return;
+  memoryCache.set(key, {
+    data,
+    timestamp: Date.now()
+  });
+};
+
+export const clearApiCache = (pattern) => {
+  if (!pattern) {
+    memoryCache.clear();
+    return;
+  }
+  for (const key of memoryCache.keys()) {
+    if (key.includes(pattern)) {
+      memoryCache.delete(key);
+    }
+  }
+};
+
+// Response interceptor - Handle errors globally and update cache
 api.interceptors.response.use(
   (response) => {
+    // Cache GET request results automatically
+    const method = response.config?.method?.toLowerCase();
+    const url = response.config?.url;
+    if (method === 'get' && url) {
+      setCachedData(url, response.data);
+    } else if (method && method !== 'get') {
+      // Invalidate relevant cache on mutations
+      if (url?.includes('/proposals')) clearApiCache('/proposals');
+      if (url?.includes('/events')) clearApiCache('/events');
+      if (url?.includes('/registrations')) clearApiCache('/registrations');
+      if (url?.includes('/payments')) clearApiCache('/payments');
+      if (url?.includes('/accommodations')) clearApiCache('/accommodations');
+      if (url?.includes('/notifications')) clearApiCache('/notifications');
+      if (url?.includes('/users')) clearApiCache('/users');
+    }
     return response;
   },
   (error) => {
@@ -72,6 +122,13 @@ export const userApi = {
   getByOrganization: (orgId) => api.get(`/users/organization/${orgId}`),
   search: (keyword) => api.get(`/users/search?keyword=${keyword}`),
   update: (id, data) => api.put(`/users/${id}`, data),
+  updateMyProfile: (data) => api.put('/users/me', data),
+  uploadAvatar: (formData, userId) => {
+    const url = userId ? `/users/${userId}/avatar` : '/users/me/avatar';
+    return api.post(url, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
   updateRolePosition: (id, data) => api.put(`/users/${id}/role-position`, data),
   provisionCoordinator: (data) => api.post('/users/provision-coordinator', data),
   activate: (id) => api.patch(`/users/${id}/activate`),
@@ -168,17 +225,23 @@ export const registrationApi = {
 // PAYMENT API
 // ============================================
 export const paymentApi = {
+  getAll: () => api.get('/payments'),
   getById: (id) => api.get(`/payments/${id}`),
   getByRegistration: (regId) => api.get(`/payments/registration/${regId}`),
   getByEvent: (eventId) => api.get(`/payments/event/${eventId}`),
-  getPending: (eventId) => api.get(`/payments/event/${eventId}/pending`),
+  getByStatus: (status) => api.get(`/payments/status/${status}`),
+  getPending: (eventId) => eventId ? api.get(`/payments/event/${eventId}/pending`) : api.get('/payments/status/PENDING'),
   getTotalByEvent: (eventId) => api.get(`/payments/event/${eventId}/total`),
   getTotalVerified: (eventId) => api.get(`/payments/event/${eventId}/verified-total`),
   submit: (data) => api.post('/payments', data),
+  initiateMomo: (data) => api.post('/payments/momo/initiate', data),
+  verifyMomo: (data) => api.post('/payments/momo/verify', data),
+  getMomoStatus: (ref) => api.get(`/payments/momo/status/${ref}`),
   verify: (id, notes) => api.patch(`/payments/${id}/verify`, { notes }),
-  reject: (id, reason) => api.patch(`/payments/${id}/reject`, { reason }),
+  reject: (id, reason) => api.patch(`/payments/${id}/reject?reason=${encodeURIComponent(reason || '')}`),
   delete: (id) => api.delete(`/payments/${id}`),
 };
+
 
 // ============================================
 // ACCOMMODATION API
@@ -201,6 +264,7 @@ export const accommodationApi = {
   
   // Room assignment
   assignRoom: (data) => api.post('/accommodations/assign', data),
+  autoAssignEvent: (eventId) => api.post(`/accommodations/event/${eventId}/auto-assign`),
   getAssignmentById: (id) => api.get(`/accommodations/assignments/${id}`),
   getAssignmentByRegistration: (regId) => api.get(`/accommodations/assignments/registration/${regId}`),
   getAssignmentsByRoom: (roomId) => api.get(`/accommodations/rooms/${roomId}/assignments`),
@@ -257,7 +321,7 @@ export const notificationApi = {
   getById: (id) => api.get(`/notifications/${id}`),
   getMyNotifications: () => api.get('/notifications/my-notifications'),
   getUnread: () => api.get('/notifications/unread'),
-  getUnreadCount: () => api.get('/notifications/unread/count'),
+  getUnreadCount: () => api.get('/notifications/unread-count'),
   getByEvent: (eventId) => api.get(`/notifications/event/${eventId}`),
   create: (data) => api.post('/notifications', data),
   createBulk: (data) => api.post('/notifications/bulk', data),
@@ -295,6 +359,7 @@ export const departmentApi = {
 // ============================================
 export const organizationApi = {
   getAll: () => api.get('/organization-units'),
+  getTree: () => api.get('/v1/org-units/tree'),
   getChildren: (parentId) => api.get('/v1/org-units/children' + (parentId ? `?parentId=${parentId}` : '')),
   getFields: () => api.get('/v1/org-units/fields'),
   getById: (id) => api.get(`/organization-units/${id}`),
@@ -305,11 +370,29 @@ export const organizationApi = {
 };
 
 // ============================================
-// ANALYTICS API
+// ANALYTICS & AI READINESS API
 // ============================================
 export const analyticsApi = {
   getAdminDashboardStats: () => api.get('/analytics/dashboard/admin'),
   getCoordinatorDashboardStats: (coordinatorId) => api.get('/analytics/dashboard/coordinator'),
+  getAIInsights: () => api.get('/analytics/ai-insights'),
+  getAIReadiness: () => api.get('/ai/readiness'),
+  getEventReadiness: (eventId) => api.get(`/ai/readiness/${eventId}`),
+  mitigateReadiness: (data) => api.post('/ai/readiness/mitigate', data),
+};
+
+export const readinessApi = {
+  getUpcoming: () => api.get('/ai/readiness'),
+  getEventReadiness: (eventId) => api.get(`/ai/readiness/${eventId}`),
+  executeMitigation: (data) => api.post('/ai/readiness/mitigate', data),
+  triggerScan: () => api.post('/ai/readiness/scan-now'),
+};
+
+export const upcomingEventAiApi = {
+  getUpcoming: (days = 30) => api.get(`/ai/upcoming-events?days=${days}`),
+  getEventInsights: (eventId) => api.get(`/ai/upcoming-events/${eventId}/insights`),
+  refreshInsights: (eventId) => api.post(`/ai/upcoming-events/${eventId}/refresh`),
 };
 
 export default api;
+

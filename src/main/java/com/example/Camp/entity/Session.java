@@ -47,5 +47,6 @@ public class Session extends BaseEntity {
     
     @OneToMany(mappedBy = "session", cascade = CascadeType.ALL)
     @Builder.Default
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private List<Attendance> attendances = new ArrayList<>();
 }

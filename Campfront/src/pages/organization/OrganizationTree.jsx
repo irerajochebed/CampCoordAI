@@ -25,6 +25,7 @@ import Textarea from '../../components/ui/Textarea';
 import Modal from '../../components/ui/Modal';
 import { PageSpinner } from '../../components/ui/Spinner';
 import Alert from '../../components/ui/Alert';
+import { organizationApi } from '../../api';
 
 export default function OrganizationTree() {
   const [loading, setLoading] = useState(true);
@@ -43,7 +44,7 @@ export default function OrganizationTree() {
     name: 'Rwanda Union Mission',
     code: 'RUM',
     leader: 'Pastor Emmanuel Mugisha',
-    contactEmail: 'info@rum.adventist.org',
+    contactEmail: 'info@rumadventist.org',
     contactPhone: '+250 788 123 456',
     address: 'Kigali, Rwanda',
     memberCount: 125000,
@@ -51,122 +52,13 @@ export default function OrganizationTree() {
       {
         id: 'field-1',
         type: 'FIELD',
-        name: 'Central Rwanda Field',
-        code: 'CRF',
-        leader: 'Pastor Gitwe Field Officer',
-        contactEmail: 'crf@rum.adventist.org',
-        contactPhone: '+250 788 100 001',
-        address: 'Muhanga',
-        memberCount: 16000,
-        children: []
-      },
-      {
-        id: 'field-2',
-        type: 'FIELD',
-        name: 'East Central Rwanda Field',
-        code: 'ECRF',
-        leader: 'Pastor Paul Uwizeye',
-        contactEmail: 'ecrf@rum.adventist.org',
-        contactPhone: '+250 788 100 002',
-        address: 'Kigali',
-        memberCount: 22000,
-        children: []
-      },
-      {
-        id: 'field-3',
-        type: 'FIELD',
         name: 'North Rwanda Field',
         code: 'NRF',
-        leader: 'Pastor Jean Claude Habimana',
-        contactEmail: 'nrf@rum.adventist.org',
-        contactPhone: '+250 788 100 003',
-        address: 'Musanze',
-        memberCount: 18000,
-        children: [
-          {
-            id: 'district-1',
-            type: 'DISTRICT',
-            name: 'Musanze District',
-            code: 'NRF-MUS',
-            leader: 'Elder David Niyonzima',
-            contactEmail: 'musanze@nrf.adventist.org',
-            contactPhone: '+250 788 345 678',
-            address: 'Kigombe Zone, Musanze',
-            memberCount: 3500,
-            children: []
-          },
-          {
-            id: 'district-2',
-            type: 'DISTRICT',
-            name: 'Bukamba District',
-            code: 'NRF-BUK',
-            leader: 'Elder Joseph Mukama',
-            contactEmail: 'bukamba@nrf.adventist.org',
-            contactPhone: '+250 788 678 901',
-            address: 'Bukamba Zone, Musanze',
-            memberCount: 2800,
-            children: []
-          }
-        ]
-      },
-      {
-        id: 'field-4',
-        type: 'FIELD',
-        name: 'North-East Rwanda Field',
-        code: 'NERF',
-        leader: 'Pastor Nyagatare Field Leader',
-        contactEmail: 'nerf@rum.adventist.org',
-        contactPhone: '+250 788 100 004',
-        address: 'Nyagatare',
-        memberCount: 14000,
-        children: []
-      },
-      {
-        id: 'field-5',
-        type: 'FIELD',
-        name: 'North-West Rwanda Field',
-        code: 'NWRF',
-        leader: 'Pastor Rubavu Field Leader',
-        contactEmail: 'nwrf@rum.adventist.org',
-        contactPhone: '+250 788 100 005',
-        address: 'Rubavu',
-        memberCount: 15000,
-        children: []
-      },
-      {
-        id: 'field-6',
-        type: 'FIELD',
-        name: 'South Rwanda Field',
-        code: 'SRF',
-        leader: 'Pastor Marie Claire Uwera',
-        contactEmail: 'srf@rum.adventist.org',
-        contactPhone: '+250 788 100 006',
-        address: 'Huye',
-        memberCount: 15000,
-        children: []
-      },
-      {
-        id: 'field-7',
-        type: 'FIELD',
-        name: 'South-East Rwanda Field',
-        code: 'SERF',
-        leader: 'Pastor Ngoma Field Leader',
-        contactEmail: 'serf@rum.adventist.org',
-        contactPhone: '+250 788 100 007',
-        address: 'Ngoma',
-        memberCount: 12500,
-        children: []
-      },
-      {
-        id: 'field-8',
-        type: 'FIELD',
-        name: 'West Rwanda Field',
-        code: 'WRF',
-        leader: 'Pastor Karongi Field Leader',
-        contactEmail: 'wrf@rum.adventist.org',
-        contactPhone: '+250 788 100 008',
-        address: 'Karongi',
-        memberCount: 12500,
+        leader: 'Pr. SETAKO Sophonie',
+        contactEmail: 'president@nrf.rumadventist.org',
+        contactPhone: '+250 788 756 534',
+        address: 'Musanze, Northern Province',
+        memberCount: 171145,
         children: []
       }
     ]
@@ -192,11 +84,25 @@ export default function OrganizationTree() {
     try {
       setLoading(true);
       setError(null);
-      // Fetch live units if available
-      setLoading(false);
+      const res = await organizationApi.getTree();
+      if (res?.data?.success && res?.data?.data && Object.keys(res.data.data).length > 0) {
+        const tree = res.data.data;
+        setOrganizationTree(tree);
+        const newExpanded = new Set();
+        if (tree.id) newExpanded.add(tree.id);
+        if (tree.children) {
+          tree.children.forEach(field => {
+            if (field.code === 'NRF' || field.name?.toLowerCase().includes('north')) {
+              newExpanded.add(field.id);
+            }
+          });
+        }
+        setExpandedNodes(newExpanded);
+      }
     } catch (err) {
       console.error('Error fetching organization tree:', err);
-      setError('Failed to load organization structure');
+      setError('Failed to load organization structure from server. Showing cached structure.');
+    } finally {
       setLoading(false);
     }
   };
@@ -220,11 +126,11 @@ export default function OrganizationTree() {
     setFormData({
       name: '',
       code: '',
-      type: getChildType(parentNode.type),
+      type: getChildType(parentNode.type || parentNode.level),
       leader: '',
       contactEmail: '',
       contactPhone: '',
-      address: '',
+      address: parentNode.address || parentNode.location || '',
       memberCount: 0,
       parentId: parentNode.id
     });
@@ -237,13 +143,13 @@ export default function OrganizationTree() {
       id: node.id,
       name: node.name,
       code: node.code,
-      type: node.type,
+      type: node.type || node.level,
       leader: node.leader,
       contactEmail: node.contactEmail,
       contactPhone: node.contactPhone,
-      address: node.address,
+      address: node.address || node.location,
       memberCount: node.memberCount,
-      parentId: null
+      parentId: node.parentId
     });
     setShowModal(true);
   };
@@ -255,6 +161,9 @@ export default function OrganizationTree() {
 
     try {
       setError(null);
+      if (typeof node.id === 'number') {
+        await organizationApi.delete(node.id);
+      }
       setSuccess(`Successfully deleted ${node.name}`);
       fetchOrganizationTree();
     } catch (err) {
@@ -268,15 +177,31 @@ export default function OrganizationTree() {
     try {
       setError(null);
       if (modalMode === 'add') {
+        await organizationApi.create({
+          name: formData.name,
+          code: formData.code,
+          level: formData.type,
+          location: formData.address,
+          contactEmail: formData.contactEmail,
+          contactPhone: formData.contactPhone,
+          parentId: formData.parentId
+        });
         setSuccess(`Successfully added ${formData.name}`);
       } else {
+        await organizationApi.update(formData.id, {
+          name: formData.name,
+          code: formData.code,
+          location: formData.address,
+          contactEmail: formData.contactEmail,
+          contactPhone: formData.contactPhone
+        });
         setSuccess(`Successfully updated ${formData.name}`);
       }
       setShowModal(false);
       fetchOrganizationTree();
     } catch (err) {
       console.error('Error saving organization:', err);
-      setError('Failed to save organization');
+      setError(err.response?.data?.message || 'Failed to save organization');
     }
   };
 

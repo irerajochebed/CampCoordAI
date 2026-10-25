@@ -8,14 +8,20 @@ import com.example.Camp.entity.OrganizationUnit;
 import com.example.Camp.entity.User;
 import com.example.Camp.enums.Position;
 import com.example.Camp.enums.Role;
+import com.example.Camp.exception.BadRequestException;
 import com.example.Camp.exception.DuplicateResourceException;
 import com.example.Camp.exception.ResourceNotFoundException;
 import com.example.Camp.repository.OrganizationUnitRepository;
 import com.example.Camp.repository.UserRepository;
+import com.example.Camp.repository.DepartmentRepository;
+import com.example.Camp.entity.Department;
+import com.example.Camp.service.JurisdictionScopeService;
 import com.example.Camp.service.UserService;
 import com.example.Camp.util.DtoMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,8 +37,10 @@ public class UserServiceImpl implements UserService {
     
     private final UserRepository userRepository;
     private final OrganizationUnitRepository organizationUnitRepository;
+    private final DepartmentRepository departmentRepository;
     private final PasswordEncoder passwordEncoder;
     private final DtoMapper dtoMapper;
+    private final JurisdictionScopeService jurisdictionScopeService;
     
     @Override
     @Transactional(readOnly = true)
@@ -64,8 +72,27 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public List<UserResponse> getAllUsersFiltered(Role role, Position position, Long organizationUnitId, Boolean active, String keyword) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        User currentUser = null;
+        if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+            currentUser = userRepository.findByEmail(auth.getName()).orElse(null);
+        }
+
+        List<Long> accessibleOrgUnitIds = null;
+        if (currentUser != null && currentUser.getRole() != Role.ADMINISTRATOR) {
+            if (jurisdictionScopeService.isUnionWideScope(currentUser)) {
+                // Union Leader / Union Administrator manages the leaders within the union
+                accessibleOrgUnitIds = null;
+            } else {
+                accessibleOrgUnitIds = jurisdictionScopeService.getAccessibleOrganizationUnitIds(currentUser);
+            }
+        }
+
+        final List<Long> scopedUnitIds = accessibleOrgUnitIds;
+
         return userRepository.findAll().stream()
                 .filter(user -> !Boolean.TRUE.equals(user.getDeleted()))
+                .filter(user -> scopedUnitIds == null || (user.getOrganizationUnit() != null && scopedUnitIds.contains(user.getOrganizationUnit().getId())))
                 .filter(user -> role == null || user.getRole() == role)
                 .filter(user -> position == null || user.getPosition() == position)
                 .filter(user -> organizationUnitId == null || (user.getOrganizationUnit() != null && user.getOrganizationUnit().getId().equals(organizationUnitId)))
@@ -108,25 +135,54 @@ public class UserServiceImpl implements UserService {
         User user = getUserById(id);
         
         if (request.getFirstName() != null) {
-            user.setFirstName(request.getFirstName());
+            user.setFirstName(request.getFirstName().trim());
         }
         if (request.getLastName() != null) {
-            user.setLastName(request.getLastName());
+            user.setLastName(request.getLastName().trim());
+        }
+        if (request.getEmail() != null && !request.getEmail().trim().isEmpty()) {
+            String newEmail = request.getEmail().trim();
+            if (!newEmail.equalsIgnoreCase(user.getEmail()) && userRepository.existsByEmail(newEmail)) {
+                throw new DuplicateResourceException("User", "email", newEmail);
+            }
+            user.setEmail(newEmail);
         }
         if (request.getPhoneNumber() != null) {
-            user.setPhoneNumber(request.getPhoneNumber());
+            String newPhone = request.getPhoneNumber().trim();
+            if (!newPhone.isEmpty() && !newPhone.equals(user.getPhoneNumber()) && userRepository.existsByPhoneNumber(newPhone)) {
+                throw new DuplicateResourceException("User", "phoneNumber", newPhone);
+            }
+            user.setPhoneNumber(newPhone.isEmpty() ? null : newPhone);
         }
         if (request.getPosition() != null) {
             user.setPosition(request.getPosition());
+        }
+        if (request.getDepartmentId() != null) {
+            Department department = departmentRepository.findById(request.getDepartmentId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Department", "id", request.getDepartmentId()));
+            user.setDepartment(department);
+            if (user.getPosition() == Position.DEPARTMENT_LEADER || user.getPosition() == Position.MINISTRY_LEADER) {
+                department.setLeader(user);
+                departmentRepository.save(department);
+            }
+        }
+        if (request.getGovernmentDistrict() != null) {
+            user.setGovernmentDistrict(request.getGovernmentDistrict());
+        }
+        if (request.getSdaDistrict() != null) {
+            user.setSdaDistrict(request.getSdaDistrict());
         }
         if (request.getGender() != null) {
             user.setGender(request.getGender());
         }
         if (request.getDateOfBirth() != null) {
+            if (request.getDateOfBirth().isAfter(java.time.LocalDate.now())) {
+                throw new BadRequestException("Date of birth cannot be in the future");
+            }
             user.setDateOfBirth(request.getDateOfBirth());
         }
         if (request.getProfileImageUrl() != null) {
-            user.setProfileImageUrl(request.getProfileImageUrl());
+            user.setProfileImageUrl(request.getProfileImageUrl().trim().isEmpty() ? null : request.getProfileImageUrl());
         }
         if (request.getPreferredLanguage() != null) {
             user.setPreferredLanguage(request.getPreferredLanguage());
@@ -155,6 +211,12 @@ public class UserServiceImpl implements UserService {
         OrganizationUnit organizationUnit = organizationUnitRepository.findById(request.getOrganizationUnitId())
                 .orElseThrow(() -> new ResourceNotFoundException("OrganizationUnit", "id", request.getOrganizationUnitId()));
 
+        Department department = null;
+        if (request.getDepartmentId() != null) {
+            department = departmentRepository.findById(request.getDepartmentId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Department", "id", request.getDepartmentId()));
+        }
+
         // Determine initial password (custom provided or default Coord@2026)
         String rawPassword = (request.getPassword() != null && !request.getPassword().trim().isEmpty())
                 ? request.getPassword().trim()
@@ -170,12 +232,23 @@ public class UserServiceImpl implements UserService {
                 .position(request.getPosition())
                 .gender(request.getGender())
                 .organizationUnit(organizationUnit)
+                .department(department)
+                .governmentDistrict(request.getGovernmentDistrict())
+                .sdaDistrict(request.getSdaDistrict())
                 .preferredLanguage(request.getPreferredLanguage() != null && !request.getPreferredLanguage().trim().isEmpty() ? request.getPreferredLanguage().trim() : "en")
                 .active(true)
                 .deleted(false)
                 .build();
 
         User savedCoordinator = userRepository.save(coordinator);
+
+        if (department != null && (savedCoordinator.getPosition() == Position.DEPARTMENT_LEADER || 
+                                   savedCoordinator.getPosition() == Position.MINISTRY_LEADER)) {
+            department.setLeader(savedCoordinator);
+            departmentRepository.save(department);
+            log.info("Assigned coordinator {} as leader of department {}", savedCoordinator.getEmail(), department.getName());
+        }
+
         log.info("Coordinator account provisioned successfully by administrator: {} [Position: {}, OrgUnit: {}]",
                 savedCoordinator.getEmail(), savedCoordinator.getPosition(), organizationUnit.getName());
 
@@ -196,6 +269,21 @@ public class UserServiceImpl implements UserService {
             OrganizationUnit unit = organizationUnitRepository.findById(request.getOrganizationUnitId())
                     .orElseThrow(() -> new ResourceNotFoundException("OrganizationUnit", "id", request.getOrganizationUnitId()));
             user.setOrganizationUnit(unit);
+        }
+        if (request.getDepartmentId() != null) {
+            Department department = departmentRepository.findById(request.getDepartmentId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Department", "id", request.getDepartmentId()));
+            user.setDepartment(department);
+            if (user.getPosition() == Position.DEPARTMENT_LEADER || user.getPosition() == Position.MINISTRY_LEADER) {
+                department.setLeader(user);
+                departmentRepository.save(department);
+            }
+        }
+        if (request.getGovernmentDistrict() != null) {
+            user.setGovernmentDistrict(request.getGovernmentDistrict());
+        }
+        if (request.getSdaDistrict() != null) {
+            user.setSdaDistrict(request.getSdaDistrict());
         }
         if (request.getActive() != null) {
             user.setActive(request.getActive());
@@ -238,5 +326,41 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public Long countUsersByRole(Role role) {
         return userRepository.countByRole(role);
+    }
+
+    @Override
+    public UserResponse uploadAvatar(Long id, org.springframework.web.multipart.MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new com.example.Camp.exception.BadRequestException("Uploaded file is empty");
+        }
+
+        User user = getUserById(id);
+
+        try {
+            java.io.File uploadDir = new java.io.File("uploads/avatars");
+            if (!uploadDir.exists()) {
+                uploadDir.mkdirs();
+            }
+
+            String originalFilename = file.getOriginalFilename();
+            String extension = ".jpg";
+            if (originalFilename != null && originalFilename.lastIndexOf('.') > 0) {
+                extension = originalFilename.substring(originalFilename.lastIndexOf('.'));
+            }
+
+            String filename = "user_" + id + "_" + System.currentTimeMillis() + extension;
+            java.nio.file.Path targetPath = uploadDir.toPath().resolve(filename);
+            java.nio.file.Files.copy(file.getInputStream(), targetPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+
+            String avatarUrl = "/uploads/avatars/" + filename;
+            user.setProfileImageUrl(avatarUrl);
+            User savedUser = userRepository.save(user);
+
+            log.info("Saved avatar for user {} at {}", user.getEmail(), avatarUrl);
+            return dtoMapper.toUserResponse(savedUser);
+        } catch (java.io.IOException e) {
+            log.error("Failed to save avatar image file", e);
+            throw new com.example.Camp.exception.BadRequestException("Failed to save avatar file: " + e.getMessage());
+        }
     }
 }

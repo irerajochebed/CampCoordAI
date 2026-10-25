@@ -7,5 +7,12 @@ public enum SessionType {
     BREAKOUT_SESSION,
     EVENING_PROGRAM,
     SPECIAL_SESSION,
-    GENERAL_SESSION
+    GENERAL_SESSION,
+    GENERAL,
+    WORSHIP,
+    SEMINAR,
+    PRAYER,
+    RECREATION,
+    BREAK
 }
+

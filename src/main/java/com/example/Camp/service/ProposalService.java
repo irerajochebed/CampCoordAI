@@ -17,6 +17,7 @@ public interface ProposalService {
     ProposalResponse updateProposal(Long id, ProposalRequest request);
     ProposalResponse getProposalById(Long id);
     List<ProposalResponse> getAllProposals();
+    List<ProposalResponse> getProposalsForCurrentUser(Long userId);
     List<ProposalResponse> getProposalsByStatus(ProposalStatus status);
     List<ProposalResponse> getProposalsByUser(Long userId);
     List<ProposalResponse> getProposalsByDepartment(Long departmentId);

@@ -60,9 +60,21 @@ public class Event extends BaseEntity {
     @Column(precision = 15, scale = 2)
     private BigDecimal budget;
     
+    private Integer minAge;
+    
+    private Integer maxAge;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "target_gender")
+    private com.example.Camp.enums.Gender targetGender;
+    
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "proposal_id")
     private Proposal proposal;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "department_id")
+    private Department department;
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "coordinator_id", nullable = false)
@@ -82,10 +94,12 @@ public class Event extends BaseEntity {
     
     @OneToMany(mappedBy = "event", cascade = CascadeType.ALL)
     @Builder.Default
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties({"event", "hibernateLazyInitializer", "handler"})
     private List<Accommodation> accommodations = new ArrayList<>();
     
     @OneToMany(mappedBy = "event", cascade = CascadeType.ALL)
     @Builder.Default
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties({"event", "hibernateLazyInitializer", "handler"})
     private List<ResourceAllocation> resourceAllocations = new ArrayList<>();
     
     @OneToMany(mappedBy = "event", cascade = CascadeType.ALL)

@@ -1,6 +1,8 @@
 package com.example.Camp.entity;
 
 import com.example.Camp.enums.DepartmentType;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -14,6 +16,7 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(callSuper = true)
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Department extends BaseEntity {
     
     @Enumerated(EnumType.STRING)
@@ -28,9 +31,11 @@ public class Department extends BaseEntity {
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "leader_id")
+    @JsonIgnoreProperties({"organizationUnit", "department", "password", "hibernateLazyInitializer", "handler"})
     private User leader;
     
     @OneToMany(mappedBy = "department", cascade = CascadeType.ALL)
     @Builder.Default
+    @JsonIgnore
     private List<Proposal> proposals = new ArrayList<>();
 }

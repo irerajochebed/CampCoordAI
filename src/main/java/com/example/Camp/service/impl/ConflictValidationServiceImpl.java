@@ -33,18 +33,18 @@ public class ConflictValidationServiceImpl implements ConflictValidationService 
     @Override
     public void validateAdvanceNotice(LocalDate startDate) {
         if (startDate == null) {
-            throw new BadRequestException("Event start date is required.");
+            throw new IllegalArgumentException("Event start date is required.");
         }
         LocalDate minAllowedDate = LocalDate.now().plusDays(30);
         if (startDate.isBefore(minAllowedDate)) {
-            throw new BadRequestException("Events must be planned and scheduled at least 30 days in advance to allow proper participant preparation.");
+            throw new IllegalArgumentException("Event proposals must be scheduled at least 30 days in advance.");
         }
     }
 
     @Override
     public List<String> checkLeaderAvailability(List<Long> requiredLeaderIds, LocalDate start, LocalDate end, Long excludeProposalId) {
         List<String> conflicts = new ArrayList<>();
-        if (requiredLeaderIds == null || requiredLeaderIds.isEmpty() || start == null || end == null) {
+        if (requiredLeaderIds == null || requiredLeaderIds.isEmpty() || start == null || end == null || end.isBefore(start)) {
             return conflicts;
         }
 
@@ -87,7 +87,7 @@ public class ConflictValidationServiceImpl implements ConflictValidationService 
     @Override
     public List<String> checkScheduleConflicts(Long orgUnitId, Long departmentId, String venue, LocalDate start, LocalDate end, Long excludeProposalId) {
         List<String> conflicts = new ArrayList<>();
-        if (start == null || end == null) return conflicts;
+        if (start == null || end == null || end.isBefore(start)) return conflicts;
 
         List<Event> allEvents = eventRepository.findAll();
         List<Proposal> allProposals = proposalRepository.findAllActiveProposals();
@@ -135,12 +135,30 @@ public class ConflictValidationServiceImpl implements ConflictValidationService 
 
     @Override
     public ConflictCheckDto performFullConflictCheck(LocalDate start, LocalDate end, Long orgUnitId, Long departmentId, String venue, List<Long> leaderIds, Long excludeProposalId) {
+        if (start == null || end == null || end.isBefore(start)) {
+            List<String> dateErrors = new ArrayList<>();
+            if (start != null && end != null && end.isBefore(start)) {
+                dateErrors.add("End date must be on or after the start date.");
+            } else if (start == null || end == null) {
+                dateErrors.add("Start date and end date are required.");
+            }
+            return ConflictCheckDto.builder()
+                    .hasConflict(!dateErrors.isEmpty())
+                    .advanceNoticeValid(false)
+                    .advanceNoticeError("Invalid date range")
+                    .conflicts(dateErrors)
+                    .leaderConflicts(new ArrayList<>())
+                    .scheduleConflicts(new ArrayList<>())
+                    .venueConflicts(new ArrayList<>())
+                    .build();
+        }
+
         boolean advanceValid = true;
         String advanceError = null;
 
         try {
             validateAdvanceNotice(start);
-        } catch (BadRequestException ex) {
+        } catch (IllegalArgumentException | BadRequestException ex) {
             advanceValid = false;
             advanceError = ex.getMessage();
         }
@@ -168,6 +186,7 @@ public class ConflictValidationServiceImpl implements ConflictValidationService 
 
     private boolean datesOverlap(LocalDate start1, LocalDate end1, LocalDate start2, LocalDate end2) {
         if (start1 == null || end1 == null || start2 == null || end2 == null) return false;
+        if (end1.isBefore(start1) || end2.isBefore(start2)) return false;
         return !start1.isAfter(end2) && !end1.isBefore(start2);
     }
 }

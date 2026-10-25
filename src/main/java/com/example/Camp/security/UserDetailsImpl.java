@@ -9,6 +9,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
@@ -29,9 +30,14 @@ public class UserDetailsImpl implements UserDetails {
     private boolean active;
     
     public static UserDetailsImpl build(User user) {
-        List<GrantedAuthority> authorities = List.of(
-                new SimpleGrantedAuthority("ROLE_" + user.getRole().name())
-        );
+        List<GrantedAuthority> authorities = new ArrayList<>();
+        if (user.getRole() != null) {
+            authorities.add(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
+        }
+        if (user.getPosition() != null) {
+            authorities.add(new SimpleGrantedAuthority("ROLE_" + user.getPosition().name()));
+            authorities.add(new SimpleGrantedAuthority("POS_" + user.getPosition().name()));
+        }
         
         return new UserDetailsImpl(
                 user.getId(),

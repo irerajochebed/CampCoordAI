@@ -102,7 +102,7 @@ public class AttendanceController {
     }
     
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMINISTRATOR')")
+    @PreAuthorize("hasRole('COORDINATOR') or hasRole('ADMINISTRATOR')")
     public ResponseEntity<ApiResponse<String>> deleteAttendance(@PathVariable Long id) {
         attendanceService.deleteAttendance(id);
         return ResponseEntity.ok(ApiResponse.success("Attendance deleted successfully", null));

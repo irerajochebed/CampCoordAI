@@ -3,6 +3,7 @@ package com.example.Camp.dto.payment;
 import com.example.Camp.enums.PaymentMethod;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -12,6 +13,7 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class PaymentRequest {
     
     @NotNull(message = "Registration ID is required")
@@ -28,4 +30,7 @@ public class PaymentRequest {
     private LocalDateTime paidAt;
     
     private String notes;
+    
+    private String receiptUrl;
 }
+

@@ -39,6 +39,8 @@ public interface UserService {
     void activateUser(Long id);
     
     void deleteUser(Long id);
+
+    UserResponse uploadAvatar(Long id, org.springframework.web.multipart.MultipartFile file);
     
     Long countUsersByRole(Role role);
 }

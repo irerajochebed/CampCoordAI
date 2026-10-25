@@ -4,6 +4,7 @@ public enum Position {
     UNION_ADMINISTRATOR,
     UNION_LEADER,
     DEPARTMENT_LEADER,
+    MINISTRY_LEADER,
     FIELD_LEADER,
     DISTRICT_PASTOR,
     PASTOR,
@@ -13,5 +14,7 @@ public enum Position {
     CAMP_SECRETARY,
     SPEAKER,
     PA_TEAM,
+    MEDIA_TEAM,
     ACCOMMODATION_OFFICER
 }
+

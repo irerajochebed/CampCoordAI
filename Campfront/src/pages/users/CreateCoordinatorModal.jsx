@@ -16,9 +16,11 @@ import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Alert from '../../components/ui/Alert';
 import OrganizationUnitSelector from '../../components/ui/OrganizationUnitSelector';
-import { userApi, organizationApi } from '../../api';
+import { useTranslation } from '../../contexts/LanguageContext';
+import { userApi, organizationApi, departmentApi } from '../../api';
 
 export default function CreateCoordinatorModal({ isOpen, onClose, onSuccess }) {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -26,21 +28,26 @@ export default function CreateCoordinatorModal({ isOpen, onClose, onSuccess }) {
     phoneNumber: '',
     position: 'FIELD_LEADER',
     organizationUnitId: '',
+    departmentId: '',
+    sdaDistrict: '',
     password: '',
     gender: 'MALE',
     preferredLanguage: 'en'
   });
 
   const [orgUnits, setOrgUnits] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [loadingOrgUnits, setLoadingOrgUnits] = useState(false);
+  const [loadingDepartments, setLoadingDepartments] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [alert, setAlert] = useState(null);
   const [errors, setErrors] = useState({});
 
-  // Fetch organization units (Unions, Fields, Districts) for assignment
+  // Fetch organization units and departments for assignment
   useEffect(() => {
     if (isOpen) {
       fetchOrgUnits();
+      fetchDepartments();
       // Reset state
       setFormData({
         firstName: '',
@@ -49,6 +56,8 @@ export default function CreateCoordinatorModal({ isOpen, onClose, onSuccess }) {
         phoneNumber: '',
         position: 'FIELD_LEADER',
         organizationUnitId: '',
+        departmentId: '',
+        sdaDistrict: '',
         password: '',
         gender: 'MALE',
         preferredLanguage: 'en'
@@ -74,6 +83,18 @@ export default function CreateCoordinatorModal({ isOpen, onClose, onSuccess }) {
     }
   };
 
+  const fetchDepartments = async () => {
+    try {
+      setLoadingDepartments(true);
+      const res = await departmentApi.getAll();
+      setDepartments(res?.data?.data || []);
+    } catch (err) {
+      console.error('Failed to load departments', err);
+    } finally {
+      setLoadingDepartments(false);
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -90,6 +111,10 @@ export default function CreateCoordinatorModal({ isOpen, onClose, onSuccess }) {
     else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Email is invalid';
     if (!formData.position) newErrors.position = 'Position is required';
     if (!formData.organizationUnitId) newErrors.organizationUnitId = 'Assigned organization unit is required';
+    
+    if ((formData.position === 'DEPARTMENT_LEADER' || formData.position === 'MINISTRY_LEADER') && !formData.departmentId) {
+      newErrors.departmentId = 'Ministry/Department assignment is required';
+    }
     return newErrors;
   };
 
@@ -112,6 +137,9 @@ export default function CreateCoordinatorModal({ isOpen, onClose, onSuccess }) {
         phoneNumber: formData.phoneNumber.trim() || null,
         position: formData.position,
         organizationUnitId: parseInt(formData.organizationUnitId, 10),
+        departmentId: (formData.position === 'DEPARTMENT_LEADER' || formData.position === 'MINISTRY_LEADER') && formData.departmentId ? parseInt(formData.departmentId, 10) : null,
+        governmentDistrict: null,
+        sdaDistrict: formData.sdaDistrict?.trim() || null,
         password: formData.password.trim() || 'Coord@2026',
         gender: formData.gender || null,
         preferredLanguage: formData.preferredLanguage || 'en'
@@ -142,23 +170,25 @@ export default function CreateCoordinatorModal({ isOpen, onClose, onSuccess }) {
   };
 
   const positionOptions = [
-    { value: 'FIELD_LEADER', label: 'Field Leader / Conference Officer' },
-    { value: 'DISTRICT_PASTOR', label: 'District Pastor' },
-    { value: 'DEPARTMENT_LEADER', label: 'Department Leader' },
-    { value: 'FINANCE_OFFICER', label: 'Finance Officer' },
-    { value: 'CAMP_SECRETARY', label: 'Camp Secretary' },
-    { value: 'CAMP_DIRECTOR', label: 'Camp Director' },
-    { value: 'UNION_LEADER', label: 'Union Leader' },
-    { value: 'UNION_ADMINISTRATOR', label: 'Union Administrator' },
-    { value: 'PASTOR', label: 'Local Pastor / Elder' },
-    { value: 'ACCOMMODATION_OFFICER', label: 'Accommodation Officer' },
-    { value: 'SPEAKER', label: 'Speaker / Evangelist' },
-    { value: 'PA_TEAM', label: 'PA & Media Team' },
+    { value: 'FIELD_LEADER', label: t('positions.FIELD_LEADER', 'Field Leader / Conference Officer') },
+    { value: 'DISTRICT_PASTOR', label: t('positions.DISTRICT_PASTOR', 'District Pastor') },
+    { value: 'DEPARTMENT_LEADER', label: t('positions.DEPARTMENT_LEADER', 'Department Leader') },
+    { value: 'MINISTRY_LEADER', label: t('positions.MINISTRY_LEADER', 'Ministry Leader') },
+    { value: 'FINANCE_OFFICER', label: t('positions.FINANCE_OFFICER', 'Finance Officer') },
+    { value: 'CAMP_SECRETARY', label: t('positions.CAMP_SECRETARY', 'Camp Secretary') },
+    { value: 'CAMP_DIRECTOR', label: t('positions.CAMP_DIRECTOR', 'Camp Director') },
+    { value: 'UNION_LEADER', label: t('positions.UNION_LEADER', 'Union Leader') },
+    { value: 'UNION_ADMINISTRATOR', label: t('positions.UNION_ADMINISTRATOR', 'Union Administrator') },
+    { value: 'PASTOR', label: t('positions.PASTOR', 'Local Pastor / Elder') },
+    { value: 'ACCOMMODATION_OFFICER', label: t('positions.ACCOMMODATION_OFFICER', 'Accommodation Officer') },
+    { value: 'SPEAKER', label: t('positions.SPEAKER', 'Speaker / Evangelist') },
+    { value: 'PA_TEAM', label: t('positions.PA_TEAM', 'PA & Sound Team') },
+    { value: 'MEDIA_TEAM', label: t('positions.MEDIA_TEAM', 'Media & Broadcast Team') },
   ];
 
   const genderOptions = [
-    { value: 'MALE', label: 'Male' },
-    { value: 'FEMALE', label: 'Female' },
+    { value: 'MALE', label: t('auth.male', 'Male') },
+    { value: 'FEMALE', label: t('auth.female', 'Female') },
   ];
 
   const orgUnitOptions = orgUnits.map(unit => ({
@@ -170,17 +200,17 @@ export default function CreateCoordinatorModal({ isOpen, onClose, onSuccess }) {
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Provision New Coordinator"
+      title={t('users.provisionModalTitle', 'Provision New Coordinator')}
       size="lg"
       footer={
         <div className="flex items-center justify-between w-full">
-          <div className="flex items-center text-xs text-gray-500 gap-1.5">
-            <Info className="w-4 h-4 text-primary-600" />
-            <span>Default initial password: <strong>Coord@2026</strong></span>
+          <div className="flex items-center text-xs text-slate-500 dark:text-slate-400 gap-1.5">
+            <Info className="w-4 h-4 text-primary-600 dark:text-primary-400" />
+            <span>{t('users.defaultPasswordNote', 'Default initial password:')} <strong className="text-slate-800 dark:text-white">Coord@2026</strong></span>
           </div>
           <div className="flex items-center gap-3">
             <Button variant="ghost" onClick={onClose} disabled={submitting}>
-              Cancel
+              {t('common.cancel', 'Cancel')}
             </Button>
             <Button
               variant="primary"
@@ -189,7 +219,7 @@ export default function CreateCoordinatorModal({ isOpen, onClose, onSuccess }) {
               loading={submitting}
               disabled={submitting}
             >
-              Provision Account
+              {t('users.provisionAccount', 'Provision Account')}
             </Button>
           </div>
         </div>
@@ -197,10 +227,10 @@ export default function CreateCoordinatorModal({ isOpen, onClose, onSuccess }) {
     >
       <div className="space-y-4">
         {/* Banner Note */}
-        <div className="bg-primary-50 border border-primary-100 rounded-xl p-3 flex items-start gap-3">
-          <ShieldCheck className="w-5 h-5 text-primary-700 shrink-0 mt-0.5" />
-          <div className="text-xs text-primary-900 leading-relaxed">
-            <strong>Administrator Action:</strong> This form directly creates an active <strong>COORDINATOR</strong> account with leadership privileges. The user will be assigned to manage events and approvals for their assigned unit.
+        <div className="bg-primary-50 dark:bg-primary-950/40 border border-primary-200 dark:border-primary-800/60 rounded-xl p-3.5 flex items-start gap-3">
+          <ShieldCheck className="w-5 h-5 text-primary-700 dark:text-primary-400 shrink-0 mt-0.5" />
+          <div className="text-xs text-primary-900 dark:text-primary-200 leading-relaxed">
+            {t('users.provisionModalDesc', 'Administrator Action: This form directly creates an active COORDINATOR account with leadership privileges. The user will be assigned to manage events and approvals for their assigned unit.')}
           </div>
         </div>
 
@@ -216,7 +246,7 @@ export default function CreateCoordinatorModal({ isOpen, onClose, onSuccess }) {
           {/* First & Last Name */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
-              label="First Name"
+              label={t('auth.firstName', 'First Name')}
               name="firstName"
               value={formData.firstName}
               onChange={handleChange}
@@ -226,7 +256,7 @@ export default function CreateCoordinatorModal({ isOpen, onClose, onSuccess }) {
               required
             />
             <Input
-              label="Last Name"
+              label={t('auth.lastName', 'Last Name')}
               name="lastName"
               value={formData.lastName}
               onChange={handleChange}
@@ -240,7 +270,7 @@ export default function CreateCoordinatorModal({ isOpen, onClose, onSuccess }) {
           {/* Email & Phone */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
-              label="Email Address"
+              label={t('auth.email', 'Email Address')}
               type="email"
               name="email"
               value={formData.email}
@@ -251,7 +281,7 @@ export default function CreateCoordinatorModal({ isOpen, onClose, onSuccess }) {
               required
             />
             <Input
-              label="Phone Number"
+              label={t('auth.phone', 'Phone Number')}
               type="tel"
               name="phoneNumber"
               value={formData.phoneNumber}
@@ -265,7 +295,7 @@ export default function CreateCoordinatorModal({ isOpen, onClose, onSuccess }) {
           {/* Position & Gender */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Select
-              label="Leadership Position"
+              label={t('profile.position', 'Leadership Position')}
               name="position"
               value={formData.position}
               onChange={handleChange}
@@ -274,7 +304,7 @@ export default function CreateCoordinatorModal({ isOpen, onClose, onSuccess }) {
               required
             />
             <Select
-              label="Gender"
+              label={t('auth.gender', 'Gender')}
               name="gender"
               value={formData.gender}
               onChange={handleChange}
@@ -282,10 +312,28 @@ export default function CreateCoordinatorModal({ isOpen, onClose, onSuccess }) {
             />
           </div>
 
+          {/* Conditional Department Selection */}
+          {(formData.position === 'DEPARTMENT_LEADER' || formData.position === 'MINISTRY_LEADER') && (
+            <div className="animate-fadeIn">
+              <Select
+                label={t('profile.department', 'Assign Ministry/Department')}
+                name="departmentId"
+                value={formData.departmentId}
+                onChange={handleChange}
+                error={errors.departmentId}
+                options={[
+                  { value: '', label: '-- Select Ministry/Department --' },
+                  ...departments.map(d => ({ value: String(d.id), label: d.name }))
+                ]}
+                required
+              />
+            </div>
+          )}
+
           {/* Assigned Organization Unit Selector */}
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">
-              Assigned Organization Unit (Conference Field / Evangelical District) <span className="text-red-500">*</span>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              {t('profile.orgUnit', 'Assigned Organization Unit')} <span className="text-rose-500">*</span>
             </label>
             <OrganizationUnitSelector
               showChurch={false}
@@ -293,9 +341,13 @@ export default function CreateCoordinatorModal({ isOpen, onClose, onSuccess }) {
                 districtId: formData.organizationUnitId,
                 organizationUnitId: formData.organizationUnitId
               }}
-              onChange={({ organizationUnitId, districtId, fieldId }) => {
-                const targetId = organizationUnitId || districtId || fieldId || '';
-                setFormData(prev => ({ ...prev, organizationUnitId: targetId }));
+              onChange={({ organizationUnitId, districtId, fieldId, districtName }) => {
+                const targetId = districtId || organizationUnitId || fieldId || '';
+                setFormData(prev => ({ 
+                  ...prev, 
+                  organizationUnitId: targetId,
+                  sdaDistrict: districtName || prev.sdaDistrict
+                }));
                 if (errors.organizationUnitId) {
                   setErrors(prev => ({ ...prev, organizationUnitId: '' }));
                 }
@@ -303,9 +355,11 @@ export default function CreateCoordinatorModal({ isOpen, onClose, onSuccess }) {
               error={errors.organizationUnitId}
               required
             />
-            <p className="mt-1 text-xs text-gray-500 flex items-center gap-1">
-              <MapPin className="w-3.5 h-3.5 text-gray-400" />
-              The coordinator will have jurisdiction over events and proposals for this unit.
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+              <MapPin className="w-3.5 h-3.5 text-slate-400" />
+              {formData.position === 'DISTRICT_PASTOR' 
+                ? 'Select North Rwanda Field (NRF), then choose the specific SDA District this pastor presides over.' 
+                : 'The coordinator will have leadership and review jurisdiction over events in this unit.'}
             </p>
           </div>
 

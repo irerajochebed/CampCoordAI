@@ -55,7 +55,7 @@ export default function ProposalForm() {
   }, [id]);
 
   useEffect(() => {
-    if (!formData.startDate || !formData.endDate) {
+    if (!formData.startDate || !formData.endDate || new Date(formData.endDate) < new Date(formData.startDate)) {
       setConflictState({ loading: false, result: null });
       return;
     }
@@ -207,10 +207,8 @@ export default function ProposalForm() {
 
     if (!formData.endDate) {
       newErrors.endDate = t('common.error', 'End date is required');
-    }
-
-    if (formData.startDate && formData.endDate && new Date(formData.startDate) > new Date(formData.endDate)) {
-      newErrors.endDate = t('common.error', 'End date must be after start date');
+    } else if (formData.startDate && formData.endDate < formData.startDate) {
+      newErrors.endDate = t('proposals.endDateBeforeStartDate', 'End date must be on or after the start date.');
     }
 
     if (!formData.venue.trim()) {
@@ -283,9 +281,24 @@ export default function ProposalForm() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    if (name === 'startDate') {
+      setFormData(prev => {
+        const next = { ...prev, startDate: value };
+        // If a user changes startDate to a day later than the current endDate, automatically clear or update endDate to match startDate
+        if (prev.endDate && value && value > prev.endDate) {
+          next.endDate = value;
+        }
+        return next;
+      });
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+    if (name === 'startDate' && errors.endDate) {
+      setErrors(prev => ({ ...prev, endDate: '' }));
     }
   };
 
@@ -450,18 +463,41 @@ export default function ProposalForm() {
                   required
                 />
 
-                <Input
-                  label={t('proposals.endDate', 'End Date')}
-                  name="endDate"
-                  type="date"
-                  value={formData.endDate}
-                  onChange={handleChange}
-                  error={errors.endDate}
-                  required
-                />
+                <div>
+                  <Input
+                    label={t('proposals.endDate', 'End Date')}
+                    name="endDate"
+                    type="date"
+                    min={formData.startDate || minStartDate}
+                    value={formData.endDate}
+                    onChange={handleChange}
+                    disabled={!formData.startDate}
+                    error={
+                      errors.endDate ||
+                      (formData.startDate && formData.endDate && formData.endDate < formData.startDate
+                        ? t('proposals.endDateBeforeStartDate', 'End date must be on or after the start date.')
+                        : undefined)
+                    }
+                    required
+                  />
+                  {!formData.startDate && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {t('proposals.selectStartDateFirst', 'Select a valid start date first.')}
+                    </p>
+                  )}
+                </div>
               </div>
 
-              {formData.startDate && formData.endDate && (
+              {/* Inline error when endDate is earlier than startDate */}
+              {formData.startDate && formData.endDate && formData.endDate < formData.startDate && (
+                <div className="mt-2 p-3 bg-red-50 border border-red-200 text-red-700 text-xs font-medium rounded-lg flex items-center gap-2">
+                  <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                  {t('proposals.endDateBeforeStartDate', 'End date must be on or after the start date.')}
+                </div>
+              )}
+
+              {/* Conflict checks alert when valid date range */}
+              {formData.startDate && formData.endDate && formData.endDate >= formData.startDate && (
                 <div className="mt-2">
                   {conflictState.loading ? (
                     <div className="p-3 bg-blue-50 text-blue-700 text-xs font-semibold rounded-lg flex items-center gap-2">
@@ -579,6 +615,11 @@ export default function ProposalForm() {
             variant="primary"
             icon={<Save className="w-4 h-4" />}
             loading={submitting}
+            disabled={
+              submitting ||
+              (Boolean(formData.startDate && formData.endDate) && formData.endDate < formData.startDate) ||
+              (Boolean(formData.startDate) && formData.startDate < minStartDate)
+            }
           >
             {isEdit ? t('proposals.editProposal', 'Update Proposal') : t('proposals.newProposal', 'Create Proposal')}
           </Button>

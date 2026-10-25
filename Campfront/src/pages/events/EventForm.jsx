@@ -15,14 +15,15 @@ export default function EventForm() {
   const navigate = useNavigate();
   const { id } = useParams();
   const { user, isAdmin } = useAuth();
+  const isEdit = Boolean(id);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(isEdit);
   const [submitting, setSubmitting] = useState(false);
   const [alert, setAlert] = useState(null);
   
   const [formData, setFormData] = useState({
     name: '',
-    type: '',
+    type: 'CAMP',
     description: '',
     startDate: '',
     endDate: '',
@@ -30,7 +31,10 @@ export default function EventForm() {
     capacity: '',
     registrationFee: '',
     budget: '',
-    requirements: ''
+    requirements: '',
+    minAge: '',
+    maxAge: '',
+    targetGender: ''
   });
 
   const [originalEvent, setOriginalEvent] = useState(null);
@@ -55,27 +59,30 @@ export default function EventForm() {
         setOriginalEvent(event);
         
         // Check permission
-        const isEventCoordinator = event.coordinator?.id === user.userId;
+        const isEventCoordinator = event.coordinator?.id === (user?.id || user?.userId) || event.coordinatorId === (user?.id || user?.userId);
         if (!isUnionAdmin && !isEventCoordinator) {
           setAlert({
             type: 'error',
             message: 'You do not have permission to edit this event'
           });
-          setTimeout(() => navigate(`/events/${id}`), 2000);
+          setTimeout(() => navigate(`/app/events/${id}`), 2000);
           return;
         }
 
         setFormData({
           name: event.name || '',
-          type: event.type || '',
+          type: event.type || 'CAMP',
           description: event.description || '',
           startDate: event.startDate || '',
           endDate: event.endDate || '',
           venue: event.venue || '',
-          capacity: event.capacity || '',
+          capacity: event.maxParticipants || event.capacity || '',
           registrationFee: event.registrationFee || '',
           budget: event.budget || '',
-          requirements: event.requirements || ''
+          requirements: event.requirements || '',
+          minAge: event.minAge ?? '',
+          maxAge: event.maxAge ?? '',
+          targetGender: event.targetGender || ''
         });
       }
     } catch (error) {
@@ -90,6 +97,7 @@ export default function EventForm() {
 
   const validate = () => {
     const newErrors = {};
+    const todayStr = new Date().toISOString().split('T')[0];
 
     if (!formData.name.trim()) {
       newErrors.name = 'Event name is required';
@@ -101,18 +109,22 @@ export default function EventForm() {
 
     if (!formData.startDate) {
       newErrors.startDate = 'Start date is required';
+    } else if (!isEdit && formData.startDate < todayStr) {
+      newErrors.startDate = 'Event start date cannot be in the past';
     }
 
     if (!formData.endDate) {
       newErrors.endDate = 'End date is required';
-    }
-
-    if (formData.startDate && formData.endDate && new Date(formData.startDate) > new Date(formData.endDate)) {
-      newErrors.endDate = 'End date must be after start date';
+    } else if (formData.startDate && formData.endDate < formData.startDate) {
+      newErrors.endDate = 'End date cannot be before start date';
     }
 
     if (!formData.venue.trim()) {
       newErrors.venue = 'Venue is required';
+    }
+
+    if (formData.minAge && formData.maxAge && parseInt(formData.minAge, 10) > parseInt(formData.maxAge, 10)) {
+      newErrors.maxAge = 'Maximum age cannot be less than minimum age';
     }
 
     if (formData.capacity && formData.capacity < 0) {
@@ -148,25 +160,33 @@ export default function EventForm() {
         startDate: formData.startDate,
         endDate: formData.endDate,
         venue: formData.venue.trim(),
-        capacity: formData.capacity ? parseInt(formData.capacity) : null,
+        maxParticipants: formData.capacity ? parseInt(formData.capacity, 10) : null,
         registrationFee: formData.registrationFee ? parseFloat(formData.registrationFee) : null,
         budget: formData.budget ? parseFloat(formData.budget) : null,
-        requirements: formData.requirements.trim() || null
+        minAge: formData.minAge !== '' ? parseInt(formData.minAge, 10) : null,
+        maxAge: formData.maxAge !== '' ? parseInt(formData.maxAge, 10) : null,
+        targetGender: formData.targetGender || null
       };
 
-      const response = await eventApi.update(id, payload);
+      let response;
+      if (isEdit) {
+        response = await eventApi.update(id, payload);
+      } else {
+        response = await eventApi.create(payload);
+      }
 
       if (response.data.success) {
+        const saved = response.data.data;
         setAlert({
           type: 'success',
-          message: 'Event updated successfully'
+          message: isEdit ? 'Event updated successfully' : 'Event created successfully'
         });
-        setTimeout(() => navigate(`/events/${id}`), 1500);
+        setTimeout(() => navigate(`/app/events/${saved?.id || id}`), 1500);
       }
     } catch (error) {
       setAlert({
         type: 'error',
-        message: error.response?.data?.message || 'Failed to update event'
+        message: error.response?.data?.message || `Failed to ${isEdit ? 'update' : 'create'} event`
       });
     } finally {
       setSubmitting(false);
@@ -175,10 +195,23 @@ export default function EventForm() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    if (name === 'startDate') {
+      setFormData(prev => {
+        const next = { ...prev, startDate: value };
+        if (prev.endDate && value && value > prev.endDate) {
+          next.endDate = value;
+        }
+        return next;
+      });
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
     // Clear error for this field
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+    if (name === 'startDate' && errors.endDate) {
+      setErrors(prev => ({ ...prev, endDate: '' }));
     }
   };
 
@@ -192,6 +225,12 @@ export default function EventForm() {
     { value: 'SEMINAR', label: 'Seminar' },
   ];
 
+  const genderOptions = [
+    { value: '', label: 'All Genders (Open to Everyone)' },
+    { value: 'MALE', label: 'Male Only (Men & Young Men)' },
+    { value: 'FEMALE', label: 'Female Only (Women & Young Women - MIFEM)' }
+  ];
+
   if (loading) {
     return <PageSpinner message="Loading event details..." />;
   }
@@ -201,17 +240,17 @@ export default function EventForm() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Edit Event</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{isEdit ? 'Edit Event' : 'Create New Event'}</h1>
           <p className="text-gray-600 mt-1">
-            Update event details and configuration
+            {isEdit ? 'Update event details and configuration' : 'Configure and schedule a new camp, conference, or event'}
           </p>
         </div>
         <Button
           variant="ghost"
           icon={<ArrowLeft className="w-4 h-4" />}
-          onClick={() => navigate(`/app/events/${id}`)}
+          onClick={() => navigate(isEdit ? `/app/events/${id}` : '/app/events')}
         >
-          Back to Event
+          {isEdit ? 'Back to Event' : 'Back to Events'}
         </Button>
       </div>
 
@@ -306,6 +345,59 @@ export default function EventForm() {
             </CardBody>
           </Card>
 
+          {/* Age & Demographic Eligibility */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Demographic & Age Eligibility</CardTitle>
+            </CardHeader>
+            <CardBody>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Input
+                    label="Minimum Age (years)"
+                    name="minAge"
+                    type="number"
+                    value={formData.minAge}
+                    onChange={handleChange}
+                    placeholder="e.g. 15 for Youth, 6 for Children"
+                    min="0"
+                    max="120"
+                  />
+
+                  <Input
+                    label="Maximum Age (years)"
+                    name="maxAge"
+                    type="number"
+                    value={formData.maxAge}
+                    onChange={handleChange}
+                    placeholder="e.g. 25 for Youth, 15 for Children (Leave blank for no upper limit)"
+                    min="0"
+                    max="120"
+                    error={errors.maxAge}
+                  />
+                </div>
+
+                <Select
+                  label="Gender Eligibility Restriction"
+                  name="targetGender"
+                  value={formData.targetGender}
+                  onChange={handleChange}
+                  options={genderOptions}
+                />
+
+                <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-xl text-xs text-blue-800 space-y-1">
+                  <p className="font-semibold">Ministry Standards:</p>
+                  <ul className="list-disc list-inside space-y-0.5 text-blue-700">
+                    <li><strong>Youth Ministries:</strong> 15 – 25 years old</li>
+                    <li><strong>Children Ministries:</strong> 6 – 15 years old</li>
+                    <li><strong>MIFEM / Women's Ministries:</strong> Women & Family (All ages)</li>
+                    <li><strong>AMO / Men's Ministries:</strong> Men & Young Men</li>
+                  </ul>
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+
           {/* Date & Location */}
           <Card>
             <CardHeader>
@@ -318,21 +410,34 @@ export default function EventForm() {
                     label="Start Date"
                     name="startDate"
                     type="date"
+                    min={!isEdit ? new Date().toISOString().split('T')[0] : undefined}
                     value={formData.startDate}
                     onChange={handleChange}
                     error={errors.startDate}
                     required
                   />
 
-                  <Input
-                    label="End Date"
-                    name="endDate"
-                    type="date"
-                    value={formData.endDate}
-                    onChange={handleChange}
-                    error={errors.endDate}
-                    required
-                  />
+                  <div>
+                    <Input
+                      label="End Date"
+                      name="endDate"
+                      type="date"
+                      min={formData.startDate || (!isEdit ? new Date().toISOString().split('T')[0] : undefined)}
+                      value={formData.endDate}
+                      onChange={handleChange}
+                      disabled={!formData.startDate}
+                      error={
+                        errors.endDate ||
+                        (formData.startDate && formData.endDate && formData.endDate < formData.startDate
+                          ? 'End date must be on or after start date'
+                          : undefined)
+                      }
+                      required
+                    />
+                    {!formData.startDate && (
+                      <p className="text-xs text-gray-500 mt-1">Select a valid start date first.</p>
+                    )}
+                  </div>
                 </div>
 
                 <Input
@@ -430,7 +535,7 @@ export default function EventForm() {
             <Button
               type="button"
               variant="ghost"
-              onClick={() => navigate(`/events/${id}`)}
+              onClick={() => navigate(isEdit ? `/app/events/${id}` : '/app/events')}
             >
               Cancel
             </Button>
@@ -439,8 +544,12 @@ export default function EventForm() {
               variant="primary"
               icon={<Save className="w-4 h-4" />}
               loading={submitting}
+              disabled={
+                submitting ||
+                (Boolean(formData.startDate && formData.endDate) && formData.endDate < formData.startDate)
+              }
             >
-              Save Changes
+              {isEdit ? 'Save Changes' : 'Create Event'}
             </Button>
           </div>
         </div>

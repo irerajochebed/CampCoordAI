@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { paymentApi } from '../../api';
+import { paymentApi, getCachedData } from '../../api';
 import { 
   ArrowLeft,
   CheckCircle,
@@ -27,11 +27,21 @@ import Modal from '../../components/ui/Modal';
 
 export default function PaymentDetail() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
   const { user, isAdmin, isCoordinator } = useAuth();
   
-  const [payment, setPayment] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // Instant initial data from route state or API memory cache
+  const initialPayment = useMemo(() => {
+    if (location.state?.payment) return location.state.payment;
+    const cached = getCachedData(`/payments/${id}`);
+    if (cached?.data) return cached.data;
+    if (cached && !cached.success && cached.id) return cached;
+    return null;
+  }, [id, location.state]);
+
+  const [payment, setPayment] = useState(initialPayment);
+  const [loading, setLoading] = useState(!initialPayment);
   const [alert, setAlert] = useState(null);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -42,21 +52,31 @@ export default function PaymentDetail() {
   const canManage = isUnionAdmin || isCoordinator;
 
   useEffect(() => {
-    fetchPayment();
+    if (initialPayment) {
+      setPayment(initialPayment);
+      setLoading(false);
+    }
+    fetchPayment(Boolean(initialPayment));
   }, [id]);
 
-  const fetchPayment = async () => {
+  const fetchPayment = async (isBackground = false) => {
     try {
-      setLoading(true);
+      if (!isBackground && !payment) {
+        setLoading(true);
+      }
       const response = await paymentApi.getById(id);
-      if (response.data.success) {
+      if (response.data?.success) {
         setPayment(response.data.data);
+      } else if (response.data) {
+        setPayment(response.data);
       }
     } catch (error) {
-      setAlert({
-        type: 'error',
-        message: error.response?.data?.message || 'Failed to fetch payment details'
-      });
+      if (!payment && !initialPayment) {
+        setAlert({
+          type: 'error',
+          message: error.response?.data?.message || 'Failed to fetch payment details'
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -151,7 +171,7 @@ export default function PaymentDetail() {
     });
   };
 
-  if (loading) {
+  if (loading && !payment) {
     return <PageSpinner message="Loading payment details..." />;
   }
 
@@ -160,7 +180,7 @@ export default function PaymentDetail() {
       <div className="text-center py-12">
         <h1 className="text-2xl font-bold text-gray-800">Payment Not Found</h1>
         <p className="text-gray-600 mt-2">The payment you're looking for doesn't exist.</p>
-        <Button onClick={() => navigate('/payments')} className="mt-4">
+        <Button onClick={() => navigate('/app/payments')} className="mt-4">
           Back to Payments
         </Button>
       </div>
@@ -175,7 +195,7 @@ export default function PaymentDetail() {
           <Button
             variant="ghost"
             icon={<ArrowLeft className="w-4 h-4" />}
-            onClick={() => navigate('/payments')}
+            onClick={() => navigate('/app/payments')}
             className="mb-4"
           >
             Back to Payments
@@ -270,8 +290,8 @@ export default function PaymentDetail() {
                   <User className="w-5 h-5 text-gray-400 mt-0.5" />
                   <div>
                     <p className="text-sm text-gray-600">Full Name</p>
-                    <p className="font-medium text-gray-900">
-                      {payment.registration.participantFirstName} {payment.registration.participantLastName}
+                    <p className="font-semibold text-gray-900">
+                      {payment.participantName || `${payment.registration?.participantFirstName || ''} ${payment.registration?.participantLastName || ''}`.trim() || 'Participant'}
                     </p>
                   </div>
                 </div>
@@ -280,11 +300,11 @@ export default function PaymentDetail() {
                   <Mail className="w-5 h-5 text-gray-400 mt-0.5" />
                   <div>
                     <p className="text-sm text-gray-600">Email</p>
-                    <p className="font-medium text-gray-900">{payment.registration.participantEmail}</p>
+                    <p className="font-medium text-gray-900">{payment.registration?.participantEmail || 'N/A'}</p>
                   </div>
                 </div>
 
-                {payment.registration.participantPhone && (
+                {payment.registration?.participantPhone && (
                   <div className="flex items-start gap-3">
                     <Phone className="w-5 h-5 text-gray-400 mt-0.5" />
                     <div>
@@ -297,22 +317,26 @@ export default function PaymentDetail() {
                 <div className="pt-3 border-t border-gray-200">
                   <p className="text-sm text-gray-600 mb-2">Event</p>
                   <div>
-                    <p className="font-semibold text-gray-900">{payment.registration.event.name}</p>
-                    <p className="text-sm text-gray-600 mt-1">
-                      {new Date(payment.registration.event.startDate).toLocaleDateString()} - {new Date(payment.registration.event.endDate).toLocaleDateString()}
-                    </p>
-                    {payment.registration.event.venue && (
+                    <p className="font-semibold text-gray-900">{payment.eventName || payment.registration?.event?.name || 'Event'}</p>
+                    {payment.registration?.event?.startDate && (
+                      <p className="text-sm text-gray-600 mt-1">
+                        {new Date(payment.registration.event.startDate).toLocaleDateString()} - {new Date(payment.registration.event.endDate).toLocaleDateString()}
+                      </p>
+                    )}
+                    {payment.registration?.event?.venue && (
                       <p className="text-sm text-gray-600">{payment.registration.event.venue}</p>
                     )}
                   </div>
                 </div>
 
-                <div>
-                  <p className="text-sm text-gray-600">Registration Fee</p>
-                  <p className="text-lg font-semibold text-gray-900">
-                    {formatCurrency(payment.registration.event.registrationFee)}
-                  </p>
-                </div>
+                {payment.registration?.event?.registrationFee != null && (
+                  <div>
+                    <p className="text-sm text-gray-600">Registration Fee</p>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {formatCurrency(payment.registration.event.registrationFee)}
+                    </p>
+                  </div>
+                )}
               </div>
             </CardBody>
           </Card>
@@ -516,7 +540,7 @@ export default function PaymentDetail() {
       >
         <div className="space-y-4">
           <p className="text-gray-700">
-            Confirm that you have verified this payment of <strong>{formatCurrency(payment.amount)}</strong> from <strong>{payment.registration.participantFirstName} {payment.registration.participantLastName}</strong>.
+            Confirm that you have verified this payment of <strong>{formatCurrency(payment.amount)}</strong> from <strong>{payment.participantName || `${payment.registration?.participantFirstName || ''} ${payment.registration?.participantLastName || ''}`.trim() || 'Participant'}</strong>.
           </p>
 
           <Textarea

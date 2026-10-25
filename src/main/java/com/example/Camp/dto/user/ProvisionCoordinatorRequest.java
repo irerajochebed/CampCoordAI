@@ -34,6 +34,12 @@ public class ProvisionCoordinatorRequest {
     @NotNull(message = "Organization unit ID is required")
     private Long organizationUnitId;
 
+    private Long departmentId;
+
+    private String governmentDistrict;
+
+    private String sdaDistrict;
+
     /**
      * Optional initial password. If null or blank, the system assigns default credentials (Coord@2026).
      */

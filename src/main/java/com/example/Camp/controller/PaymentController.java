@@ -1,6 +1,9 @@
 package com.example.Camp.controller;
 
 import com.example.Camp.dto.common.ApiResponse;
+import com.example.Camp.dto.payment.MomoInitiateRequest;
+import com.example.Camp.dto.payment.MomoInitiateResponse;
+import com.example.Camp.dto.payment.MomoVerifyRequest;
 import com.example.Camp.dto.payment.PaymentRequest;
 import com.example.Camp.dto.payment.PaymentResponse;
 import com.example.Camp.enums.PaymentStatus;
@@ -29,10 +32,43 @@ public class PaymentController {
         PaymentResponse response = paymentService.createPayment(request);
         return ResponseEntity.ok(ApiResponse.success("Payment submitted successfully", response));
     }
+
+    // Free Mobile Money (MTN MoMo & Airtel Money) Automated Checkout
+    @PostMapping({"/momo/initiate", "/momo/request-to-pay"})
+    public ResponseEntity<ApiResponse<MomoInitiateResponse>> initiateMomoPayment(
+            @Valid @RequestBody MomoInitiateRequest request) {
+        MomoInitiateResponse response = paymentService.initiateMomoPayment(request);
+        return ResponseEntity.ok(ApiResponse.success("Mobile Money prompt sent to " + response.getPhoneNumber(), response));
+    }
+
+    @PostMapping({"/momo/verify", "/momo/confirm"})
+    public ResponseEntity<ApiResponse<PaymentResponse>> completeMomoPayment(
+            @Valid @RequestBody MomoVerifyRequest request) {
+        PaymentResponse response = paymentService.completeMomoPayment(request);
+        return ResponseEntity.ok(ApiResponse.success("Mobile Money payment verified! Registration confirmed with ticket badge.", response));
+    }
+
+    @GetMapping("/momo/status/{reference}")
+    public ResponseEntity<ApiResponse<PaymentResponse>> getMomoPaymentStatus(
+            @PathVariable String reference) {
+        PaymentResponse response = paymentService.getMomoPaymentStatus(reference);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
     
+    @GetMapping
+    @PreAuthorize("hasRole('COORDINATOR') or hasRole('ADMINISTRATOR')")
+    public ResponseEntity<ApiResponse<List<PaymentResponse>>> getAllPayments(Authentication authentication) {
+        Long currentUserId = getUserId(authentication);
+        List<PaymentResponse> response = paymentService.getAllPayments(currentUserId);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<PaymentResponse>> getPaymentById(@PathVariable Long id) {
-        PaymentResponse response = paymentService.getPaymentById(id);
+    public ResponseEntity<ApiResponse<PaymentResponse>> getPaymentById(
+            @PathVariable Long id,
+            Authentication authentication) {
+        Long currentUserId = getUserId(authentication);
+        PaymentResponse response = paymentService.getPaymentById(id, currentUserId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
     
@@ -46,16 +82,20 @@ public class PaymentController {
     @GetMapping("/event/{eventId}")
     @PreAuthorize("hasRole('COORDINATOR') or hasRole('ADMINISTRATOR')")
     public ResponseEntity<ApiResponse<List<PaymentResponse>>> getPaymentsByEvent(
-            @PathVariable Long eventId) {
-        List<PaymentResponse> response = paymentService.getPaymentsByEvent(eventId);
+            @PathVariable Long eventId,
+            Authentication authentication) {
+        Long currentUserId = getUserId(authentication);
+        List<PaymentResponse> response = paymentService.getPaymentsByEvent(eventId, currentUserId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
     
     @GetMapping("/status/{status}")
     @PreAuthorize("hasRole('COORDINATOR') or hasRole('ADMINISTRATOR')")
     public ResponseEntity<ApiResponse<List<PaymentResponse>>> getPaymentsByStatus(
-            @PathVariable PaymentStatus status) {
-        List<PaymentResponse> response = paymentService.getPaymentsByStatus(status);
+            @PathVariable PaymentStatus status,
+            Authentication authentication) {
+        Long currentUserId = getUserId(authentication);
+        List<PaymentResponse> response = paymentService.getPaymentsByStatus(status, currentUserId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
     
@@ -64,8 +104,8 @@ public class PaymentController {
     public ResponseEntity<ApiResponse<PaymentResponse>> verifyPayment(
             @PathVariable Long id,
             Authentication authentication) {
-        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-        PaymentResponse response = paymentService.verifyPayment(id, userDetails.getId());
+        Long currentUserId = getUserId(authentication);
+        PaymentResponse response = paymentService.verifyPayment(id, currentUserId);
         return ResponseEntity.ok(ApiResponse.success("Payment verified successfully", response));
     }
     
@@ -73,15 +113,20 @@ public class PaymentController {
     @PreAuthorize("hasRole('COORDINATOR') or hasRole('ADMINISTRATOR')")
     public ResponseEntity<ApiResponse<PaymentResponse>> rejectPayment(
             @PathVariable Long id,
-            @RequestParam String reason) {
-        PaymentResponse response = paymentService.rejectPayment(id, reason);
+            @RequestParam String reason,
+            Authentication authentication) {
+        Long currentUserId = getUserId(authentication);
+        PaymentResponse response = paymentService.rejectPayment(id, reason, currentUserId);
         return ResponseEntity.ok(ApiResponse.success("Payment rejected", response));
     }
     
     @GetMapping("/event/{eventId}/total")
     @PreAuthorize("hasRole('COORDINATOR') or hasRole('ADMINISTRATOR')")
-    public ResponseEntity<ApiResponse<BigDecimal>> getTotalPaymentsByEvent(@PathVariable Long eventId) {
-        BigDecimal total = paymentService.getTotalPaymentsByEvent(eventId);
+    public ResponseEntity<ApiResponse<BigDecimal>> getTotalPaymentsByEvent(
+            @PathVariable Long eventId,
+            Authentication authentication) {
+        Long currentUserId = getUserId(authentication);
+        BigDecimal total = paymentService.getTotalPaymentsByEvent(eventId, currentUserId);
         return ResponseEntity.ok(ApiResponse.success(total));
     }
     
@@ -90,5 +135,12 @@ public class PaymentController {
     public ResponseEntity<ApiResponse<String>> deletePayment(@PathVariable Long id) {
         paymentService.deletePayment(id);
         return ResponseEntity.ok(ApiResponse.success("Payment deleted successfully", null));
+    }
+
+    private Long getUserId(Authentication authentication) {
+        if (authentication != null && authentication.getPrincipal() instanceof UserDetailsImpl) {
+            return ((UserDetailsImpl) authentication.getPrincipal()).getId();
+        }
+        return null;
     }
 }

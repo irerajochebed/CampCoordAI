@@ -18,7 +18,7 @@ public class QRCodeController {
     private final QRCodeService qrCodeService;
     
     @GetMapping("/registration/{registrationId}/image")
-    @PreAuthorize("hasRole('COORDINATOR') or hasRole('ADMINISTRATOR')")
+    @PreAuthorize("hasRole('PARTICIPANT') or hasRole('COORDINATOR') or hasRole('ADMINISTRATOR')")
     public ResponseEntity<byte[]> getQRCodeImageForRegistration(@PathVariable Long registrationId) {
         byte[] qrCode = qrCodeService.generateQRCodeForRegistration(registrationId);
         
@@ -31,11 +31,12 @@ public class QRCodeController {
     }
     
     @GetMapping("/registration/{registrationId}/base64")
-    @PreAuthorize("hasRole('COORDINATOR') or hasRole('ADMINISTRATOR')")
+    @PreAuthorize("hasRole('PARTICIPANT') or hasRole('COORDINATOR') or hasRole('ADMINISTRATOR')")
     public ResponseEntity<ApiResponse<String>> getQRCodeBase64ForRegistration(@PathVariable Long registrationId) {
         String base64QRCode = qrCodeService.generateQRCodeBase64ForRegistration(registrationId);
         return ResponseEntity.ok(ApiResponse.success("QR code generated successfully", base64QRCode));
     }
+
     
     @PostMapping("/generate/image")
     @PreAuthorize("hasRole('COORDINATOR') or hasRole('ADMINISTRATOR')")

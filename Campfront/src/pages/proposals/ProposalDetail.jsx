@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
-import { proposalApi } from '../../api';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useParams, Link, useLocation } from 'react-router-dom';
+import { proposalApi, getCachedData } from '../../api';
 import { 
   ArrowLeft, 
   Calendar, 
@@ -34,15 +34,25 @@ import Input from '../../components/ui/Input';
 
 export default function ProposalDetail() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
   const { user, isAdmin } = useAuth();
   const { t } = useTranslation();
   
-  const [proposal, setProposal] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // Instant initial data from route state or API memory cache
+  const initialProposal = useMemo(() => {
+    if (location.state?.proposal) return location.state.proposal;
+    const cached = getCachedData(`/proposals/${id}`);
+    if (cached?.data) return cached.data;
+    if (cached && !cached.success && cached.id) return cached;
+    return null;
+  }, [id, location.state]);
+
+  const [proposal, setProposal] = useState(initialProposal);
+  const [loading, setLoading] = useState(!initialProposal);
   const [alert, setAlert] = useState(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
-  const [reviewAction, setReviewAction] = useState(null); // 'leader_recommend', 'leader_revision', 'leader_reject', 'admin_approve', 'admin_revision', 'admin_reject'
+  const [reviewAction, setReviewAction] = useState(null); // 'field_approve', 'leader_recommend', 'leader_revision', 'leader_reject', 'admin_approve', 'admin_revision', 'admin_reject'
   const [reviewComments, setReviewComments] = useState('');
   const [confirmedVenue, setConfirmedVenue] = useState('');
   const [confirmedStartDate, setConfirmedStartDate] = useState('');
@@ -50,27 +60,38 @@ export default function ProposalDetail() {
   const [submitting, setSubmitting] = useState(false);
 
   // Authorization checks
+  const currentUserId = user?.userId || user?.id;
   const isUnionAdmin = isAdmin || user?.position === 'UNION_ADMINISTRATOR';
   const isFieldLeader = user?.position === 'FIELD_LEADER';
-  const isDeptLeader = user?.position === 'DEPARTMENT_LEADER';
+  const isDeptLeader = user?.position === 'DEPARTMENT_LEADER' || user?.position === 'MINISTRY_LEADER';
   const isDistrictPastor = user?.position === 'DISTRICT_PASTOR';
 
   useEffect(() => {
-    fetchProposal();
+    if (initialProposal) {
+      setProposal(initialProposal);
+      setLoading(false);
+    }
+    fetchProposal(Boolean(initialProposal));
   }, [id]);
 
-  const fetchProposal = async () => {
+  const fetchProposal = async (isBackground = false) => {
     try {
-      setLoading(true);
+      if (!isBackground && !proposal) {
+        setLoading(true);
+      }
       const response = await proposalApi.getById(id);
-      if (response.data.success) {
+      if (response.data?.success) {
         setProposal(response.data.data);
+      } else if (response.data) {
+        setProposal(response.data);
       }
     } catch (error) {
-      setAlert({
-        type: 'error',
-        message: error.response?.data?.message || 'Failed to fetch proposal'
-      });
+      if (!proposal && !initialProposal) {
+        setAlert({
+          type: 'error',
+          message: error.response?.data?.message || 'Failed to fetch proposal'
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -99,7 +120,12 @@ export default function ProposalDetail() {
     try {
       let response;
       
-      if (reviewAction === 'leader_recommend') {
+      if (reviewAction === 'field_approve') {
+        response = await proposalApi.leaderReview(id, {
+          decision: 'APPROVED',
+          comments: reviewComments.trim()
+        });
+      } else if (reviewAction === 'leader_recommend') {
         response = await proposalApi.leaderReview(id, {
           decision: 'RECOMMENDED_BY_LEADER',
           comments: reviewComments.trim()
@@ -130,11 +156,11 @@ export default function ProposalDetail() {
       if (response?.data?.success) {
         setAlert({
           type: 'success',
-          message: reviewAction === 'admin_approve'
-            ? 'Proposal successfully approved! Official event record has been generated and locked.'
+          message: reviewAction === 'admin_approve' || reviewAction === 'field_approve'
+            ? 'Proposal successfully approved! Official event record has been generated and locked in the master calendar.'
             : reviewAction === 'leader_recommend'
-            ? 'Proposal successfully recommended and forwarded to Union Administrator for final approval.'
-            : 'Decision recorded successfully.'
+            ? 'Proposal successfully recommended and forwarded to Union Administrator for final review.'
+            : 'Review decision recorded successfully.'
         });
         setShowReviewModal(false);
         fetchProposal();
@@ -193,7 +219,7 @@ export default function ProposalDetail() {
     }).format(amount || 0);
   };
 
-  if (loading) {
+  if (loading && !proposal) {
     return <PageSpinner message="Loading proposal details..." />;
   }
 
@@ -214,49 +240,64 @@ export default function ProposalDetail() {
     );
   }
 
-  const isOwner = proposal.proposedById === user?.userId || proposal.proposedById === user?.id;
-  const canEdit = (proposal.status === 'DRAFT' || proposal.status === 'REVISION_REQUESTED') && (isOwner || isUnionAdmin);
-  const canSubmit = (proposal.status === 'DRAFT' || proposal.status === 'REVISION_REQUESTED') && (isOwner || isUnionAdmin);
+  // Author Check (Prevent self-approval)
+  const isAuthor = Boolean(currentUserId && (
+    proposal.proposedById === currentUserId ||
+    proposal.proposedBy?.id === currentUserId
+  ));
 
-  // Level 1 Leader review permissions
-  const isPendingLeaderReview = proposal.status === 'SUBMITTED' || proposal.status === 'PENDING_LEADER_REVIEW';
-  const canLeaderReview = isPendingLeaderReview && (
-    isUnionAdmin ||
-    (proposal.scope === 'FIELD' && (isFieldLeader || isUnionAdmin)) ||
-    (proposal.scope === 'UNION' && (isDeptLeader || isUnionAdmin)) ||
-    (proposal.scope === 'DISTRICT' && (isDistrictPastor || isFieldLeader || isUnionAdmin))
+  const canEdit = (proposal.status === 'DRAFT' || proposal.status === 'REVISION_REQUESTED') && (isAuthor || isUnionAdmin);
+  const canSubmit = (proposal.status === 'DRAFT' || proposal.status === 'REVISION_REQUESTED') && (isAuthor || isUnionAdmin);
+
+  const isPendingReview = proposal.status === 'SUBMITTED' || proposal.status === 'PENDING_LEADER_REVIEW' || proposal.status === 'UNDER_REVIEW';
+  const isPendingUnionAdmin = proposal.status === 'RECOMMENDED_BY_LEADER' || (isPendingReview && proposal.scope === 'UNION');
+
+  // Multi-tier SDA Governance action permissions:
+  // - DISTRICT scope: Field Leader or Union Admin has final decision authority (approve / reject / revision)
+  // - FIELD scope: Field Leader or Union Admin has final decision authority
+  // - UNION scope: Dept Leader recommends; Union Admin gives final approval
+  const canFieldOrDistrictApprove = !isAuthor && isPendingReview && (
+    (proposal.scope === 'DISTRICT' && (isFieldLeader || isUnionAdmin)) ||
+    (proposal.scope === 'FIELD' && (isFieldLeader || isUnionAdmin))
   );
 
-  // Level 2 Admin final approval permissions
-  const isPendingAdminApproval = proposal.status === 'RECOMMENDED_BY_LEADER' || proposal.status === 'UNDER_REVIEW' || (isPendingLeaderReview && isUnionAdmin);
-  const canAdminApprove = isUnionAdmin && proposal.status !== 'APPROVED' && proposal.status !== 'REJECTED';
+  const canUnionRecommend = !isAuthor && proposal.scope === 'UNION' && isPendingReview && (isDeptLeader || isUnionAdmin);
+  const canUnionAdminApprove = !isAuthor && proposal.scope === 'UNION' && isUnionAdmin && (isPendingUnionAdmin || isPendingReview);
 
-  // Step Calculation for Visual Stepper
-  const getStepStatus = (stepIndex) => {
-    // 0: Draft, 1: Leader Review, 2: Admin Approval, 3: Event Created
+  // Dynamic step status calculation based on scope
+  const getStepStatus = (stepIndex, totalSteps) => {
     if (proposal.status === 'DRAFT') {
       return stepIndex === 0 ? 'current' : 'upcoming';
-    }
-    if (proposal.status === 'SUBMITTED' || proposal.status === 'PENDING_LEADER_REVIEW') {
-      if (stepIndex === 0) return 'complete';
-      if (stepIndex === 1) return 'current';
-      return 'upcoming';
-    }
-    if (proposal.status === 'RECOMMENDED_BY_LEADER' || proposal.status === 'UNDER_REVIEW') {
-      if (stepIndex <= 1) return 'complete';
-      if (stepIndex === 2) return 'current';
-      return 'upcoming';
     }
     if (proposal.status === 'APPROVED') {
       return 'complete';
     }
     if (proposal.status === 'REJECTED') {
-      if (stepIndex === 0) return 'complete';
-      return 'error';
+      return stepIndex === 0 ? 'complete' : (stepIndex === 1 ? 'error' : 'upcoming');
     }
     if (proposal.status === 'REVISION_REQUESTED') {
-      if (stepIndex === 0) return 'current';
-      return 'warning';
+      return stepIndex === 0 ? 'current' : (stepIndex === 1 ? 'warning' : 'upcoming');
+    }
+
+    if (totalSteps === 3) {
+      // DISTRICT or FIELD Scope (1: Submission, 2: Field Leadership Final Approval, 3: Event Created)
+      if (isPendingReview) {
+        if (stepIndex === 0) return 'complete';
+        if (stepIndex === 1) return 'current';
+        return 'upcoming';
+      }
+    } else {
+      // UNION Scope (1: Submission, 2: Dept Leader Endorsement, 3: Union Admin Final Approval, 4: Event Created)
+      if (proposal.status === 'SUBMITTED' || proposal.status === 'PENDING_LEADER_REVIEW') {
+        if (stepIndex === 0) return 'complete';
+        if (stepIndex === 1) return 'current';
+        return 'upcoming';
+      }
+      if (proposal.status === 'RECOMMENDED_BY_LEADER' || proposal.status === 'UNDER_REVIEW') {
+        if (stepIndex <= 1) return 'complete';
+        if (stepIndex === 2) return 'current';
+        return 'upcoming';
+      }
     }
     return 'upcoming';
   };
@@ -308,17 +349,17 @@ export default function ProposalDetail() {
             </Button>
           )}
 
-          {/* Level 1: Leader Actions */}
-          {canLeaderReview && (
-            <div className="flex gap-2 p-1.5 bg-blue-50 border border-blue-200 rounded-xl">
+          {/* District / Field Scope: Field Leadership Actions (Final Approval) */}
+          {canFieldOrDistrictApprove && (
+            <div className="flex gap-2 p-1.5 bg-emerald-50 border border-emerald-200 rounded-xl">
               <Button
-                variant="primary"
+                variant="success"
                 size="sm"
-                icon={<Award className="w-4 h-4 text-white" />}
-                onClick={() => handleOpenReview('leader_recommend')}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                icon={<ShieldCheck className="w-4 h-4 text-white" />}
+                onClick={() => handleOpenReview('field_approve')}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm"
               >
-                Recommend to Union
+                Approve & Create Event
               </Button>
               <Button
                 variant="warning"
@@ -339,8 +380,39 @@ export default function ProposalDetail() {
             </div>
           )}
 
-          {/* Level 2: Union Administrator Actions */}
-          {canAdminApprove && (
+          {/* Union Scope Step 1: Dept Leader Endorsement */}
+          {canUnionRecommend && (
+            <div className="flex gap-2 p-1.5 bg-blue-50 border border-blue-200 rounded-xl">
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Award className="w-4 h-4 text-white" />}
+                onClick={() => handleOpenReview('leader_recommend')}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                Recommend to Union Admin
+              </Button>
+              <Button
+                variant="warning"
+                size="sm"
+                icon={<RefreshCw className="w-4 h-4" />}
+                onClick={() => handleOpenReview('leader_revision')}
+              >
+                Request Changes
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                icon={<XCircle className="w-4 h-4" />}
+                onClick={() => handleOpenReview('leader_reject')}
+              >
+                Reject
+              </Button>
+            </div>
+          )}
+
+          {/* Union Scope Step 2: Union Administrator Final Approval */}
+          {canUnionAdminApprove && (
             <div className="flex gap-2 p-1.5 bg-emerald-50 border border-emerald-200 rounded-xl">
               <Button
                 variant="success"
@@ -380,6 +452,21 @@ export default function ProposalDetail() {
         />
       )}
 
+      {/* Author Notice Guard */}
+      {isAuthor && proposal.status !== 'APPROVED' && proposal.status !== 'REJECTED' && (
+        <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs text-slate-700">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 bg-blue-500 rounded-full animate-ping"></span>
+            <span>
+              <strong>Author Notice:</strong> You submitted this proposal. It is currently under governance review by the designated {proposal.scope === 'UNION' ? 'Union Administration' : 'Field Leadership'}.
+            </span>
+          </div>
+          <span className="bg-slate-200 px-2 py-0.5 rounded text-slate-800 font-semibold">
+            {proposal.scope} JURISDICTION
+          </span>
+        </div>
+      )}
+
       {/* Official Event Created Notification Banner */}
       {proposal.status === 'APPROVED' && (
         <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
@@ -392,12 +479,12 @@ export default function ProposalDetail() {
                 Official Event Record Created & Locked
               </h3>
               <p className="text-xs text-emerald-800 mt-0.5">
-                Dates and venue are confirmed. The official event has been initialized in the system catalog.
+                Dates and venue are confirmed. The official event has been initialized in the events catalog with open registration.
               </p>
             </div>
           </div>
           {proposal.createdEventId && (
-            <Link to={`/events/${proposal.createdEventId}`}>
+            <Link to={`/app/events/${proposal.createdEventId}`}>
               <Button variant="success" size="sm" icon={<ExternalLink className="w-4 h-4" />}>
                 View Event {proposal.createdEventCode && `(${proposal.createdEventCode})`}
               </Button>
@@ -406,90 +493,239 @@ export default function ProposalDetail() {
         </div>
       )}
 
-      {/* Interactive Multi-Tier Approval Stepper */}
+      {/* Dynamic Multi-Tier Governance Stepper by Scope */}
       <Card className="overflow-hidden border-slate-200">
         <CardBody className="p-6">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-4">
-            Approval & Governance Pipeline
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Step 1: Proposal Submission */}
-            <div className={`p-4 rounded-xl border flex items-start gap-3 ${
-              getStepStatus(0) === 'complete' ? 'bg-emerald-50/70 border-emerald-200' :
-              getStepStatus(0) === 'current' ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-500/20' : 'bg-gray-50 border-gray-200'
-            }`}>
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-xs ${
-                getStepStatus(0) === 'complete' ? 'bg-emerald-600 text-white' :
-                getStepStatus(0) === 'current' ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-700'
-              }`}>
-                {getStepStatus(0) === 'complete' ? <CheckCircle2 className="w-4 h-4" /> : '1'}
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-gray-900">Submission</p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {proposal.proposedByName || 'Coordinator / Dept Leader'}
-                </p>
-              </div>
-            </div>
-
-            {/* Step 2: Level 1 Leader Review */}
-            <div className={`p-4 rounded-xl border flex items-start gap-3 ${
-              getStepStatus(1) === 'complete' ? 'bg-emerald-50/70 border-emerald-200' :
-              getStepStatus(1) === 'current' ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-500/20' :
-              getStepStatus(1) === 'error' ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'
-            }`}>
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-xs ${
-                getStepStatus(1) === 'complete' ? 'bg-emerald-600 text-white' :
-                getStepStatus(1) === 'current' ? 'bg-blue-600 text-white' :
-                getStepStatus(1) === 'error' ? 'bg-red-600 text-white' : 'bg-gray-300 text-gray-700'
-              }`}>
-                {getStepStatus(1) === 'complete' ? <CheckCircle2 className="w-4 h-4" /> :
-                 getStepStatus(1) === 'error' ? <XCircle className="w-4 h-4" /> : '2'}
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-gray-900">Level 1 Leader</p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {proposal.leaderReviewedByName ? `Recommended by ${proposal.leaderReviewedByName}` : 'Field/Union Leader Review'}
-                </p>
-              </div>
-            </div>
-
-            {/* Step 3: Level 2 Union Administrator Approval */}
-            <div className={`p-4 rounded-xl border flex items-start gap-3 ${
-              getStepStatus(2) === 'complete' ? 'bg-emerald-50/70 border-emerald-200' :
-              getStepStatus(2) === 'current' ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-500/20' : 'bg-gray-50 border-gray-200'
-            }`}>
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-xs ${
-                getStepStatus(2) === 'complete' ? 'bg-emerald-600 text-white' :
-                getStepStatus(2) === 'current' ? 'bg-amber-600 text-white' : 'bg-gray-300 text-gray-700'
-              }`}>
-                {getStepStatus(2) === 'complete' ? <CheckCircle2 className="w-4 h-4" /> : '3'}
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-gray-900">Level 2 Union Admin</p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {proposal.adminApprovedByName ? `Approved by ${proposal.adminApprovedByName}` : 'Final Governance Review'}
-                </p>
-              </div>
-            </div>
-
-            {/* Step 4: Event Lock & Generation */}
-            <div className={`p-4 rounded-xl border flex items-start gap-3 ${
-              getStepStatus(3) === 'complete' ? 'bg-emerald-50/70 border-emerald-200' : 'bg-gray-50 border-gray-200'
-            }`}>
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-xs ${
-                getStepStatus(3) === 'complete' ? 'bg-emerald-600 text-white' : 'bg-gray-300 text-gray-700'
-              }`}>
-                {getStepStatus(3) === 'complete' ? <CheckCircle2 className="w-4 h-4" /> : '4'}
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-gray-900">Event Created</p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {proposal.createdEventCode ? `Official ${proposal.createdEventCode}` : 'Automatic generation'}
-                </p>
-              </div>
-            </div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500">
+              {proposal.scope === 'DISTRICT' ? 'District Governance Pipeline (District → Field)' :
+               proposal.scope === 'FIELD' ? 'Field Governance Pipeline (Field Level Approval)' :
+               'Union Governance Pipeline (Union Ministry → Union Admin)'}
+            </h3>
+            <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+              {proposal.scope} Scope
+            </span>
           </div>
+
+          {/* DISTRICT SCOPE PIPELINE (3 Steps) */}
+          {proposal.scope === 'DISTRICT' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Step 1: District Pastor Submission */}
+              <div className={`p-4 rounded-xl border flex items-start gap-3 ${
+                getStepStatus(0, 3) === 'complete' ? 'bg-emerald-50/70 border-emerald-200' :
+                getStepStatus(0, 3) === 'current' ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-500/20' : 'bg-gray-50 border-gray-200'
+              }`}>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-xs ${
+                  getStepStatus(0, 3) === 'complete' ? 'bg-emerald-600 text-white' :
+                  getStepStatus(0, 3) === 'current' ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-700'
+                }`}>
+                  {getStepStatus(0, 3) === 'complete' ? <CheckCircle2 className="w-4 h-4" /> : '1'}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">District Submission</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {proposal.proposedByName || 'District Pastor'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 2: Field Leadership Final Approval */}
+              <div className={`p-4 rounded-xl border flex items-start gap-3 ${
+                getStepStatus(1, 3) === 'complete' ? 'bg-emerald-50/70 border-emerald-200' :
+                getStepStatus(1, 3) === 'current' ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-500/20' :
+                getStepStatus(1, 3) === 'error' ? 'bg-red-50 border-red-200' :
+                getStepStatus(1, 3) === 'warning' ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-200'
+              }`}>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-xs ${
+                  getStepStatus(1, 3) === 'complete' ? 'bg-emerald-600 text-white' :
+                  getStepStatus(1, 3) === 'current' ? 'bg-blue-600 text-white' :
+                  getStepStatus(1, 3) === 'error' ? 'bg-red-600 text-white' :
+                  getStepStatus(1, 3) === 'warning' ? 'bg-amber-600 text-white' : 'bg-gray-300 text-gray-700'
+                }`}>
+                  {getStepStatus(1, 3) === 'complete' ? <CheckCircle2 className="w-4 h-4" /> :
+                   getStepStatus(1, 3) === 'error' ? <XCircle className="w-4 h-4" /> :
+                   getStepStatus(1, 3) === 'warning' ? <RefreshCw className="w-4 h-4" /> : '2'}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Field Leadership Approval</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {proposal.leaderReviewedByName || proposal.adminApprovedByName || 'Field Leader Final Decision'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 3: Event Auto-Created */}
+              <div className={`p-4 rounded-xl border flex items-start gap-3 ${
+                getStepStatus(2, 3) === 'complete' ? 'bg-emerald-50/70 border-emerald-200' : 'bg-gray-50 border-gray-200'
+              }`}>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-xs ${
+                  getStepStatus(2, 3) === 'complete' ? 'bg-emerald-600 text-white' : 'bg-gray-300 text-gray-700'
+                }`}>
+                  {getStepStatus(2, 3) === 'complete' ? <CheckCircle2 className="w-4 h-4" /> : '3'}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Event Created & Locked</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {proposal.createdEventCode ? `Official ${proposal.createdEventCode}` : 'Auto-created on Field Approval'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* FIELD SCOPE PIPELINE (3 Steps) */}
+          {proposal.scope === 'FIELD' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Step 1: Field Submitter */}
+              <div className={`p-4 rounded-xl border flex items-start gap-3 ${
+                getStepStatus(0, 3) === 'complete' ? 'bg-emerald-50/70 border-emerald-200' :
+                getStepStatus(0, 3) === 'current' ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-500/20' : 'bg-gray-50 border-gray-200'
+              }`}>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-xs ${
+                  getStepStatus(0, 3) === 'complete' ? 'bg-emerald-600 text-white' :
+                  getStepStatus(0, 3) === 'current' ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-700'
+                }`}>
+                  {getStepStatus(0, 3) === 'complete' ? <CheckCircle2 className="w-4 h-4" /> : '1'}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Field Submission</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {proposal.proposedByName || 'Field Ministry Director'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 2: Field Leadership Final Approval & RUM Notification */}
+              <div className={`p-4 rounded-xl border flex items-start gap-3 ${
+                getStepStatus(1, 3) === 'complete' ? 'bg-emerald-50/70 border-emerald-200' :
+                getStepStatus(1, 3) === 'current' ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-500/20' :
+                getStepStatus(1, 3) === 'error' ? 'bg-red-50 border-red-200' :
+                getStepStatus(1, 3) === 'warning' ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-200'
+              }`}>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-xs ${
+                  getStepStatus(1, 3) === 'complete' ? 'bg-emerald-600 text-white' :
+                  getStepStatus(1, 3) === 'current' ? 'bg-blue-600 text-white' :
+                  getStepStatus(1, 3) === 'error' ? 'bg-red-600 text-white' :
+                  getStepStatus(1, 3) === 'warning' ? 'bg-amber-600 text-white' : 'bg-gray-300 text-gray-700'
+                }`}>
+                  {getStepStatus(1, 3) === 'complete' ? <CheckCircle2 className="w-4 h-4" /> :
+                   getStepStatus(1, 3) === 'error' ? <XCircle className="w-4 h-4" /> :
+                   getStepStatus(1, 3) === 'warning' ? <RefreshCw className="w-4 h-4" /> : '2'}
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-semibold text-gray-900">Field Leadership Approval</p>
+                    <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded font-medium">RUM Notified</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {proposal.leaderReviewedByName || proposal.adminApprovedByName || 'Field President / Leader Decision'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 3: Event Created & Locked */}
+              <div className={`p-4 rounded-xl border flex items-start gap-3 ${
+                getStepStatus(2, 3) === 'complete' ? 'bg-emerald-50/70 border-emerald-200' : 'bg-gray-50 border-gray-200'
+              }`}>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-xs ${
+                  getStepStatus(2, 3) === 'complete' ? 'bg-emerald-600 text-white' : 'bg-gray-300 text-gray-700'
+                }`}>
+                  {getStepStatus(2, 3) === 'complete' ? <CheckCircle2 className="w-4 h-4" /> : '3'}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Event Active in Catalog</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {proposal.createdEventCode ? `Official ${proposal.createdEventCode}` : 'Auto-created on Field Approval'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* UNION SCOPE PIPELINE (4 Steps) */}
+          {proposal.scope === 'UNION' && (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Step 1: Union Submission */}
+              <div className={`p-4 rounded-xl border flex items-start gap-3 ${
+                getStepStatus(0, 4) === 'complete' ? 'bg-emerald-50/70 border-emerald-200' :
+                getStepStatus(0, 4) === 'current' ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-500/20' : 'bg-gray-50 border-gray-200'
+              }`}>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-xs ${
+                  getStepStatus(0, 4) === 'complete' ? 'bg-emerald-600 text-white' :
+                  getStepStatus(0, 4) === 'current' ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-700'
+                }`}>
+                  {getStepStatus(0, 4) === 'complete' ? <CheckCircle2 className="w-4 h-4" /> : '1'}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Union Submission</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {proposal.proposedByName || 'Union Ministry Director'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 2: Level 1 Union Dept Endorsement */}
+              <div className={`p-4 rounded-xl border flex items-start gap-3 ${
+                getStepStatus(1, 4) === 'complete' ? 'bg-emerald-50/70 border-emerald-200' :
+                getStepStatus(1, 4) === 'current' ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-500/20' :
+                getStepStatus(1, 4) === 'error' ? 'bg-red-50 border-red-200' :
+                getStepStatus(1, 4) === 'warning' ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-200'
+              }`}>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-xs ${
+                  getStepStatus(1, 4) === 'complete' ? 'bg-emerald-600 text-white' :
+                  getStepStatus(1, 4) === 'current' ? 'bg-blue-600 text-white' :
+                  getStepStatus(1, 4) === 'error' ? 'bg-red-600 text-white' :
+                  getStepStatus(1, 4) === 'warning' ? 'bg-amber-600 text-white' : 'bg-gray-300 text-gray-700'
+                }`}>
+                  {getStepStatus(1, 4) === 'complete' ? <CheckCircle2 className="w-4 h-4" /> :
+                   getStepStatus(1, 4) === 'error' ? <XCircle className="w-4 h-4" /> :
+                   getStepStatus(1, 4) === 'warning' ? <RefreshCw className="w-4 h-4" /> : '2'}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Ministry Endorsement</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {proposal.leaderReviewedByName ? `Recommended by ${proposal.leaderReviewedByName}` : 'Union Dept Leader Endorsement'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 3: Level 2 Union Admin Final Approval */}
+              <div className={`p-4 rounded-xl border flex items-start gap-3 ${
+                getStepStatus(2, 4) === 'complete' ? 'bg-emerald-50/70 border-emerald-200' :
+                getStepStatus(2, 4) === 'current' ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-500/20' : 'bg-gray-50 border-gray-200'
+              }`}>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-xs ${
+                  getStepStatus(2, 4) === 'complete' ? 'bg-emerald-600 text-white' :
+                  getStepStatus(2, 4) === 'current' ? 'bg-amber-600 text-white' : 'bg-gray-300 text-gray-700'
+                }`}>
+                  {getStepStatus(2, 4) === 'complete' ? <CheckCircle2 className="w-4 h-4" /> : '3'}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Union Admin Approval</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {proposal.adminApprovedByName ? `Approved by ${proposal.adminApprovedByName}` : 'Union Administrator Governance'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 4: Official Union Event Created */}
+              <div className={`p-4 rounded-xl border flex items-start gap-3 ${
+                getStepStatus(3, 4) === 'complete' ? 'bg-emerald-50/70 border-emerald-200' : 'bg-gray-50 border-gray-200'
+              }`}>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-xs ${
+                  getStepStatus(3, 4) === 'complete' ? 'bg-emerald-600 text-white' : 'bg-gray-300 text-gray-700'
+                }`}>
+                  {getStepStatus(3, 4) === 'complete' ? <CheckCircle2 className="w-4 h-4" /> : '4'}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Event Created & Locked</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {proposal.createdEventCode ? `Official ${proposal.createdEventCode}` : 'Automatic generation'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </CardBody>
       </Card>
 
@@ -645,7 +881,7 @@ export default function ProposalDetail() {
 
                 <div>
                   <p className="text-xs text-gray-500">Department</p>
-                  <p className="font-semibold text-gray-900">{proposal.departmentName || 'N/A'}</p>
+                  <p className="font-semibold text-gray-900">{proposal.departmentName || 'General Ministries'}</p>
                 </div>
 
                 <div>
@@ -655,12 +891,14 @@ export default function ProposalDetail() {
 
                 <div>
                   <p className="text-xs text-gray-500">Proposed By</p>
-                  <p className="font-semibold text-gray-900">{proposal.proposedByName}</p>
+                  <p className="font-semibold text-gray-900">{proposal.proposedByName || 'District / Field Leader'}</p>
                 </div>
 
                 {proposal.leaderReviewedByName && (
                   <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg">
-                    <p className="text-xs text-blue-700 font-semibold">Level 1 Leader Review</p>
+                    <p className="text-xs text-blue-700 font-semibold">
+                      {proposal.scope === 'UNION' ? 'Level 1 Union Recommendation' : 'Field Leadership Approval'}
+                    </p>
                     <p className="text-sm text-blue-950 font-medium">{proposal.leaderReviewedByName}</p>
                     {proposal.leaderReviewedAt && (
                       <p className="text-xs text-blue-600 mt-0.5">
@@ -670,7 +908,7 @@ export default function ProposalDetail() {
                   </div>
                 )}
 
-                {proposal.adminApprovedByName && (
+                {proposal.adminApprovedByName && proposal.scope === 'UNION' && (
                   <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-lg">
                     <p className="text-xs text-emerald-700 font-semibold">Level 2 Union Admin Approval</p>
                     <p className="text-sm text-emerald-950 font-medium">{proposal.adminApprovedByName}</p>
@@ -697,8 +935,9 @@ export default function ProposalDetail() {
         isOpen={showReviewModal}
         onClose={() => setShowReviewModal(false)}
         title={
-          reviewAction === 'admin_approve' ? 'Level 2: Final Approval & Event Locking' :
-          reviewAction === 'leader_recommend' ? 'Level 1: Recommend Proposal to Union' :
+          reviewAction === 'field_approve' ? 'Field Leadership: Approve Proposal & Create Official Event' :
+          reviewAction === 'admin_approve' ? 'Union Admin: Final Approval & Event Locking' :
+          reviewAction === 'leader_recommend' ? 'Union Dept Leader: Recommend Proposal to Union Admin' :
           reviewAction?.includes('reject') ? 'Reject Proposal' : 'Request Proposal Revisions'
         }
         footer={
@@ -720,6 +959,18 @@ export default function ProposalDetail() {
         }
       >
         <div className="space-y-4">
+          {reviewAction === 'field_approve' && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-2.5 text-xs text-emerald-900">
+              <ShieldCheck className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-emerald-950">Field Leadership Final Decision Authority</p>
+                <p className="mt-0.5">
+                  Approving this {proposal.scope} proposal will immediately transition it to APPROVED status, create the official event record in the events catalog, and automatically notify the Rwanda Union Mission (RUM) Administration.
+                </p>
+              </div>
+            </div>
+          )}
+
           {reviewAction === 'admin_approve' && (
             <div className="space-y-4">
               <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-2.5 text-xs text-emerald-900">
@@ -761,7 +1012,7 @@ export default function ProposalDetail() {
             <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-2.5 text-xs text-blue-900">
               <Award className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="font-bold text-blue-950">Respective Leader Recommendation</p>
+                <p className="font-bold text-blue-950">Union Department Leader Endorsement</p>
                 <p className="mt-0.5">
                   Recommending this proposal marks Level 1 Leader endorsement and advances the proposal to the Union Administrator for final review.
                 </p>

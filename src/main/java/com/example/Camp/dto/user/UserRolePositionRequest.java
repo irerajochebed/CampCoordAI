@@ -16,5 +16,8 @@ public class UserRolePositionRequest {
     private Role role;
     private Position position;
     private Long organizationUnitId;
+    private Long departmentId;
+    private String governmentDistrict;
+    private String sdaDistrict;
     private Boolean active;
 }

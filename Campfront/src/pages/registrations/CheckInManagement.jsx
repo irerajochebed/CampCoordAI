@@ -97,7 +97,21 @@ export default function CheckInManagement() {
     }
   };
 
+  const isEventPassed = event ? (
+    event.status === 'COMPLETED' ||
+    event.status === 'CANCELLED' ||
+    (event.endDate && new Date(event.endDate + (event.endDate.includes('T') ? '' : 'T23:59:59')) < new Date())
+  ) : false;
+
   const handleCheckIn = async (registrationId) => {
+    if (isEventPassed) {
+      setAlert({
+        type: 'error',
+        message: 'Check-in is closed: This event has already concluded.'
+      });
+      return;
+    }
+
     try {
       await registrationApi.checkIn(registrationId);
       setAlert({ 
@@ -116,6 +130,14 @@ export default function CheckInManagement() {
   const handleQRScan = async (e) => {
     e.preventDefault();
     
+    if (isEventPassed) {
+      setAlert({
+        type: 'error',
+        message: 'Check-in is closed: This event has already concluded.'
+      });
+      return;
+    }
+
     if (!qrCodeInput.trim()) {
       setAlert({ type: 'error', message: 'Please enter a QR code' });
       return;
@@ -142,6 +164,14 @@ export default function CheckInManagement() {
   };
 
   const handleBulkCheckIn = async () => {
+    if (isEventPassed) {
+      setAlert({
+        type: 'error',
+        message: 'Check-in is closed: This event has already concluded.'
+      });
+      return;
+    }
+
     const confirmedRegistrations = filteredRegistrations.filter(
       r => r.status === 'CONFIRMED'
     );
@@ -254,7 +284,7 @@ export default function CheckInManagement() {
           <Button
             variant="ghost"
             icon={<ArrowLeft className="w-4 h-4" />}
-            onClick={() => navigate(`/events/${eventId}`)}
+            onClick={() => navigate(`/app/events/${eventId}`)}
             className="mb-4"
           >
             Back to Event
@@ -263,6 +293,18 @@ export default function CheckInManagement() {
           <p className="text-gray-600 mt-1">{event?.name}</p>
         </div>
       </div>
+
+      {isEventPassed && (
+        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/60 rounded-xl p-4 flex items-center gap-3 text-amber-900 dark:text-amber-200">
+          <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+          <div>
+            <h4 className="font-semibold text-sm">Event Concluded & Check-In Closed</h4>
+            <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+              This event ended on {event?.endDate ? new Date(event.endDate).toLocaleDateString() : 'its closing date'}. Participant check-in and checkout are strictly closed.
+            </p>
+          </div>
+        </div>
+      )}
 
       {alert && (
         <Alert
@@ -332,28 +374,36 @@ export default function CheckInManagement() {
             <CardTitle>Quick Check-In by QR Code</CardTitle>
           </CardHeader>
           <CardBody>
-            <form onSubmit={handleQRScan} className="flex gap-3">
-              <div className="flex-1 relative">
-                <QrCode className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <Input
-                  placeholder="Scan or enter QR code..."
-                  value={qrCodeInput}
-                  onChange={(e) => setQrCodeInput(e.target.value)}
-                  className="pl-10"
-                  autoFocus
-                />
-              </div>
-              <Button
-                type="submit"
-                variant="primary"
-                icon={<CheckCircle className="w-4 h-4" />}
-              >
-                Check In
-              </Button>
-            </form>
-            <p className="text-xs text-gray-500 mt-2">
-              Use a QR scanner or type the code manually to quickly check in participants
-            </p>
+            {isEventPassed ? (
+              <p className="text-sm text-gray-500 italic">
+                QR check-in is disabled because this event has concluded.
+              </p>
+            ) : (
+              <>
+                <form onSubmit={handleQRScan} className="flex gap-3">
+                  <div className="flex-1 relative">
+                    <QrCode className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <Input
+                      placeholder="Scan or enter QR code..."
+                      value={qrCodeInput}
+                      onChange={(e) => setQrCodeInput(e.target.value)}
+                      className="pl-10"
+                      autoFocus
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    icon={<CheckCircle className="w-4 h-4" />}
+                  >
+                    Check In
+                  </Button>
+                </form>
+                <p className="text-xs text-gray-500 mt-2">
+                  Use a QR scanner or type the code manually to quickly check in participants
+                </p>
+              </>
+            )}
           </CardBody>
         </Card>
       )}
@@ -390,7 +440,7 @@ export default function CheckInManagement() {
               Showing {filteredRegistrations.length} of {registrations.length} participants
             </p>
             <div className="flex gap-2">
-              {canManage && stats.readyToCheckIn > 0 && (
+              {canManage && !isEventPassed && stats.readyToCheckIn > 0 && (
                 <Button
                   variant="primary"
                   size="sm"
@@ -432,31 +482,31 @@ export default function CheckInManagement() {
           <CardBody className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold text-xs uppercase tracking-wider">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left">
                       ID
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left">
                       Participant
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left">
                       Contact
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left">
                       Accommodation
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left">
                       Status
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-right">
                       Actions
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-800 bg-transparent">
                   {filteredRegistrations.map(registration => (
-                    <tr key={registration.id} className="hover:bg-gray-50">
+                    <tr key={registration.id} className="transition-colors hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm font-mono text-gray-900">#{registration.id}</span>
                       </td>
@@ -506,7 +556,7 @@ export default function CheckInManagement() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center justify-end gap-2">
-                          {canManage && registration.status === 'CONFIRMED' && (
+                          {canManage && !isEventPassed && registration.status === 'CONFIRMED' && (
                             <Button
                               variant="primary"
                               size="sm"
@@ -516,6 +566,10 @@ export default function CheckInManagement() {
                               Check In
                             </Button>
                           )}
+
+                          {isEventPassed && registration.status === 'CONFIRMED' && (
+                            <span className="text-xs text-gray-400 italic">Event Ended</span>
+                          )}
                           
                           {registration.status === 'CHECKED_IN' && (
                             <Badge variant="success" className="flex items-center gap-1">
@@ -524,10 +578,17 @@ export default function CheckInManagement() {
                             </Badge>
                           )}
 
+                          {registration.status === 'CHECKED_OUT' && (
+                            <Badge variant="default" className="flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3" />
+                              Checked Out
+                            </Badge>
+                          )}
+
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => navigate(`/registrations/${registration.id}`)}
+                            onClick={() => navigate(`/app/registrations/${registration.id}`)}
                           >
                             View
                           </Button>

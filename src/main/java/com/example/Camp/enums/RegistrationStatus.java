@@ -6,5 +6,6 @@ public enum RegistrationStatus {
     PAYMENT_VERIFIED,
     CONFIRMED,
     CANCELLED,
-    CHECKED_IN
+    CHECKED_IN,
+    CHECKED_OUT
 }

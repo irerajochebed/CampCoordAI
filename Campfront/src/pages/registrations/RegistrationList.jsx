@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { registrationApi, eventApi } from '../../api';
+import { registrationApi, eventApi, getCachedData } from '../../api';
 import { 
   Search, 
   Filter,
@@ -29,9 +29,16 @@ export default function RegistrationList() {
   const { user, isAdmin, isCoordinator, isParticipant } = useAuth();
   const { t } = useTranslation();
   
-  const [registrations, setRegistrations] = useState([]);
+  const cachedRegs = useMemo(() => {
+    const cached = getCachedData('/registrations');
+    if (cached?.data && Array.isArray(cached.data)) return cached.data;
+    if (Array.isArray(cached)) return cached;
+    return [];
+  }, []);
+
+  const [registrations, setRegistrations] = useState(cachedRegs);
   const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(cachedRegs.length === 0);
   const [alert, setAlert] = useState(null);
   
   const [filters, setFilters] = useState({
@@ -42,9 +49,37 @@ export default function RegistrationList() {
 
   const isUnionAdmin = isAdmin || user?.position === 'UNION_ADMINISTRATOR';
 
+  const jurisdictionInfo = (() => {
+    if (user?.role === 'ADMINISTRATOR' || user?.position === 'UNION_ADMINISTRATOR' || user?.position === 'UNION_LEADER' || user?.organizationLevel === 'UNION') {
+      return {
+        scope: 'Union-Wide Audit',
+        unit: user?.organizationUnitName || 'Rwanda Union Mission (All 8 Fields)',
+      };
+    }
+    if (user?.position === 'FIELD_LEADER' || user?.organizationLevel === 'FIELD') {
+      return {
+        scope: 'Field Scope',
+        unit: `${user?.organizationUnitName || 'Field'} (All Districts & Churches)`,
+      };
+    }
+    if (user?.position === 'DISTRICT_PASTOR' || user?.position === 'PASTOR' || user?.organizationLevel === 'DISTRICT') {
+      return {
+        scope: 'District Jurisdiction',
+        unit: `${user?.organizationUnitName || user?.sdaDistrict || 'District'} (District & Churches)`,
+      };
+    }
+    if (user?.organizationLevel === 'CHURCH' || user?.organizationLevel === 'LOCAL_CHURCH') {
+      return {
+        scope: 'Local Church Scope',
+        unit: user?.organizationUnitName || 'Local Church',
+      };
+    }
+    return null;
+  })();
+
   useEffect(() => {
     fetchEvents();
-    fetchRegistrations();
+    fetchRegistrations(cachedRegs.length > 0);
   }, []);
 
   const fetchEvents = async () => {
@@ -53,7 +88,7 @@ export default function RegistrationList() {
         ? await eventApi.getMyEvents()
         : await eventApi.getAll();
       
-      if (response.data.success) {
+      if (response.data?.success) {
         setEvents(response.data.data || []);
       }
     } catch (error) {
@@ -61,31 +96,25 @@ export default function RegistrationList() {
     }
   };
 
-  const fetchRegistrations = async () => {
+  const fetchRegistrations = async (isBackground = false) => {
     try {
-      setLoading(true);
-      let response;
-      
-      if (isParticipant) {
-        // Participants see only their own registrations
-        response = await registrationApi.getMyRegistrations();
-      } else if (isCoordinator && !isUnionAdmin) {
-        // Coordinators see registrations for their events
-        response = await registrationApi.getAll(); // Backend should filter by coordinator's events
-      } else {
-        // Union Admin sees all registrations
-        response = await registrationApi.getAll();
+      if (!isBackground && registrations.length === 0) {
+        setLoading(true);
       }
+      const response = isParticipant 
+        ? await registrationApi.getMyRegistrations()
+        : await registrationApi.getAll();
 
-      if (response.data.success) {
-        setRegistrations(response.data.data || []);
-      }
+      const list = response.data?.data || response.data || [];
+      setRegistrations(Array.isArray(list) ? list : []);
     } catch (error) {
       console.error('Error fetching registrations:', error);
-      setAlert({
-        type: 'error',
-        message: error.response?.data?.message || t('common.error', 'Failed to fetch registrations')
-      });
+      if (registrations.length === 0) {
+        setAlert({
+          type: 'error',
+          message: error.response?.data?.message || t('common.error', 'Failed to fetch registrations')
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -170,13 +199,15 @@ export default function RegistrationList() {
 
   // Apply filters
   const filteredRegistrations = registrations.filter(reg => {
-    if (filters.event && reg.event.id.toString() !== filters.event) return false;
+    const eventId = reg.event?.id || reg.eventId;
+    if (filters.event && eventId && eventId.toString() !== filters.event) return false;
     if (filters.status && reg.status !== filters.status) return false;
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
-      const participantName = `${reg.participantFirstName} ${reg.participantLastName}`.toLowerCase();
-      const eventName = reg.event.name.toLowerCase();
-      if (!participantName.includes(searchLower) && !eventName.includes(searchLower)) {
+      const participantName = (reg.participantName || `${reg.participantFirstName || ''} ${reg.participantLastName || ''}`).toLowerCase();
+      const eventName = (reg.event?.name || reg.eventName || '').toLowerCase();
+      const regNum = (reg.registrationNumber || '').toLowerCase();
+      if (!participantName.includes(searchLower) && !eventName.includes(searchLower) && !regNum.includes(searchLower)) {
         return false;
       }
     }
@@ -203,8 +234,16 @@ export default function RegistrationList() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('registrations.title', 'Registrations')}</h1>
-          <p className="text-gray-600 mt-1">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('registrations.title', 'Registrations')}</h1>
+            {!isParticipant && jurisdictionInfo && (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-full shadow-2xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                <span className="font-bold">{jurisdictionInfo.scope}:</span> {jurisdictionInfo.unit}
+              </span>
+            )}
+          </div>
+          <p className="text-slate-600 dark:text-slate-300 text-sm mt-1">
             {isParticipant 
               ? t('registrations.mySubtitle', 'Your event registrations') 
               : t('registrations.subtitle', 'Manage event registrations and participant information')}
@@ -315,116 +354,163 @@ export default function RegistrationList() {
           <CardBody className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
                       {t('registrations.participant', 'Participant')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
                       {t('registrations.event', 'Event')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
                       {t('registrations.registrationDate', 'Registration Date')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
                       {t('common.status', 'Status')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
                       {t('registrations.payment', 'Payment')}
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
                       {t('common.actions', 'Actions')}
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredRegistrations.map(registration => (
-                    <tr key={registration.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div>
-                          <p className="font-medium text-gray-900">
-                            {registration.participantFirstName} {registration.participantLastName}
-                          </p>
-                          <p className="text-sm text-gray-500">{registration.participantEmail}</p>
-                          {registration.participantPhone && (
-                            <p className="text-sm text-gray-500">{registration.participantPhone}</p>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="font-medium text-gray-900">{registration.event.name}</p>
-                          <p className="text-sm text-gray-500">
-                            {new Date(registration.event.startDate).toLocaleDateString()} - {new Date(registration.event.endDate).toLocaleDateString()}
-                          </p>
-                          {registration.event.venue && (
-                            <p className="text-sm text-gray-500">{registration.event.venue}</p>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(registration.registrationDate).toLocaleDateString('en-RW', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric'
-                        })}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(registration.status)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="space-y-1">
-                          {getPaymentStatusBadge(registration.payment)}
-                          {registration.event.registrationFee && (
-                            <p className="text-sm text-gray-500">
-                              {formatCurrency(registration.event.registrationFee)}
-                            </p>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            icon={<Eye className="w-4 h-4" />}
-                            onClick={() => navigate(`/app/registrations/${registration.id}`)}
-                            title="View details"
-                          />
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-800 bg-transparent">
+                  {filteredRegistrations.map(registration => {
+                    const participantName = registration.participantName || 
+                      `${registration.participantFirstName || ''} ${registration.participantLastName || ''}`.trim() || 'Participant';
+                    const eventTitle = registration.event?.name || registration.eventName || 'Event';
+                    const startDate = registration.event?.startDate || registration.eventStartDate;
+                    const endDate = registration.event?.endDate || registration.eventEndDate;
+                    const venue = registration.event?.venue || registration.eventVenue;
+                    const regFee = registration.event?.registrationFee || registration.eventRegistrationFee;
+                    const isFree = !regFee || Number(regFee) === 0;
 
-                          {!isParticipant && registration.status === 'CONFIRMED' && registration.status !== 'CHECKED_IN' && (
+                    return (
+                      <tr key={registration.id} className="transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div>
+                            <p className="font-semibold text-slate-900 dark:text-white">{participantName}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">{registration.participantEmail || registration.participantPhone}</p>
+                            <div className="flex items-center gap-1.5 mt-1">
+                              {registration.registrationNumber && (
+                                <span className="font-mono text-[11px] text-primary-600 dark:text-primary-400 font-bold">
+                                  {registration.registrationNumber}
+                                </span>
+                              )}
+                              {registration.churchName && (
+                                <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded font-medium border border-slate-200 dark:border-slate-700">
+                                  {registration.churchName}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div>
+                            <p className="font-medium text-slate-900 dark:text-white">{eventTitle}</p>
+                            {startDate && (
+                              <p className="text-xs text-slate-500 dark:text-slate-400">
+                                {new Date(startDate).toLocaleDateString()} {endDate ? `- ${new Date(endDate).toLocaleDateString()}` : ''}
+                              </p>
+                            )}
+                            {venue && (
+                              <p className="text-xs text-slate-400 dark:text-slate-500">{venue}</p>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-700 dark:text-slate-300">
+                          {new Date(registration.registrationDate || registration.createdAt).toLocaleDateString('en-RW', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {getStatusBadge(registration.status)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="space-y-1">
+                            {isFree ? (
+                              <Badge variant="success">Free Event</Badge>
+                            ) : (
+                              <>
+                                {getPaymentStatusBadge(registration.payment)}
+                                <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                  {formatCurrency(regFee)}
+                                </p>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex items-center justify-end gap-2">
+                            {/* Participant quick actions */}
+                            {isParticipant && registration.status === 'PENDING' && !isFree && (
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                icon={<DollarSign className="w-3.5 h-3.5" />}
+                                onClick={() => navigate(`/app/payments/new?registrationId=${registration.id}`)}
+                              >
+                                Pay Fee
+                              </Button>
+                            )}
+
+                            {isParticipant && (registration.status === 'CONFIRMED' || registration.status === 'CHECKED_IN') && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                icon={<QrCode className="w-3.5 h-3.5 text-primary-600" />}
+                                onClick={() => navigate(`/app/registrations/${registration.id}`, { state: { registration } })}
+                              >
+                                Ticket
+                              </Button>
+                            )}
+
                             <Button
                               variant="ghost"
                               size="sm"
-                              icon={<QrCode className="w-4 h-4 text-primary-600" />}
-                              onClick={() => handleQuickCheckIn(registration.id)}
-                              title="Quick check-in"
+                              icon={<Eye className="w-4 h-4" />}
+                              onClick={() => navigate(`/app/registrations/${registration.id}`, { state: { registration } })}
+                              title="View details"
                             />
-                          )}
 
-                          {!isParticipant && registration.status === 'PAYMENT_VERIFIED' && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              icon={<CheckCircle className="w-4 h-4 text-green-600" />}
-                              onClick={() => handleConfirm(registration.id)}
-                              title="Confirm registration"
-                            />
-                          )}
+                            {!isParticipant && registration.status === 'CONFIRMED' && registration.status !== 'CHECKED_IN' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                icon={<QrCode className="w-4 h-4 text-primary-600" />}
+                                onClick={() => handleQuickCheckIn(registration.id)}
+                                title="Quick check-in"
+                              />
+                            )}
 
-                          {registration.status !== 'CANCELLED' && registration.status !== 'CHECKED_IN' && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              icon={<XCircle className="w-4 h-4 text-red-600" />}
-                              onClick={() => handleCancel(registration.id)}
-                              title="Cancel registration"
-                            />
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            {!isParticipant && (registration.status === 'PAYMENT_VERIFIED' || registration.status === 'PAYMENT_SUBMITTED') && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                icon={<CheckCircle className="w-4 h-4 text-green-600" />}
+                                onClick={() => handleConfirm(registration.id)}
+                                title="Confirm registration"
+                              />
+                            )}
+
+                            {registration.status !== 'CANCELLED' && registration.status !== 'CHECKED_IN' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                icon={<XCircle className="w-4 h-4 text-red-600" />}
+                                onClick={() => handleCancel(registration.id)}
+                                title="Cancel registration"
+                              />
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

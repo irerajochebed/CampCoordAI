@@ -46,4 +46,8 @@ public interface AccommodationService {
     Long getTotalCapacityByEvent(Long eventId);
     
     Long getOccupiedBedsByEvent(Long eventId);
+
+    RoomAssignment autoAssignParticipant(com.example.Camp.entity.Registration registration);
+
+    List<RoomAssignment> autoAssignEventParticipants(Long eventId);
 }

@@ -31,6 +31,29 @@ public class UserController {
         UserResponse response = authService.getCurrentUser();
         return ResponseEntity.ok(ApiResponse.success(response));
     }
+
+    @PutMapping("/me")
+    public ResponseEntity<ApiResponse<UserResponse>> updateCurrentUser(@RequestBody UserUpdateRequest request) {
+        UserResponse currentUser = authService.getCurrentUser();
+        UserResponse response = userService.updateUser(currentUser.getId(), request);
+        return ResponseEntity.ok(ApiResponse.success("Profile updated successfully", response));
+    }
+
+    @PostMapping(value = {"/me/avatar", "/avatar"}, consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<UserResponse>> uploadCurrentUserAvatar(
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        UserResponse currentUser = authService.getCurrentUser();
+        UserResponse response = userService.uploadAvatar(currentUser.getId(), file);
+        return ResponseEntity.ok(ApiResponse.success("Avatar uploaded successfully", response));
+    }
+
+    @PostMapping(value = "/{id}/avatar", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<UserResponse>> uploadUserAvatar(
+            @PathVariable Long id,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        UserResponse response = userService.uploadAvatar(id, file);
+        return ResponseEntity.ok(ApiResponse.success("Avatar uploaded successfully", response));
+    }
     
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<UserResponse>> getUserById(@PathVariable Long id) {
@@ -39,7 +62,7 @@ public class UserController {
     }
     
     @GetMapping
-    @PreAuthorize("hasRole('ADMINISTRATOR')")
+    @PreAuthorize("hasRole('ADMINISTRATOR') or hasRole('UNION_ADMINISTRATOR') or hasRole('UNION_LEADER') or hasRole('COORDINATOR')")
     public ResponseEntity<ApiResponse<List<UserResponse>>> getAllUsers(
             @RequestParam(required = false) Role role,
             @RequestParam(required = false) Position position,
@@ -51,7 +74,7 @@ public class UserController {
     }
     
     @GetMapping("/role/{role}")
-    @PreAuthorize("hasRole('ADMINISTRATOR') or hasRole('COORDINATOR')")
+    @PreAuthorize("hasRole('ADMINISTRATOR') or hasRole('UNION_ADMINISTRATOR') or hasRole('UNION_LEADER') or hasRole('COORDINATOR')")
     public ResponseEntity<ApiResponse<List<UserResponse>>> getUsersByRole(@PathVariable Role role) {
         List<UserResponse> response = userService.getUsersByRole(role);
         return ResponseEntity.ok(ApiResponse.success(response));
@@ -79,7 +102,7 @@ public class UserController {
     }
 
     @PutMapping("/{id}/role-position")
-    @PreAuthorize("hasRole('ADMINISTRATOR')")
+    @PreAuthorize("hasRole('ADMINISTRATOR') or hasRole('UNION_ADMINISTRATOR') or hasRole('UNION_LEADER')")
     public ResponseEntity<ApiResponse<UserResponse>> updateUserRolePosition(
             @PathVariable Long id,
             @RequestBody UserRolePositionRequest request) {
@@ -88,7 +111,7 @@ public class UserController {
     }
     
     @PostMapping("/provision-coordinator")
-    @PreAuthorize("hasRole('ADMINISTRATOR')")
+    @PreAuthorize("hasRole('ADMINISTRATOR') or hasRole('UNION_ADMINISTRATOR') or hasRole('UNION_LEADER')")
     public ResponseEntity<ApiResponse<UserResponse>> provisionCoordinator(
             @Valid @RequestBody ProvisionCoordinatorRequest request) {
         UserResponse response = userService.provisionCoordinator(request);
@@ -96,28 +119,28 @@ public class UserController {
     }
     
     @PatchMapping("/{id}/deactivate")
-    @PreAuthorize("hasRole('ADMINISTRATOR')")
+    @PreAuthorize("hasRole('ADMINISTRATOR') or hasRole('UNION_ADMINISTRATOR') or hasRole('UNION_LEADER')")
     public ResponseEntity<ApiResponse<String>> deactivateUser(@PathVariable Long id) {
         userService.deactivateUser(id);
         return ResponseEntity.ok(ApiResponse.success("User deactivated successfully", null));
     }
     
     @PatchMapping("/{id}/activate")
-    @PreAuthorize("hasRole('ADMINISTRATOR')")
+    @PreAuthorize("hasRole('ADMINISTRATOR') or hasRole('UNION_ADMINISTRATOR') or hasRole('UNION_LEADER')")
     public ResponseEntity<ApiResponse<String>> activateUser(@PathVariable Long id) {
         userService.activateUser(id);
         return ResponseEntity.ok(ApiResponse.success("User activated successfully", null));
     }
     
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMINISTRATOR')")
+    @PreAuthorize("hasRole('ADMINISTRATOR') or hasRole('UNION_ADMINISTRATOR') or hasRole('UNION_LEADER')")
     public ResponseEntity<ApiResponse<String>> deleteUser(@PathVariable Long id) {
         userService.deleteUser(id);
         return ResponseEntity.ok(ApiResponse.success("User deleted successfully", null));
     }
     
     @GetMapping("/count/role/{role}")
-    @PreAuthorize("hasRole('ADMINISTRATOR')")
+    @PreAuthorize("hasRole('ADMINISTRATOR') or hasRole('UNION_ADMINISTRATOR') or hasRole('UNION_LEADER') or hasRole('COORDINATOR')")
     public ResponseEntity<ApiResponse<Long>> countUsersByRole(@PathVariable Role role) {
         Long count = userService.countUsersByRole(role);
         return ResponseEntity.ok(ApiResponse.success(count));

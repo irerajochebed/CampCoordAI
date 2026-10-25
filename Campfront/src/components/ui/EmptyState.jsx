@@ -2,23 +2,23 @@ export default function EmptyState({
   icon, 
   title, 
   description, 
-  action,
+  action, 
   className = '' 
 }) {
   return (
-    <div className={`text-center py-12 ${className}`}>
+    <div className={`text-center py-12 px-4 ${className}`}>
       {icon && (
-        <div className="flex justify-center mb-4 text-gray-400">
+        <div className="flex justify-center mb-3 text-slate-400 dark:text-slate-500">
           {icon}
         </div>
       )}
       
       {title && (
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>
+        <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1.5">{title}</h3>
       )}
       
       {description && (
-        <p className="text-gray-600 mb-6 max-w-md mx-auto">{description}</p>
+        <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mb-6 max-w-md mx-auto leading-relaxed">{description}</p>
       )}
       
       {action && (

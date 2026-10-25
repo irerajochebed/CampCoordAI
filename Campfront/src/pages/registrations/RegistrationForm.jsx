@@ -10,7 +10,8 @@ import {
   DollarSign,
   Users,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  ShieldCheck
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -21,6 +22,14 @@ import Alert from '../../components/ui/Alert';
 import Badge from '../../components/ui/Badge';
 import { PageSpinner } from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
+import { 
+  getMinistryAgeRule, 
+  getEventAgeDisplay, 
+  validateParticipantAge, 
+  calculateAge, 
+  getEventGenderRule, 
+  validateParticipantGender 
+} from '../../utils/ageRangeHelper';
 
 export default function RegistrationForm() {
   const navigate = useNavigate();
@@ -39,7 +48,9 @@ export default function RegistrationForm() {
     participantFirstName: user?.firstName || '',
     participantLastName: user?.lastName || '',
     participantEmail: user?.email || '',
-    participantPhone: user?.phone || '',
+    participantPhone: user?.phone || user?.phoneNumber || '',
+    participantGender: user?.gender || '',
+    participantAge: user?.dateOfBirth ? calculateAge(user.dateOfBirth) || '' : '',
     emergencyContactName: '',
     emergencyContactPhone: '',
     specialRequirements: ''
@@ -51,21 +62,75 @@ export default function RegistrationForm() {
     fetchAvailableEvents();
   }, []);
 
+  useEffect(() => {
+    if (user) {
+      setFormData(prev => ({
+        ...prev,
+        participantFirstName: prev.participantFirstName || user.firstName || '',
+        participantLastName: prev.participantLastName || user.lastName || '',
+        participantEmail: prev.participantEmail || user.email || '',
+        participantPhone: prev.participantPhone || user.phone || user.phoneNumber || '',
+        participantGender: prev.participantGender || user.gender || '',
+        participantAge: prev.participantAge || (user.dateOfBirth ? calculateAge(user.dateOfBirth) || '' : '')
+      }));
+    }
+  }, [user]);
+
+
   const fetchAvailableEvents = async () => {
     try {
       setLoading(true);
-      // Fetch events with REGISTRATION_OPEN status
-      const response = await eventApi.getByStatus('REGISTRATION_OPEN');
-      const eventsList = response.data?.data || response.data || [];
+      // Fetch open events or fallback to all events
+      let eventsList = [];
+      try {
+        const response = await eventApi.getByStatus('REGISTRATION_OPEN');
+        eventsList = response.data?.data || response.data || [];
+      } catch (e) {
+        const allRes = await eventApi.getAll();
+        eventsList = allRes.data?.data || allRes.data || [];
+      }
+
       if (Array.isArray(eventsList)) {
-        setAvailableEvents(eventsList);
+        const now = new Date();
+        const activeEvents = eventsList.filter(ev => {
+          if (ev.status === 'COMPLETED' || ev.status === 'CANCELLED') return false;
+          if (ev.endDate) {
+            const end = new Date(ev.endDate + (ev.endDate.includes('T') ? '' : 'T23:59:59'));
+            if (end < now) return false;
+          }
+          if (ev.registrationEndDate) {
+            const regEnd = new Date(ev.registrationEndDate + (ev.registrationEndDate.includes('T') ? '' : 'T23:59:59'));
+            if (regEnd < now) return false;
+          }
+          return true;
+        });
+
+        setAvailableEvents(activeEvents);
         
         // If eventId param was passed, select it
         if (paramEventId) {
-          const match = eventsList.find(e => e.id.toString() === paramEventId.toString());
+          const match = activeEvents.find(e => e.id.toString() === paramEventId.toString());
           if (match) {
             setSelectedEvent(match);
             setFormData(prev => ({ ...prev, eventId: match.id.toString() }));
+          } else {
+            // Check if it was closed or passed
+            try {
+              const singleRes = await eventApi.getById(paramEventId);
+              const singleEvent = singleRes.data?.data || singleRes.data;
+              if (singleEvent) {
+                const isPassed = singleEvent.status === 'COMPLETED' || 
+                  (singleEvent.endDate && new Date(singleEvent.endDate + (singleEvent.endDate.includes('T') ? '' : 'T23:59:59')) < now);
+                setAlert({
+                  type: 'error',
+                  message: isPassed 
+                    ? `Registration is closed: "${singleEvent.name}" has already concluded.`
+                    : `Registration is currently closed for "${singleEvent.name}".`
+                });
+              }
+            } catch (err) {
+              console.error('Error fetching specified event:', err);
+            }
           }
         }
       }
@@ -119,8 +184,31 @@ export default function RegistrationForm() {
       newErrors.participantPhone = 'Invalid phone number format';
     }
 
-    if (formData.emergencyContactPhone && !/^[0-9+\-\s()]+$/.test(formData.emergencyContactPhone)) {
-      newErrors.emergencyContactPhone = 'Invalid phone number format';
+    // 1. Validate Age against Event Rules
+    if (formData.participantAge) {
+      const ageNum = parseInt(formData.participantAge, 10);
+      if (isNaN(ageNum) || ageNum < 1 || ageNum > 120) {
+        newErrors.participantAge = 'Please enter a valid age between 1 and 120';
+      } else if (selectedEvent) {
+        const ageCheck = validateParticipantAge(ageNum, selectedEvent);
+        if (!ageCheck.valid) {
+          newErrors.participantAge = ageCheck.message;
+        }
+      }
+    } else if (selectedEvent) {
+      // If event has explicit age requirements and user hasn't provided age
+      const ageCheck = validateParticipantAge(null, selectedEvent);
+      if (!ageCheck.valid) {
+        newErrors.participantAge = ageCheck.message;
+      }
+    }
+
+    // 2. Validate Gender against Event Rules
+    if (selectedEvent) {
+      const genderCheck = validateParticipantGender(formData.participantGender, selectedEvent);
+      if (!genderCheck.valid) {
+        newErrors.participantGender = genderCheck.message;
+      }
     }
 
     setErrors(newErrors);
@@ -135,10 +223,28 @@ export default function RegistrationForm() {
       return;
     }
 
+    if (selectedEvent) {
+      const now = new Date();
+      const isPassed = selectedEvent.status === 'COMPLETED' || selectedEvent.status === 'CANCELLED' ||
+        (selectedEvent.endDate && new Date(selectedEvent.endDate + (selectedEvent.endDate.includes('T') ? '' : 'T23:59:59')) < now);
+      const isRegClosed = isPassed || selectedEvent.status === 'REGISTRATION_CLOSED' ||
+        (selectedEvent.registrationEndDate && new Date(selectedEvent.registrationEndDate + (selectedEvent.registrationEndDate.includes('T') ? '' : 'T23:59:59')) < now);
+      
+      if (isPassed) {
+        setAlert({ type: 'error', message: 'Registration is closed: This event has already concluded.' });
+        return;
+      }
+      if (isRegClosed) {
+        setAlert({ type: 'error', message: 'Registration is closed for this event.' });
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
       const payload = {
         eventId: parseInt(formData.eventId),
+        participantId: user?.id || user?.userId || null,
         participantFirstName: formData.participantFirstName.trim(),
         participantLastName: formData.participantLastName.trim(),
         participantEmail: formData.participantEmail.trim(),
@@ -151,15 +257,26 @@ export default function RegistrationForm() {
       const response = await registrationApi.create(payload);
 
       if (response.data.success) {
-        setAlert({
-          type: 'success',
-          message: 'Registration submitted successfully! You will receive confirmation once payment is verified.'
-        });
+        const regData = response.data.data;
+        const isFree = !selectedEvent?.registrationFee || Number(selectedEvent?.registrationFee) === 0;
         
-        // Redirect to registration detail after 2 seconds
-        setTimeout(() => {
-          navigate(`/registrations/${response.data.data.id}`);
-        }, 2000);
+        if (isFree || regData.status === 'CONFIRMED') {
+          setAlert({
+            type: 'success',
+            message: '🎉 Registration Confirmed! Your QR Code ticket is ready. Redirecting...'
+          });
+          setTimeout(() => {
+            navigate(`/app/registrations/${regData.id}`);
+          }, 1500);
+        } else {
+          setAlert({
+            type: 'success',
+            message: 'Registration created! Please submit your payment proof to complete registration.'
+          });
+          setTimeout(() => {
+            navigate(`/app/payments/new?registrationId=${regData.id}`);
+          }, 1500);
+        }
       }
     } catch (error) {
       setAlert({
@@ -335,6 +452,39 @@ export default function RegistrationForm() {
                             </div>
                           </div>
                         )}
+
+                        {/* Age & Gender Eligibility */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 col-span-2 pt-2 border-t border-gray-200/60">
+                          <div className="flex items-start gap-2">
+                            <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-gray-600 text-xs">Required Age Group</p>
+                              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                <span className={`px-2 py-0.5 rounded text-xs font-semibold border ${getMinistryAgeRule(selectedEvent.department?.type || selectedEvent.department?.name, selectedEvent.type).badgeColor}`}>
+                                  {getEventAgeDisplay(selectedEvent)}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-gray-500 mt-0.5">
+                                {getMinistryAgeRule(selectedEvent.department?.type || selectedEvent.department?.name, selectedEvent.type).description}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-start gap-2">
+                            <Users className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-gray-600 text-xs">Gender Eligibility</p>
+                              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                <span className={`px-2 py-0.5 rounded text-xs font-semibold border ${getEventGenderRule(selectedEvent).badgeColor}`}>
+                                  {getEventGenderRule(selectedEvent).label}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-gray-500 mt-0.5">
+                                {getEventGenderRule(selectedEvent).description}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -370,26 +520,56 @@ export default function RegistrationForm() {
                       />
                     </div>
 
-                    <Input
-                      label="Email"
-                      name="participantEmail"
-                      type="email"
-                      value={formData.participantEmail}
-                      onChange={handleChange}
-                      error={errors.participantEmail}
-                      required
-                      placeholder="Enter email address"
-                    />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Input
+                        label="Email"
+                        name="participantEmail"
+                        type="email"
+                        value={formData.participantEmail}
+                        onChange={handleChange}
+                        error={errors.participantEmail}
+                        required
+                        placeholder="Enter email address"
+                      />
 
-                    <Input
-                      label="Phone Number (Optional)"
-                      name="participantPhone"
-                      type="tel"
-                      value={formData.participantPhone}
-                      onChange={handleChange}
-                      error={errors.participantPhone}
-                      placeholder="+250 XXX XXX XXX"
-                    />
+                      <Input
+                        label="Age (years)"
+                        name="participantAge"
+                        type="number"
+                        value={formData.participantAge}
+                        onChange={handleChange}
+                        error={errors.participantAge}
+                        placeholder="e.g. 20"
+                        min="1"
+                        max="120"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Select
+                        label="Gender"
+                        name="participantGender"
+                        value={formData.participantGender}
+                        onChange={handleChange}
+                        error={errors.participantGender}
+                        required
+                        options={[
+                          { value: '', label: 'Select gender...' },
+                          { value: 'MALE', label: 'Male' },
+                          { value: 'FEMALE', label: 'Female' }
+                        ]}
+                      />
+
+                      <Input
+                        label="Phone Number (Optional)"
+                        name="participantPhone"
+                        type="tel"
+                        value={formData.participantPhone}
+                        onChange={handleChange}
+                        error={errors.participantPhone}
+                        placeholder="+250 XXX XXX XXX"
+                      />
+                    </div>
                   </div>
                 </CardBody>
               </Card>
@@ -444,7 +624,7 @@ export default function RegistrationForm() {
                 <Button
                   type="button"
                   variant="ghost"
-                  onClick={() => navigate('/registrations')}
+                  onClick={() => navigate('/app/registrations')}
                 >
                   Cancel
                 </Button>

@@ -101,7 +101,7 @@ public class ProposalServiceImpl implements ProposalService {
                 if (resolved == null) {
                     List<User> unionUsers = userRepository.findActiveByOrganizationUnitId(1L);
                     for (User u : unionUsers) {
-                        if ((u.getPosition() == Position.UNION_LEADER || u.getPosition() == Position.DEPARTMENT_LEADER)
+                        if ((u.getPosition() == Position.UNION_LEADER || u.getPosition() == Position.DEPARTMENT_LEADER || u.getPosition() == Position.MINISTRY_LEADER)
                                 && (creatorId == null || !u.getId().equals(creatorId))) {
                             log.info("Found Union Leader: {}", u.getEmail());
                             resolved = u;
@@ -399,6 +399,7 @@ public class ProposalServiceImpl implements ProposalService {
 
     @Override
     public ProposalResponse updateProposal(Long id, ProposalRequest request) {
+        validateDates(request.getStartDate(), request.getEndDate());
         Proposal proposal = getProposalEntity(id);
         if (proposal.getStatus() != ProposalStatus.DRAFT && proposal.getStatus() != ProposalStatus.REVISION_REQUESTED) {
             throw new BadRequestException("Cannot update proposal in status: " + proposal.getStatus());
@@ -496,6 +497,69 @@ public class ProposalServiceImpl implements ProposalService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<ProposalResponse> getProposalsForCurrentUser(Long userId) {
+        User user = userService.getUserById(userId);
+        Position position = user.getPosition();
+        Role role = user.getRole();
+
+        // 1. System Administrator (Superadmin): All proposals across RUM from district level to union
+        if (role == Role.ADMINISTRATOR) {
+            return proposalRepository.findAllActiveProposals().stream()
+                    .map(dtoMapper::toProposalResponse)
+                    .collect(Collectors.toList());
+        }
+
+        // 2. Union Administrator / Union Leader / Department Leader:
+        // Union leaders only see UNION-scoped proposals (or proposals they authored or department)
+        if (position == Position.UNION_ADMINISTRATOR || position == Position.UNION_LEADER ||
+                position == Position.DEPARTMENT_LEADER || position == Position.MINISTRY_LEADER) {
+            Long deptId = user.getDepartment() != null ? user.getDepartment().getId() : null;
+            return proposalRepository.findAllActiveProposals().stream()
+                    .filter(p -> (p.getProposedBy() != null && p.getProposedBy().getId().equals(userId)) ||
+                                 (deptId != null && p.getDepartment() != null && p.getDepartment().getId().equals(deptId)) ||
+                                 p.getScope() == ProposalScope.UNION)
+                    .map(dtoMapper::toProposalResponse)
+                    .collect(Collectors.toList());
+        }
+
+        // 3. Field Leader: Proposals where target unit is their Field OR child District under their Field, OR proposed by them
+        if (position == Position.FIELD_LEADER) {
+            Long fieldId = resolveFieldUnitId(user.getOrganizationUnit());
+            return proposalRepository.findAllActiveProposals().stream()
+                    .filter(p -> {
+                        boolean isAuthor = p.getProposedBy() != null && p.getProposedBy().getId().equals(userId);
+                        if (isAuthor) return true;
+                        if (fieldId == null) return false;
+                        Long targetUnitId = p.getTargetOrganizationUnit() != null ? p.getTargetOrganizationUnit().getId() : null;
+                        Long parentUnitId = (p.getTargetOrganizationUnit() != null && p.getTargetOrganizationUnit().getParent() != null)
+                                ? p.getTargetOrganizationUnit().getParent().getId() : null;
+                        return fieldId.equals(targetUnitId) || fieldId.equals(parentUnitId);
+                    })
+                    .map(dtoMapper::toProposalResponse)
+                    .collect(Collectors.toList());
+        }
+
+        // 4. District Pastor / Pastor: ONLY proposals where proposed_by_id = currentUser.id OR target_organization_unit_id = currentUser.organizationUnit.id
+        if (position == Position.DISTRICT_PASTOR || position == Position.PASTOR) {
+            Long districtId = user.getOrganizationUnit() != null ? user.getOrganizationUnit().getId() : null;
+            return proposalRepository.findAllActiveProposals().stream()
+                    .filter(p -> {
+                        boolean isAuthor = p.getProposedBy() != null && p.getProposedBy().getId().equals(userId);
+                        boolean isTargetUnit = districtId != null && p.getTargetOrganizationUnit() != null && districtId.equals(p.getTargetOrganizationUnit().getId());
+                        return isAuthor || isTargetUnit;
+                    })
+                    .map(dtoMapper::toProposalResponse)
+                    .collect(Collectors.toList());
+        }
+
+        // 5. Default Coordinator / User: My proposals
+        return proposalRepository.findActiveByProposedBy(userId).stream()
+                .map(dtoMapper::toProposalResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<ProposalResponse> getPendingLeaderReviewProposalsForUser(Long userId) {
         return getPendingReviewProposalsForUser(userId);
     }
@@ -508,22 +572,53 @@ public class ProposalServiceImpl implements ProposalService {
         User user = userService.getUserById(userId);
         Position position = user.getPosition();
 
-        // Union Administrator / Union Leader: sees all UNION-scope proposals
-        if (user.getRole() == Role.ADMINISTRATOR ||
-                position == Position.UNION_ADMINISTRATOR ||
-                position == Position.UNION_LEADER) {
-            return proposalRepository.findPendingFinalApprovalForUnionAdmin().stream()
-                    .map(dtoMapper::toProposalResponse).collect(Collectors.toList());
+        // 1. System Administrator: sees ALL pending proposals across all scopes (DISTRICT, FIELD, UNION)
+        if (user.getRole() == Role.ADMINISTRATOR) {
+            return proposalRepository.findAllActiveProposals().stream()
+                    .filter(p -> p.getStatus() == ProposalStatus.SUBMITTED ||
+                                 p.getStatus() == ProposalStatus.PENDING_LEADER_REVIEW ||
+                                 p.getStatus() == ProposalStatus.RECOMMENDED_BY_LEADER ||
+                                 p.getStatus() == ProposalStatus.UNDER_REVIEW)
+                    .filter(p -> p.getProposedBy() == null || !p.getProposedBy().getId().equals(userId))
+                    .map(dtoMapper::toProposalResponse)
+                    .collect(Collectors.toList());
+        }
+
+        // 2. Union Administrator / Union Leader: ONLY show proposals requiring Union action (scope = 'UNION')
+        if (position == Position.UNION_ADMINISTRATOR || position == Position.UNION_LEADER) {
+            return proposalRepository.findAllActiveProposals().stream()
+                    .filter(p -> p.getScope() == ProposalScope.UNION)
+                    .filter(p -> p.getStatus() == ProposalStatus.SUBMITTED ||
+                                 p.getStatus() == ProposalStatus.RECOMMENDED_BY_LEADER ||
+                                 p.getStatus() == ProposalStatus.UNDER_REVIEW)
+                    .filter(p -> p.getProposedBy() == null || !p.getProposedBy().getId().equals(userId))
+                    .map(dtoMapper::toProposalResponse)
+                    .collect(Collectors.toList());
         }
 
         // Department Leader: sees UNION-scope proposals from their dept awaiting endorsement
-        if (position == Position.DEPARTMENT_LEADER) {
+        if (position == Position.DEPARTMENT_LEADER || position == Position.MINISTRY_LEADER) {
             return getDeptLeaderPendingProposals(user);
         }
 
-        // Field Leader: sees FIELD-scope proposals targeting their field unit
+        // Field Leader: sees FIELD or DISTRICT scope proposals targeting their field unit or child districts
         if (position == Position.FIELD_LEADER) {
-            return getFieldLeaderPendingProposals(user);
+            Long fieldId = resolveFieldUnitId(user.getOrganizationUnit());
+            if (fieldId == null) return new ArrayList<>();
+            return proposalRepository.findAllActiveProposals().stream()
+                    .filter(p -> (p.getScope() == ProposalScope.FIELD || p.getScope() == ProposalScope.DISTRICT))
+                    .filter(p -> p.getStatus() == ProposalStatus.SUBMITTED ||
+                                 p.getStatus() == ProposalStatus.PENDING_LEADER_REVIEW ||
+                                 p.getStatus() == ProposalStatus.UNDER_REVIEW)
+                    .filter(p -> {
+                        Long targetUnitId = p.getTargetOrganizationUnit() != null ? p.getTargetOrganizationUnit().getId() : null;
+                        Long parentUnitId = (p.getTargetOrganizationUnit() != null && p.getTargetOrganizationUnit().getParent() != null)
+                                ? p.getTargetOrganizationUnit().getParent().getId() : null;
+                        return fieldId.equals(targetUnitId) || fieldId.equals(parentUnitId);
+                    })
+                    .filter(p -> p.getProposedBy() == null || !p.getProposedBy().getId().equals(userId))
+                    .map(dtoMapper::toProposalResponse)
+                    .collect(Collectors.toList());
         }
 
         // District Pastor: sees DISTRICT-scope proposals targeting their district unit
@@ -537,26 +632,7 @@ public class ProposalServiceImpl implements ProposalService {
     @Override
     @Transactional(readOnly = true)
     public Long countPendingReviewForUser(Long userId) {
-        User user = userService.getUserById(userId);
-        Position position = user.getPosition();
-
-        if (user.getRole() == Role.ADMINISTRATOR || position == Position.UNION_ADMINISTRATOR || position == Position.UNION_LEADER) {
-            return proposalRepository.countPendingFinalApprovalForUnionAdmin();
-        }
-        if (position == Position.DEPARTMENT_LEADER) {
-            return departmentRepository.findFirstByLeaderId(user.getId())
-                    .map(dept -> proposalRepository.countPendingEndorsementForDeptLeader(dept.getId()))
-                    .orElse(0L);
-        }
-        if (position == Position.FIELD_LEADER && user.getOrganizationUnit() != null) {
-            Long fieldId = resolveFieldUnitId(user.getOrganizationUnit());
-            return fieldId != null ? proposalRepository.countPendingForFieldLeader(fieldId) : 0L;
-        }
-        if (position == Position.DISTRICT_PASTOR && user.getOrganizationUnit() != null) {
-            Long districtId = resolveDistrictUnitId(user.getOrganizationUnit());
-            return districtId != null ? (long) getDistrictPastorPendingProposals(user).size() : 0L;
-        }
-        return 0L;
+        return (long) getPendingReviewProposalsForUser(userId).size();
     }
 
     // ── MULTI-LEVEL LEADER REVIEW (Level 1: Field/Union Leader) ────────────────
@@ -565,16 +641,43 @@ public class ProposalServiceImpl implements ProposalService {
         Proposal proposal = getProposalEntity(id);
         User leader = userService.getUserById(leaderId);
 
+        // Guard: Proposal authors cannot review or approve their own proposals
+        if (proposal.getProposedBy() != null && proposal.getProposedBy().getId().equals(leaderId)) {
+            throw new BadRequestException("Proposal authors cannot review or approve their own proposals.");
+        }
+
+        // Guard: Union leaders only review UNION-scoped proposals
+        if (leader.getRole() != Role.ADMINISTRATOR &&
+                (leader.getPosition() == Position.UNION_ADMINISTRATOR || leader.getPosition() == Position.UNION_LEADER) &&
+                proposal.getScope() != ProposalScope.UNION) {
+            throw new BadRequestException("Union leadership reviews are reserved for UNION-scoped proposals.");
+        }
+
         ProposalStatus decision = request.getDecision();
         ProposalStatus effectiveStatus;
-        if (decision == ProposalStatus.APPROVED || decision == ProposalStatus.RECOMMENDED_BY_LEADER) {
-            effectiveStatus = ProposalStatus.RECOMMENDED_BY_LEADER;
-        } else if (decision == ProposalStatus.REJECTED) {
-            effectiveStatus = ProposalStatus.REJECTED;
-        } else if (decision == ProposalStatus.REVISION_REQUESTED) {
-            effectiveStatus = ProposalStatus.REVISION_REQUESTED;
+
+        if (proposal.getScope() == ProposalScope.DISTRICT || proposal.getScope() == ProposalScope.FIELD) {
+            // Field Leadership has final decision authority for DISTRICT and FIELD scopes
+            if (decision == ProposalStatus.APPROVED || decision == ProposalStatus.RECOMMENDED_BY_LEADER) {
+                effectiveStatus = ProposalStatus.APPROVED;
+            } else if (decision == ProposalStatus.REJECTED) {
+                effectiveStatus = ProposalStatus.REJECTED;
+            } else if (decision == ProposalStatus.REVISION_REQUESTED) {
+                effectiveStatus = ProposalStatus.REVISION_REQUESTED;
+            } else {
+                effectiveStatus = decision;
+            }
         } else {
-            effectiveStatus = decision;
+            // UNION scope: Level 1 Leader recommends to Union Administrator
+            if (decision == ProposalStatus.APPROVED || decision == ProposalStatus.RECOMMENDED_BY_LEADER) {
+                effectiveStatus = ProposalStatus.RECOMMENDED_BY_LEADER;
+            } else if (decision == ProposalStatus.REJECTED) {
+                effectiveStatus = ProposalStatus.REJECTED;
+            } else if (decision == ProposalStatus.REVISION_REQUESTED) {
+                effectiveStatus = ProposalStatus.REVISION_REQUESTED;
+            } else {
+                effectiveStatus = decision;
+            }
         }
 
         saveReview(proposal, leader, effectiveStatus, "LEADER_REVIEW", request.getComments());
@@ -585,12 +688,24 @@ public class ProposalServiceImpl implements ProposalService {
         proposal.setLeaderReviewedAt(LocalDateTime.now());
         proposal.setReviewedBy(leader);
         proposal.setReviewComments(request.getComments());
-        if (proposal.getScope() == ProposalScope.UNION) {
+
+        if (effectiveStatus == ProposalStatus.APPROVED) {
+            proposal.setAdminApprovedBy(leader);
+            proposal.setAdminReviewComments(request.getComments());
+            proposal.setAdminApprovedAt(LocalDateTime.now());
+            // Locks dates/venue and automatically creates the official event record
+            autoCreateEvent(proposal);
+        } else if (proposal.getScope() == ProposalScope.UNION) {
             proposal.setDeptLeaderEndorsed(true);
         }
 
         Proposal saved = proposalRepository.save(proposal);
-        log.info("Leader {} ({}) submitted review for proposal {} → {}", leader.getEmail(), leader.getPosition(), id, effectiveStatus);
+        log.info("Leader {} ({}) submitted review for proposal {} (scope={}) → {}", leader.getEmail(), leader.getPosition(), id, proposal.getScope(), effectiveStatus);
+
+        if (effectiveStatus == ProposalStatus.APPROVED) {
+            sendApprovalNotification(saved);
+        }
+
         return dtoMapper.toProposalResponse(saved);
     }
 
@@ -599,6 +714,16 @@ public class ProposalServiceImpl implements ProposalService {
     public ProposalResponse adminApproval(Long id, AdminApprovalRequest request, Long adminId) {
         Proposal proposal = getProposalEntity(id);
         User admin = userService.getUserById(adminId);
+
+        // Guard: Proposal authors cannot approve their own proposals
+        if (proposal.getProposedBy() != null && proposal.getProposedBy().getId().equals(adminId)) {
+            throw new BadRequestException("Proposal authors cannot review or approve their own proposals.");
+        }
+
+        // Guard: Non-superadmin union administrators only approve UNION-scoped proposals
+        if (admin.getRole() != Role.ADMINISTRATOR && proposal.getScope() != ProposalScope.UNION) {
+            throw new BadRequestException("Union leadership can only approve UNION-scoped proposals. District and Field scope proposals are approved at their respective levels or by the System Administrator.");
+        }
 
         if (request != null) {
             if (request.getConfirmedVenue() != null && !request.getConfirmedVenue().trim().isEmpty()) {
@@ -610,12 +735,14 @@ public class ProposalServiceImpl implements ProposalService {
             if (request.getConfirmedEndDate() != null) {
                 proposal.setEndDate(request.getConfirmedEndDate());
             }
-            validateDates(proposal.getStartDate(), proposal.getEndDate());
+            if (proposal.getEndDate().isBefore(proposal.getStartDate())) {
+                throw new IllegalArgumentException("Event end date cannot be before the start date.");
+            }
         }
 
         String comments = (request != null && request.getComments() != null && !request.getComments().trim().isEmpty())
                 ? request.getComments().trim()
-                : "Approved by Union Administrator";
+                : "Approved by " + (admin.getPosition() != null ? admin.getPosition().name() : "Union Administrator");
 
         return executeAdminApproval(proposal, comments, admin);
     }
@@ -624,6 +751,14 @@ public class ProposalServiceImpl implements ProposalService {
     public ProposalResponse adminApproval(Long id, String comments, Long adminId) {
         Proposal proposal = getProposalEntity(id);
         User admin = userService.getUserById(adminId);
+
+        if (proposal.getProposedBy() != null && proposal.getProposedBy().getId().equals(adminId)) {
+            throw new BadRequestException("Proposal authors cannot review or approve their own proposals.");
+        }
+
+        if (admin.getRole() != Role.ADMINISTRATOR && proposal.getScope() != ProposalScope.UNION) {
+            throw new BadRequestException("Union leadership can only approve UNION-scoped proposals. District and Field scope proposals are approved at their respective levels or by the System Administrator.");
+        }
 
         String effectiveComments = (comments != null && !comments.trim().isEmpty())
                 ? comments.trim()
@@ -646,9 +781,9 @@ public class ProposalServiceImpl implements ProposalService {
         autoCreateEvent(proposal);
 
         Proposal saved = proposalRepository.save(proposal);
-        log.info("Union Administrator {} finalized approval for proposal {} → Status: APPROVED", admin.getEmail(), proposal.getId());
+        log.info("Administrator / Leader {} finalized approval for proposal {} → Status: APPROVED", admin.getEmail(), proposal.getId());
         
-        // Automated notification to Coordinator
+        // Automated notification to Creator
         sendApprovalNotification(saved);
         
         return dtoMapper.toProposalResponse(saved);
@@ -658,6 +793,7 @@ public class ProposalServiceImpl implements ProposalService {
     @Transactional(readOnly = true)
     public List<ProposalResponse> getPendingAdminApprovalProposals() {
         return proposalRepository.findPendingFinalApprovalForUnionAdmin().stream()
+                .filter(p -> p.getScope() == ProposalScope.UNION)
                 .map(dtoMapper::toProposalResponse).collect(Collectors.toList());
     }
 
@@ -813,10 +949,13 @@ public class ProposalServiceImpl implements ProposalService {
 
     private void validateDates(java.time.LocalDate startDate, java.time.LocalDate endDate) {
         if (startDate == null || endDate == null) {
-            throw new BadRequestException("Start date and end date are required");
+            throw new IllegalArgumentException("Start date and end date are required.");
         }
         if (endDate.isBefore(startDate)) {
-            throw new BadRequestException("End date cannot be before start date");
+            throw new IllegalArgumentException("Event end date cannot be before the start date.");
+        }
+        if (startDate.isBefore(java.time.LocalDate.now().plusDays(30))) {
+            throw new IllegalArgumentException("Event proposals must be scheduled at least 30 days in advance.");
         }
     }
 
@@ -841,19 +980,22 @@ public class ProposalServiceImpl implements ProposalService {
         }
     }
 
-    private void notifyFieldScopeUnionLeaders(Proposal proposal) {
+    private void notifyUnionLeadersEventApproved(Proposal proposal) {
         if (proposal == null || notificationService == null) return;
         try {
-            String title = "Field Scope Event / Proposal Scheduled: " + proposal.getEventName();
-            String msg = "A Field Scope event proposal '" + proposal.getEventName() + "' at venue '" + proposal.getVenue() 
-                    + "' (" + proposal.getStartDate() + " to " + proposal.getEndDate() + ") has been submitted by " 
-                    + (proposal.getProposedBy() != null ? proposal.getProposedBy().getFirstName() + " " + proposal.getProposedBy().getLastName() : "Field Organizer") 
-                    + " for field " + (proposal.getTargetOrganizationUnit() != null ? proposal.getTargetOrganizationUnit().getName() : "Field Unit") + ".";
+            String scopeName = proposal.getScope() != null ? proposal.getScope().name() : "Local";
+            String unitName = proposal.getTargetOrganizationUnit() != null ? proposal.getTargetOrganizationUnit().getName() : "Local Unit";
+            String title = "New " + scopeName + " Event Approved: " + proposal.getEventName();
+            String msg = "A " + scopeName + " scope event '" + proposal.getEventName() + "' at venue '" + proposal.getVenue() 
+                    + "' (" + proposal.getStartDate() + " to " + proposal.getEndDate() + ") has been approved for " 
+                    + unitName + ". Organized by " 
+                    + (proposal.getProposedBy() != null ? proposal.getProposedBy().getFirstName() + " " + proposal.getProposedBy().getLastName() : "Organizer") + ".";
             String actionUrl = proposal.getEvent() != null ? "/app/events/" + proposal.getEvent().getId() : "/app/proposals/" + proposal.getId();
-            Long senderId = proposal.getProposedBy() != null ? proposal.getProposedBy().getId() : null;
+            Long senderId = proposal.getAdminApprovedBy() != null ? proposal.getAdminApprovedBy().getId() : (proposal.getReviewedBy() != null ? proposal.getReviewedBy().getId() : null);
             notificationService.notifyUnionLeadersForFieldScope(title, msg, actionUrl, senderId, proposal.getEvent());
+            log.info("Notified Union Leaders of approved {} scope event {}", scopeName, proposal.getEventName());
         } catch (Exception e) {
-            log.warn("Failed to notify Union Leaders for Field scope proposal: {}", e.getMessage());
+            log.warn("Failed to notify Union Leaders of approved event: {}", e.getMessage());
         }
     }
 
@@ -879,8 +1021,7 @@ public class ProposalServiceImpl implements ProposalService {
         proposal.setEvent(saved);
         log.info("Auto-created Event {} (status: REGISTRATION_OPEN) for approved proposal {}", saved.getEventCode(), proposal.getId());
 
-        if (proposal.getScope() == ProposalScope.FIELD) {
-            notifyFieldScopeUnionLeaders(proposal);
-        }
+        // Notify Union leadership of any approved event (DISTRICT, FIELD, UNION) scheduled across their union
+        notifyUnionLeadersEventApproved(proposal);
     }
 }

@@ -71,6 +71,7 @@ export default function NotificationList() {
         await notificationApi.markAsRead(notif.id);
         setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, isRead: true, readAt: new Date().toISOString() } : n));
       }
+      window.dispatchEvent(new Event('notifications-updated'));
     } catch (err) {
       setAlert({ type: 'error', message: 'Failed to update notification status' });
     }
@@ -81,6 +82,7 @@ export default function NotificationList() {
       await notificationApi.markAllAsRead();
       setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
       setAlert({ type: 'success', message: 'All notifications marked as read' });
+      window.dispatchEvent(new Event('notifications-updated'));
     } catch (err) {
       setAlert({ type: 'error', message: 'Failed to mark all as read' });
     }
@@ -92,6 +94,7 @@ export default function NotificationList() {
       await notificationApi.delete(id);
       setNotifications(prev => prev.filter(n => n.id !== id));
       setAlert({ type: 'success', message: 'Notification deleted successfully' });
+      window.dispatchEvent(new Event('notifications-updated'));
     } catch (err) {
       setAlert({ type: 'error', message: 'Failed to delete notification' });
     }

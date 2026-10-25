@@ -45,6 +45,19 @@ public class AttendanceServiceImpl implements AttendanceService {
             throw new BusinessRuleException("Attendance already recorded for this session");
         }
         
+        // Check if event is concluded or cancelled
+        com.example.Camp.entity.Event event = session.getEvent();
+        java.time.LocalDate today = java.time.LocalDate.now();
+        if (event != null) {
+            if (event.getStatus() == com.example.Camp.enums.EventStatus.CANCELLED) {
+                throw new BusinessRuleException("Cannot record attendance for a cancelled event");
+            }
+            if (event.getStatus() == com.example.Camp.enums.EventStatus.COMPLETED || 
+                (event.getEndDate() != null && event.getEndDate().isBefore(today))) {
+                throw new BusinessRuleException("Attendance closed: the event concluded on " + event.getEndDate());
+            }
+        }
+        
         // Check if session is for the same event as registration
         if (!session.getEvent().getId().equals(registration.getEvent().getId())) {
             throw new BusinessRuleException("Session and registration are for different events");
@@ -76,6 +89,19 @@ public class AttendanceServiceImpl implements AttendanceService {
         // Check if already attended
         if (attendanceRepository.findBySessionAndRegistration(sessionId, registration.getId()).isPresent()) {
             throw new BusinessRuleException("Attendance already recorded for this session");
+        }
+        
+        // Check if event is concluded or cancelled
+        com.example.Camp.entity.Event event = session.getEvent();
+        java.time.LocalDate today = java.time.LocalDate.now();
+        if (event != null) {
+            if (event.getStatus() == com.example.Camp.enums.EventStatus.CANCELLED) {
+                throw new BusinessRuleException("Cannot record attendance for a cancelled event");
+            }
+            if (event.getStatus() == com.example.Camp.enums.EventStatus.COMPLETED || 
+                (event.getEndDate() != null && event.getEndDate().isBefore(today))) {
+                throw new BusinessRuleException("Attendance closed: the event concluded on " + event.getEndDate());
+            }
         }
         
         // Check if session is for the same event as registration

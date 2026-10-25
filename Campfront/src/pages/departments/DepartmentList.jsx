@@ -1,79 +1,357 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { PageHeader, StatusBadge, Modal } from '../../components/ui/index';
-import { Plus, Users, CalendarDays, Eye, Edit2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { 
+  Users, 
+  Eye, 
+  Search, 
+  Phone, 
+  Mail, 
+  Building, 
+  ShieldCheck, 
+  RefreshCw,
+  Award,
+  Sparkles,
+  BookOpen,
+  Church,
+  Compass,
+  Heart,
+  Music,
+  Radio,
+  Briefcase,
+  GraduationCap
+} from 'lucide-react';
+import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
+import Badge from '../../components/ui/Badge';
+import Button from '../../components/ui/Button';
+import Input from '../../components/ui/Input';
+import Modal from '../../components/ui/Modal';
+import EmptyState from '../../components/ui/EmptyState';
+import { departmentApi } from '../../api';
 
-const DEPARTMENTS = [
-  { id: 1, name: 'Youth Ministries',       leader: 'Jean Pierre N.', events: 4, members: 320, status: 'ACTIVE', icon: '🏕️', color: '#4f46e5', description: 'Youth Ministries, Pathfinder, and Adventurer clubs.' },
-  { id: 2, name: "Women's Ministries (MIFEM)", leader: 'Grace Mukamana',  events: 2, members: 180, status: 'ACTIVE', icon: '👩', color: '#ec4899', description: 'Ministères Féminins — Empowering Adventist women in leadership.' },
-  { id: 3, name: "Children's Ministries",  leader: 'Alice Nyiraneza', events: 3, members: 210, status: 'ACTIVE', icon: '🧒', color: '#f59e0b', description: 'Nurturing children through Bible clubs and camps.' },
-  { id: 4, name: 'Family Ministries',      leader: 'Pastor Eric H.',  events: 2, members: 145, status: 'ACTIVE', icon: '👨‍👩‍👧', color: '#10b981', description: 'Strengthening Adventist families through seminars.' },
-  { id: 5, name: 'Ministerial Association',leader: 'Elder David K.',   events: 1, members: 62,  status: 'ACTIVE', icon: '✝️', color: '#8b5cf6', description: 'Supporting pastors and church elders across fields.' },
-  { id: 6, name: 'Personal Ministries & Sabbath School', leader: 'Ruth Ingabire', events: 3, members: 240, status: 'ACTIVE', icon: '🤝', color: '#14b8a6', description: 'Evangelism, outreach, Bible study, and discipleship programs.' },
-  { id: 7, name: 'Adventist Chaplaincy Ministries (ACM)', leader: 'Pastor Joseph M.', events: 1, members: 75, status: 'ACTIVE', icon: '⛪', color: '#6366f1', description: 'Chaplaincy services in schools, hospitals, and institutions.' },
-  { id: 8, name: 'Adventist Possibility Ministries (APM)', leader: 'Claire U.', events: 1, members: 50, status: 'ACTIVE', icon: '♿', color: '#0ea5e9', description: 'Inclusion and support for individuals with special needs.' },
-  { id: 9, name: 'Health Ministries',      leader: 'Dr. Samuel K.',   events: 1, members: 88,  status: 'ACTIVE', icon: '🏥', color: '#06b6d4', description: 'Promoting physical, mental, and spiritual health principles.' },
-  { id: 10, name: 'Publishing Ministries',  leader: 'Mary Uwimana',    events: 1, members: 45,  status: 'ACTIVE', icon: '📚', color: '#f97316', description: 'Literature evangelism and Christian book ministry.' },
-  { id: 11, name: 'Stewardship Ministries', leader: 'Elder Isaac R.',  events: 2, members: 130, status: 'ACTIVE', icon: '💎', color: '#eab308', description: 'Biblical stewardship, tithing, and resource management.' },
-  { id: 12, name: 'Public Affairs & Religious Liberty (PARL)', leader: 'Adv. Emmanuel B.', events: 1, members: 40, status: 'ACTIVE', icon: '⚖️', color: '#64748b', description: 'Promoting religious freedom, freedom of conscience, and PR.' },
-  { id: 13, name: 'Education Department',  leader: 'Prof. Peter N.',   events: 1, members: 75,  status: 'ACTIVE', icon: '🎓', color: '#a855f7', description: 'Overseeing Adventist schools, universities, and educators.' },
-  { id: 14, name: 'Communication Department', leader: 'Jean Paul M.',  events: 2, members: 95,  status: 'ACTIVE', icon: '📡', color: '#3b82f6', description: 'Media relations, digital evangelism, and broadcasting.' },
-];
+// Refined Icon mapping for the 17 official SDA Ministries
+const DEPT_ICON_MAP = {
+  YOUTH: Compass,
+  WOMEN_MIFEM: Heart,
+  CHILDREN: Sparkles,
+  FAMILY: Users,
+  MINISTERIAL: Church,
+  SABBATH_SCHOOL_PM: BookOpen,
+  CHAPLAINCY: Church,
+  POSSIBILITY: Heart,
+  HEALTH: Heart,
+  PUBLISHING: BookOpen,
+  STEWARDSHIP: Award,
+  PARL: ShieldCheck,
+  EDUCATION: GraduationCap,
+  COMMUNICATION: Radio,
+  EVANGELISM: Compass,
+  REVIVAL_REFORMATION: Sparkles,
+  MUSIC: Music,
+};
 
 export default function DepartmentList() {
+  const [departments, setDepartments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
   const [selected, setSelected] = useState(null);
-  return (
-    <div className="animate-fade-in">
-      <PageHeader
-        title="Ministries & Departments"
-        subtitle="All 14 official organizational functional ministries of Rwanda Union Mission"
-        breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Ministries' }]}
-        actions={<button className="btn btn-primary"><Plus size={16} /> Add Ministry</button>}
-      />
+  const [error, setError] = useState(null);
 
-      <div className="events-grid">
-        {DEPARTMENTS.map(dept => (
-          <div key={dept.id} className="card" style={{ cursor: 'pointer', borderLeft: `4px solid ${dept.color}` }} onClick={() => setSelected(dept)}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
-              <div style={{ width: 48, height: 48, borderRadius: 'var(--radius-md)', background: `${dept.color}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>
-                {dept.icon}
-              </div>
-              <div style={{ flex: 1 }}>
-                <h4 style={{ fontSize: 'var(--text-base)', fontWeight: 700, marginBottom: 2 }}>{dept.name}</h4>
-                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: 0 }}>Leader: {dept.leader}</p>
-              </div>
-              <StatusBadge status={dept.status} />
-            </div>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: 16, minHeight: 40 }}>{dept.description}</p>
-            <div style={{ display: 'flex', gap: 16, padding: '12px 0', borderTop: '1px solid var(--border-subtle)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>
-                <CalendarDays size={14} color={dept.color} /><strong>{dept.events}</strong> events
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>
-                <Users size={14} color={dept.color} /><strong>{dept.members}</strong> members
-              </div>
-            </div>
-          </div>
-        ))}
+  useEffect(() => {
+    fetchDepartments();
+  }, []);
+
+  const fetchDepartments = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await departmentApi.getAll();
+      const data = res.data?.data || res.data || [];
+      setDepartments(data);
+    } catch (err) {
+      console.error('Failed to fetch departments', err);
+      setError('Failed to load ministries from server.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filtered = departments.filter(d => 
+    d.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    d.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    d.leaderName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    d.description?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const getDeptIcon = (type, name) => {
+    if (type && DEPT_ICON_MAP[type]) return DEPT_ICON_MAP[type];
+    const n = (name || '').toLowerCase();
+    if (n.includes('youth') || n.includes('adventurer') || n.includes('pathfinder')) return Compass;
+    if (n.includes('women') || n.includes('mifem') || n.includes('family') || n.includes('health')) return Heart;
+    if (n.includes('child') || n.includes('revival')) return Sparkles;
+    if (n.includes('ministerial') || n.includes('pastor') || n.includes('chaplain')) return Church;
+    if (n.includes('sabbath') || n.includes('publish') || n.includes('book')) return BookOpen;
+    if (n.includes('education') || n.includes('school')) return GraduationCap;
+    if (n.includes('comm') || n.includes('media')) return Radio;
+    if (n.includes('music') || n.includes('choir')) return Music;
+    return BookOpen;
+  };
+
+  return (
+    <div className="space-y-6 animate-fadeIn">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Ministries & Departments Directory</h1>
+          <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">Official organizational and functional ministries of Rwanda Union Mission (RUM) across 8 Field Conferences</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button 
+            variant="secondary" 
+            icon={<RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />}
+            onClick={fetchDepartments}
+            disabled={loading}
+          >
+            Refresh
+          </Button>
+          <Link to="/app/organization">
+            <Button variant="primary" icon={<Building className="w-4 h-4" />}>
+              View Org Hierarchy
+            </Button>
+          </Link>
+        </div>
       </div>
 
-      {selected && (
-        <Modal open={!!selected} onClose={() => setSelected(null)} title={selected.name}
-          footer={<><button className="btn btn-ghost" onClick={() => setSelected(null)}>Close</button><button className="btn btn-primary"><Edit2 size={14} /> Edit</button></>}>
+      {/* Ministries Stats Banner */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="card p-4 flex items-center gap-4 border border-blue-200/80 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/40">
+          <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center text-xl font-bold shadow-xs shrink-0">
+            {departments.length || 16}
+          </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
-              <div style={{ width: 64, height: 64, borderRadius: 'var(--radius-lg)', background: `${selected.color}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36 }}>{selected.icon}</div>
+            <div className="text-xs font-bold uppercase tracking-wider text-blue-800 dark:text-blue-300">Total Active Ministries</div>
+            <div className="text-sm text-slate-800 dark:text-slate-200 font-semibold mt-0.5">Official Rwanda Union Mission Ministries</div>
+          </div>
+        </div>
+
+        <div className="card p-4 flex items-center gap-4 border border-emerald-200/80 dark:border-emerald-900/60 bg-emerald-50/50 dark:bg-emerald-950/40">
+          <div className="w-12 h-12 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-xl font-bold shadow-xs shrink-0">
+            <Award className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <div className="text-xs font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">Appointed Directors</div>
+            <div className="text-sm text-slate-800 dark:text-slate-200 font-semibold mt-0.5">
+              {departments.filter(d => d.leaderName).length} Active RUM Directors
+            </div>
+          </div>
+        </div>
+
+        <div className="card p-4 flex items-center gap-4 border border-amber-200/80 dark:border-amber-900/60 bg-amber-50/50 dark:bg-amber-950/40">
+          <div className="w-12 h-12 rounded-xl bg-amber-600 text-white flex items-center justify-center text-xl font-bold shadow-xs shrink-0">
+            <Sparkles className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <div className="text-xs font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">Administrative Scope</div>
+            <div className="text-sm text-slate-800 dark:text-slate-200 font-semibold mt-0.5">Rwanda Union Mission & 8 Field Conferences</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Search Bar */}
+      <Card>
+        <CardBody className="py-3">
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+            <input
+              type="text"
+              placeholder="Search ministry by name, code, director, or description..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all font-medium"
+            />
+          </div>
+        </CardBody>
+      </Card>
+
+      {/* Grid of Ministries */}
+      {loading ? (
+        <div className="card p-12 text-center text-slate-500 dark:text-slate-400">
+          <div className="w-7 h-7 border-3 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+          <p className="text-sm font-medium">Loading Rwanda Union Mission (RUM) Ministries...</p>
+        </div>
+      ) : error ? (
+        <div className="card p-8 text-center text-rose-600 dark:text-rose-400">
+          <p className="font-semibold">{error}</p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={fetchDepartments}>Retry</Button>
+        </div>
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon={<BookOpen className="w-12 h-12" />}
+          title={`No ministries matched "${searchTerm}"`}
+          description="Try adjusting your search criteria"
+        />
+      ) : (
+        <div className="events-grid">
+          {filtered.map(dept => {
+            const IconComponent = getDeptIcon(dept.departmentType, dept.name);
+            return (
+              <div 
+                key={dept.id} 
+                className="card p-5 hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between"
+                onClick={() => setSelected(dept)}
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-11 h-11 rounded-xl bg-primary-50 dark:bg-primary-950/70 border border-primary-100 dark:border-primary-800/60 flex items-center justify-center text-primary-600 dark:text-primary-400 shrink-0">
+                        <IconComponent className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="font-bold text-slate-900 dark:text-white text-base truncate leading-snug">
+                          {dept.name}
+                        </h4>
+                        {dept.code && (
+                          <span className="inline-block text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 mt-1 border border-slate-200 dark:border-slate-700">
+                            {dept.code}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <Badge variant={dept.active !== false ? 'success' : 'danger'} size="sm">
+                      {dept.active !== false ? 'Active' : 'Inactive'}
+                    </Badge>
+                  </div>
+
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 line-clamp-2 leading-relaxed">
+                    {dept.description || 'Official ministry department serving Rwanda Union Mission & North Rwanda Field.'}
+                  </p>
+                </div>
+
+                <div>
+                  {/* Director / Leader Card Info */}
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/80 dark:border-slate-700/80 mb-3 space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500 dark:text-slate-400 font-medium">Department Director:</span>
+                      <span className="font-bold text-slate-900 dark:text-white truncate max-w-[150px]">
+                        {dept.leaderName || 'Appointed Director'}
+                      </span>
+                    </div>
+                    {dept.leaderPhone && (
+                      <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">
+                        <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span>{dept.leaderPhone}</span>
+                      </div>
+                    )}
+                    {dept.leaderEmail && (
+                      <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 truncate">
+                        <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span className="truncate">{dept.leaderEmail}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2.5 border-t border-slate-100 dark:border-slate-800 text-xs">
+                    <div className="flex items-center gap-1 text-primary-600 dark:text-primary-400 font-semibold">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Official Ministry</span>
+                    </div>
+                    <span className="text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 flex items-center gap-1 font-medium transition-colors">
+                      Details <Eye className="w-3.5 h-3.5" />
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Detail Modal */}
+      {selected && (
+        <Modal 
+          isOpen={!!selected} 
+          onClose={() => setSelected(null)} 
+          title={selected.name}
+          footer={
+            <div className="flex items-center justify-between w-full">
+              <Button variant="ghost" onClick={() => setSelected(null)}>Close</Button>
+              <Link to="/app/users" onClick={() => setSelected(null)}>
+                <Button variant="primary" icon={<Users className="w-4 h-4" />}>
+                  View in Leadership Directory
+                </Button>
+              </Link>
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            <div className="flex items-center gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
+              <div className="w-14 h-14 rounded-2xl bg-primary-50 dark:bg-primary-950/70 border border-primary-100 dark:border-primary-800/60 flex items-center justify-center text-primary-600 dark:text-primary-400 text-2xl font-bold shrink-0">
+                {(() => {
+                  const Icon = getDeptIcon(selected.departmentType, selected.name);
+                  return <Icon className="w-7 h-7" />;
+                })()}
+              </div>
               <div>
-                <h4 style={{ marginBottom: 4 }}>{selected.name}</h4>
-                <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{selected.description}</p>
+                <h4 className="text-lg font-bold text-slate-900 dark:text-white">{selected.name}</h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Code: <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{selected.code}</span>
+                </p>
               </div>
             </div>
-            {[['Leader', selected.leader], ['Events Organized', selected.events], ['Total Members', selected.members], ['Status', selected.status]].map(([l, v]) => (
-              <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-                <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{l}</span>
-                <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)', fontWeight: 600 }}>{v}</span>
+
+            <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 space-y-2.5">
+              <h5 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Director & Leadership Contact</h5>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-slate-500 dark:text-slate-400">Director Name:</span>
+                  <span className="font-bold text-slate-900 dark:text-white">{selected.leaderName || 'Appointed Director'}</span>
+                </div>
+                {selected.leaderPosition && (
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-slate-500 dark:text-slate-400">Position:</span>
+                    <span className="font-semibold text-primary-700 dark:text-primary-300 bg-primary-50 dark:bg-primary-950/80 px-2 py-0.5 rounded-md text-xs border border-primary-200 dark:border-primary-800/60">
+                      {selected.leaderPosition.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                )}
+                {selected.leaderEmail && (
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-slate-500 dark:text-slate-400">Email:</span>
+                    <a href={`mailto:${selected.leaderEmail}`} className="text-primary-600 dark:text-primary-400 hover:underline font-medium">
+                      {selected.leaderEmail}
+                    </a>
+                  </div>
+                )}
+                {selected.leaderPhone && (
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-slate-500 dark:text-slate-400">Phone:</span>
+                    <a href={`tel:${selected.leaderPhone}`} className="text-slate-800 dark:text-slate-200 font-medium">
+                      {selected.leaderPhone}
+                    </a>
+                  </div>
+                )}
               </div>
-            ))}
+            </div>
+
+            <div className="space-y-2.5 pt-2">
+              <div className="flex justify-between items-start gap-4 py-2 border-b border-slate-100 dark:border-slate-800">
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Description</span>
+                <span className="text-xs text-slate-800 dark:text-slate-200 text-right max-w-[70%] leading-relaxed">
+                  {selected.description}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Department Type</span>
+                <span className="text-xs text-slate-800 dark:text-slate-200 font-bold">
+                  {selected.departmentType}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-2">
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Status</span>
+                <Badge variant={selected.active !== false ? 'success' : 'danger'} size="sm">
+                  {selected.active !== false ? 'Active' : 'Inactive'}
+                </Badge>
+              </div>
+            </div>
           </div>
         </Modal>
       )}

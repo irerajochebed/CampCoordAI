@@ -1,6 +1,7 @@
 package com.example.Camp.entity;
 
 import com.example.Camp.enums.OrganizationLevel;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -14,6 +15,7 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(callSuper = true)
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class OrganizationUnit extends BaseEntity {
     
     @Column(nullable = false)
@@ -34,6 +36,7 @@ public class OrganizationUnit extends BaseEntity {
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
+    @JsonIgnoreProperties({"parent", "children", "users", "hibernateLazyInitializer", "handler"})
     private OrganizationUnit parent;
     
     @Column(name = "is_custom", columnDefinition = "boolean default false")
@@ -42,9 +45,11 @@ public class OrganizationUnit extends BaseEntity {
     
     @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL)
     @Builder.Default
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private List<OrganizationUnit> children = new ArrayList<>();
     
     @OneToMany(mappedBy = "organizationUnit", cascade = CascadeType.ALL)
     @Builder.Default
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private List<User> users = new ArrayList<>();
 }

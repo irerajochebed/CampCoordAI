@@ -49,12 +49,14 @@ export default function StaffAssignment() {
     { value: 'CAMP_SECRETARY', label: 'Camp Secretary' },
     { value: 'FINANCE_OFFICER', label: 'Finance Officer' },
     { value: 'SPEAKER', label: 'Speaker' },
-    { value: 'PA_TEAM', label: 'PA Team Member' },
+    { value: 'PA_TEAM', label: 'PA & Sound Team Member' },
+    { value: 'MEDIA_TEAM', label: 'Media & Broadcast Team Member' },
     { value: 'WORSHIP_LEADER', label: 'Worship Leader' },
     { value: 'REGISTRATION_DESK', label: 'Registration Desk' },
     { value: 'ACCOMMODATION_MANAGER', label: 'Accommodation Manager' },
     { value: 'RESOURCE_MANAGER', label: 'Resource Manager' },
   ];
+
 
   useEffect(() => {
     fetchEvent();
@@ -218,7 +220,8 @@ export default function StaffAssignment() {
       CAMP_SECRETARY: 'warning',
       FINANCE_OFFICER: 'success',
       SPEAKER: 'info',
-      PA_TEAM: 'default',
+      PA_TEAM: 'info',
+      MEDIA_TEAM: 'info',
       WORSHIP_LEADER: 'info',
       REGISTRATION_DESK: 'default',
       ACCOMMODATION_MANAGER: 'warning',

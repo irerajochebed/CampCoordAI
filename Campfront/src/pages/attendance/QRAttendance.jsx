@@ -194,24 +194,25 @@ export default function QRAttendance() {
         clearInterval(scanIntervalRef.current);
       }
 
-      // Check in participant
-      const response = await attendanceApi.checkIn({
-        sessionId: parseInt(selectedSession),
-        qrCode: qrData
-      });
+      // Check in participant via QR
+      const response = await attendanceApi.recordByQR(parseInt(selectedSession), qrData);
 
       if (response.data.success) {
         const attendance = response.data.data;
+        const participantName = attendance.registration?.participantFirstName && attendance.registration?.participantLastName
+          ? `${attendance.registration.participantFirstName} ${attendance.registration.participantLastName}`
+          : (attendance.registration?.participant?.fullName || 'Participant');
+
         setCheckInModal({
           success: true,
-          participant: attendance.registration?.participant,
+          participant: { fullName: participantName },
           checkInTime: attendance.checkInTime,
           message: 'Check-in successful!'
         });
         
         // Refresh stats
         fetchSessionStats();
-        setSuccess(`Successfully checked in ${attendance.registration?.participant?.fullName}`);
+        setSuccess(`Successfully checked in ${participantName}`);
       }
 
     } catch (err) {
@@ -235,16 +236,21 @@ export default function QRAttendance() {
 
     try {
       setError(null);
-      
-      // Search for participants by name or registration ID
-      const response = await attendanceApi.searchParticipant({
-        sessionId: parseInt(selectedSession),
-        query: manualSearch
+      const res = await registrationApi.getByEvent(eventId);
+      const allRegs = res.data?.data || [];
+      const query = manualSearch.toLowerCase().trim();
+      const matches = allRegs.filter(r => {
+        const name = (r.participantName || `${r.participantFirstName || ''} ${r.participantLastName || ''}`).toLowerCase();
+        const email = (r.participantEmail || r.participant?.email || '').toLowerCase();
+        const regNum = (r.registrationNumber || '').toLowerCase();
+        return name.includes(query) || email.includes(query) || regNum.includes(query) || r.id.toString() === query;
       });
 
-      if (response.data.success) {
-        setSearchResults(response.data.data || []);
-      }
+      setSearchResults(matches.map(r => ({
+        id: r.id,
+        registration: r,
+        checkInTime: null
+      })));
     } catch (err) {
       console.error('Error searching:', err);
       setError(err.response?.data?.message || 'Search failed');
@@ -255,14 +261,15 @@ export default function QRAttendance() {
     try {
       setError(null);
       
-      const response = await attendanceApi.checkIn({
-        sessionId: parseInt(selectedSession),
-        registrationId
-      });
+      const response = await attendanceApi.recordManual(parseInt(selectedSession), registrationId);
 
       if (response.data.success) {
         const attendance = response.data.data;
-        setSuccess(`Successfully checked in ${attendance.registration?.participant?.fullName}`);
+        const participantName = attendance.registration?.participantFirstName && attendance.registration?.participantLastName
+          ? `${attendance.registration.participantFirstName} ${attendance.registration.participantLastName}`
+          : (attendance.registration?.participant?.fullName || 'Participant');
+
+        setSuccess(`Successfully checked in ${participantName}`);
         setManualSearch('');
         setSearchResults([]);
         fetchSessionStats();
@@ -304,8 +311,8 @@ export default function QRAttendance() {
             <h1 className="text-2xl font-bold text-gray-900">QR Code Attendance Scanner</h1>
             <p className="text-gray-600 mt-1">{event.name}</p>
           </div>
-          <Link to={`/events/${eventId}`}>
-            <Button variant="outline">Back to Event</Button>
+          <Link to={`/app/attendance?eventId=${eventId}`}>
+            <Button variant="outline">Back to Attendance</Button>
           </Link>
         </div>
       </div>
@@ -331,23 +338,16 @@ export default function QRAttendance() {
         <CardBody>
           <div className="flex items-center gap-4">
             <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select Session
-              </label>
               <Select
+                label="Select Session"
                 value={selectedSession}
                 onChange={(e) => setSelectedSession(e.target.value)}
-              >
-                <option value="">Choose a session...</option>
-                {sessions.map((session) => (
-                  <option key={session.id} value={session.id}>
-                    {session.title} - {new Date(session.startTime).toLocaleString('en-RW', {
-                      dateStyle: 'medium',
-                      timeStyle: 'short'
-                    })}
-                  </option>
-                ))}
-              </Select>
+                options={sessions.map(s => ({
+                  value: s.id.toString(),
+                  label: `${s.title} (${new Date(s.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
+                }))}
+                placeholder="Choose a session..."
+              />
             </div>
             <div className="pt-7">
               <Button

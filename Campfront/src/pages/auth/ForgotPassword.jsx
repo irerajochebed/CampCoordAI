@@ -4,6 +4,8 @@ import { Mail, ArrowLeft } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Alert from '../../components/ui/Alert';
+import ThemeSwitcher from '../../components/ui/ThemeSwitcher';
+import LanguageSwitcher from '../../components/ui/LanguageSwitcher';
 import sdaLogo from '../../assets/sda-logo.jpg';
 import heroImage from '../../assets/hero.png';
 
@@ -40,28 +42,32 @@ export default function ForgotPassword() {
     <div 
       className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 relative"
       style={{
-        backgroundImage: `linear-gradient(to right, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.5)), url(${heroImage})`,
+        backgroundImage: `linear-gradient(to right, rgba(0, 0, 0, 0.30), rgba(0, 0, 0, 0.15)), url(${heroImage})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundAttachment: 'fixed'
       }}
     >
-      {/* Back to Login Link */}
-      <Link 
-        to="/login" 
-        className="absolute top-4 left-4 flex items-center text-white hover:text-gray-200 transition-colors"
-      >
-        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-        </svg>
-        Back to Login
-      </Link>
+      {/* Top Header Navigation */}
+      <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between max-w-5xl mx-auto">
+        <Link 
+          to="/login" 
+          className="inline-flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-800 dark:text-white/90 hover:text-slate-900 dark:hover:text-white bg-white/80 dark:bg-slate-900/60 hover:bg-white dark:hover:bg-slate-900/80 backdrop-blur-md px-3.5 py-1.5 rounded-full transition-all border border-slate-200 dark:border-white/20 shadow-md"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to Login</span>
+        </Link>
+        <div className="flex items-center gap-2">
+          <ThemeSwitcher />
+          <LanguageSwitcher />
+        </div>
+      </div>
 
       <div className="max-w-md w-full space-y-8">
         {/* Header */}
         <div className="text-center">
           <Link to="/login" className="inline-flex justify-center mb-4">
-            <img src={sdaLogo} alt="SDA Logo" className="w-20 h-20 object-contain bg-white rounded-full p-2" />
+            <img src={sdaLogo} alt="SDA Logo" className="w-20 h-20 object-contain drop-shadow-md" />
           </Link>
           <h2 className="text-3xl font-bold text-white">
             Reset your password

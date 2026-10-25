@@ -60,6 +60,8 @@ public class SecurityConfig {
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // Allow all CORS preflight (OPTIONS) requests without authentication
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         // Public Auth Endpoints
                         .requestMatchers("/api/auth/**", "/api/v1/auth/**").permitAll()
                         // Public Organization Units & Departments/Ministries
@@ -68,7 +70,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/departments/**", "/api/departments/**", "/api/v1/ministries/**", "/api/ministries/**").permitAll()
                         .requestMatchers("/api/v1/departments/**", "/api/departments/**", "/api/v1/ministries/**", "/api/ministries/**").permitAll()
                         // Public general endpoints & static resources
-                        .requestMatchers("/api/public/**", "/api/v1/public/**", "/error", "/favicon.ico").permitAll()
+                        .requestMatchers("/api/public/**", "/api/v1/public/**", "/uploads/**", "/error", "/favicon.ico").permitAll()
                         // Admin Role Endpoints
                         .requestMatchers("/api/v1/admin/**", "/api/admin/**").hasRole("ADMINISTRATOR")
                         // Protected endpoints

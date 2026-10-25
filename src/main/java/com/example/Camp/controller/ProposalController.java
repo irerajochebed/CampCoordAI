@@ -49,7 +49,11 @@ public class ProposalController {
     }
     
     @GetMapping
-    public ResponseEntity<ApiResponse<List<ProposalResponse>>> getAllProposals() {
+    public ResponseEntity<ApiResponse<List<ProposalResponse>>> getAllProposals(Authentication authentication) {
+        if (authentication != null && authentication.getPrincipal() instanceof UserDetailsImpl userDetails) {
+            List<ProposalResponse> response = proposalService.getProposalsForCurrentUser(userDetails.getId());
+            return ResponseEntity.ok(ApiResponse.success(response));
+        }
         List<ProposalResponse> response = proposalService.getAllProposals();
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -93,7 +97,7 @@ public class ProposalController {
     }
 
     @GetMapping("/pending-admin-approval")
-    @PreAuthorize("hasRole('ADMINISTRATOR')")
+    @PreAuthorize("hasRole('ADMINISTRATOR') or hasRole('UNION_ADMINISTRATOR')")
     public ResponseEntity<ApiResponse<List<ProposalResponse>>> getPendingAdminApprovalProposals() {
         List<ProposalResponse> response = proposalService.getPendingAdminApprovalProposals();
         return ResponseEntity.ok(ApiResponse.success(response));
@@ -115,7 +119,7 @@ public class ProposalController {
     }
     
     @RequestMapping(value = "/{id}/review", method = {RequestMethod.POST, RequestMethod.PUT})
-    @PreAuthorize("hasRole('ADMINISTRATOR')")
+    @PreAuthorize("hasRole('ADMINISTRATOR') or hasRole('UNION_ADMINISTRATOR')")
     public ResponseEntity<ApiResponse<ProposalResponse>> reviewProposal(
             @PathVariable Long id,
             @Valid @RequestBody ProposalReviewRequest request,
@@ -126,7 +130,7 @@ public class ProposalController {
     }
     
     @PatchMapping("/{id}/approve")
-    @PreAuthorize("hasRole('ADMINISTRATOR')")
+    @PreAuthorize("hasRole('ADMINISTRATOR') or hasRole('UNION_ADMINISTRATOR')")
     public ResponseEntity<ApiResponse<ProposalResponse>> approveProposal(
             @PathVariable Long id,
             Authentication authentication) {
@@ -136,7 +140,7 @@ public class ProposalController {
     }
     
     @PatchMapping("/{id}/reject")
-    @PreAuthorize("hasRole('ADMINISTRATOR')")
+    @PreAuthorize("hasRole('ADMINISTRATOR') or hasRole('UNION_ADMINISTRATOR')")
     public ResponseEntity<ApiResponse<ProposalResponse>> rejectProposal(
             @PathVariable Long id,
             @RequestParam String comments,
@@ -158,7 +162,7 @@ public class ProposalController {
     }
 
     @RequestMapping(value = "/{id}/admin-approval", method = {RequestMethod.PUT, RequestMethod.POST, RequestMethod.PATCH})
-    @PreAuthorize("hasRole('ADMINISTRATOR')")
+    @PreAuthorize("hasRole('ADMINISTRATOR') or hasRole('UNION_ADMINISTRATOR')")
     public ResponseEntity<ApiResponse<ProposalResponse>> adminApproval(
             @PathVariable Long id,
             @RequestBody(required = false) com.example.Camp.dto.proposal.AdminApprovalRequest request,
