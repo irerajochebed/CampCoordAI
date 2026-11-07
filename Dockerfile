@@ -5,7 +5,7 @@ WORKDIR /app
 COPY pom.xml .
 COPY src ./src
 
-# Skip compiling and running test sources during Docker build
+# Explicitly bypass test compilation and test execution
 RUN mvn clean package -Dmaven.test.skip=true
 
 # Stage 2: Runtime image
