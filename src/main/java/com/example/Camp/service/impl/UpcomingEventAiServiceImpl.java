@@ -7,6 +7,7 @@ import com.example.Camp.dto.ai.upcoming.UpcomingEventInsightResponse;
 import com.example.Camp.dto.ai.upcoming.UpcomingEventResponse;
 import com.example.Camp.entity.*;
 import com.example.Camp.enums.EventStatus;
+import com.example.Camp.enums.OrganizationLevel;
 import com.example.Camp.enums.PaymentStatus;
 import com.example.Camp.enums.RiskSeverity;
 import com.example.Camp.enums.Role;
@@ -47,6 +48,7 @@ public class UpcomingEventAiServiceImpl implements UpcomingEventAiService {
     private final SessionRepository sessionRepository;
     private final AiInsightRepository aiInsightRepository;
     private final AuditLogRepository auditLogRepository;
+    private final OrganizationUnitRepository organizationUnitRepository;
     private final EventService eventService;
     private final JurisdictionScopeService jurisdictionScopeService;
     private final AiSummaryProvider summaryProvider;
@@ -60,6 +62,7 @@ public class UpcomingEventAiServiceImpl implements UpcomingEventAiService {
             SessionRepository sessionRepository,
             AiInsightRepository aiInsightRepository,
             AuditLogRepository auditLogRepository,
+            OrganizationUnitRepository organizationUnitRepository,
             @Lazy EventService eventService,
             JurisdictionScopeService jurisdictionScopeService,
             @Qualifier("llmSummaryProvider") AiSummaryProvider summaryProvider) {
@@ -70,6 +73,7 @@ public class UpcomingEventAiServiceImpl implements UpcomingEventAiService {
         this.sessionRepository = sessionRepository;
         this.aiInsightRepository = aiInsightRepository;
         this.auditLogRepository = auditLogRepository;
+        this.organizationUnitRepository = organizationUnitRepository;
         this.eventService = eventService;
         this.jurisdictionScopeService = jurisdictionScopeService;
         this.summaryProvider = summaryProvider;
@@ -78,7 +82,7 @@ public class UpcomingEventAiServiceImpl implements UpcomingEventAiService {
     @Override
     @Transactional(readOnly = true)
     public List<UpcomingEventResponse> findUpcomingEvents(Integer days, User currentUser) {
-        int lookaheadDays = (days == null || days <= 0) ? 30 : days;
+        int lookaheadDays = (days == null || days <= 0) ? 365 : Math.max(days, 90);
         LocalDate today = LocalDate.now();
         LocalDate maxDate = today.plusDays(lookaheadDays);
 
@@ -86,7 +90,8 @@ public class UpcomingEventAiServiceImpl implements UpcomingEventAiService {
                 .filter(e -> !Boolean.TRUE.equals(e.getDeleted()))
                 .filter(e -> e.getStatus() != EventStatus.CANCELLED && e.getStatus() != EventStatus.COMPLETED)
                 .filter(e -> e.getStartDate() != null)
-                .filter(e -> !e.getStartDate().isBefore(today) && !e.getStartDate().isAfter(maxDate))
+                .filter(e -> (e.getEndDate() != null ? !e.getEndDate().isBefore(today) : !e.getStartDate().isBefore(today))
+                        && !e.getStartDate().isAfter(maxDate))
                 .sorted(Comparator.comparing(Event::getStartDate))
                 .toList();
 
@@ -567,7 +572,16 @@ public class UpcomingEventAiServiceImpl implements UpcomingEventAiService {
     // ── Helper Methods & Mappers ────────────────────────────────────────────────
 
     private boolean isRegistrationWindowOpen(Event event, LocalDate today) {
-        if (event.getStatus() == EventStatus.REGISTRATION_OPEN) return true;
+        if (event == null) return false;
+        if (event.getStatus() == EventStatus.REGISTRATION_OPEN) {
+            if (event.getRegistrationEndDate() != null && today.isAfter(event.getRegistrationEndDate())) {
+                return false;
+            }
+            if (event.getRegistrationStartDate() != null && today.isBefore(event.getRegistrationStartDate())) {
+                return false;
+            }
+            return true;
+        }
         if (event.getRegistrationStartDate() != null && event.getRegistrationEndDate() != null) {
             return !today.isBefore(event.getRegistrationStartDate()) && !today.isAfter(event.getRegistrationEndDate());
         }
@@ -581,25 +595,89 @@ public class UpcomingEventAiServiceImpl implements UpcomingEventAiService {
 
         if (user.getRole() == Role.COORDINATOR) {
             return events.stream()
-                    .filter(e -> e.getCoordinator() != null && e.getCoordinator().getId().equals(user.getId()))
+                    .filter(e -> (e.getCoordinator() != null && e.getCoordinator().getId().equals(user.getId()))
+                            || isCoordinatorAllowedEvent(user, e))
                     .toList();
         }
 
-        // Participant role: only upcoming events open to their jurisdiction
-        List<Long> accessibleUnits = jurisdictionScopeService.getAccessibleOrganizationUnitIds(user);
+        // Participant role: upcoming/active events accessible to the participant based on jurisdiction & status
         return events.stream()
-                .filter(e -> isRegistrationWindowOpen(e, LocalDate.now()))
-                .filter(e -> {
-                    if (accessibleUnits.isEmpty()) return true; // Union-level participant
-                    Long eventOrgId = null;
-                    if (e.getProposal() != null && e.getProposal().getTargetOrganizationUnit() != null) {
-                        eventOrgId = e.getProposal().getTargetOrganizationUnit().getId();
-                    } else if (e.getCoordinator() != null && e.getCoordinator().getOrganizationUnit() != null) {
-                        eventOrgId = e.getCoordinator().getOrganizationUnit().getId();
-                    }
-                    return eventOrgId == null || accessibleUnits.contains(eventOrgId);
-                })
+                .filter(e -> isParticipantEligibleForEvent(user, e))
                 .toList();
+    }
+
+    private boolean isCoordinatorAllowedEvent(User user, Event event) {
+        if (event == null) return false;
+        if (event.getCoordinator() != null && event.getCoordinator().getId().equals(user.getId())) {
+            return true;
+        }
+        if (user.getDepartment() != null) {
+            Department eventDept = event.getDepartment();
+            if (eventDept == null && event.getProposal() != null) {
+                eventDept = event.getProposal().getDepartment();
+            }
+            if (eventDept != null && eventDept.getId().equals(user.getDepartment().getId())) {
+                return true;
+            }
+        }
+        List<Long> accessibleUnits = jurisdictionScopeService.getAccessibleOrganizationUnitIds(user);
+        if (accessibleUnits.isEmpty()) return true;
+        Long targetUnitId = null;
+        if (event.getProposal() != null && event.getProposal().getTargetOrganizationUnit() != null) {
+            targetUnitId = event.getProposal().getTargetOrganizationUnit().getId();
+        } else if (event.getCoordinator() != null && event.getCoordinator().getOrganizationUnit() != null) {
+            targetUnitId = event.getCoordinator().getOrganizationUnit().getId();
+        }
+        return targetUnitId == null || accessibleUnits.contains(targetUnitId);
+    }
+
+    private boolean isParticipantEligibleForEvent(User user, Event event) {
+        if (event == null || Boolean.TRUE.equals(event.getDeleted())) {
+            return false;
+        }
+        if (event.getStatus() == EventStatus.CANCELLED || event.getStatus() == EventStatus.COMPLETED || event.getStatus() == EventStatus.DRAFT) {
+            return false;
+        }
+
+        // If participant is registered, always allow them to see it
+        if (user != null && registrationRepository.findByEventAndParticipant(event.getId(), user.getId()).isPresent()) {
+            return true;
+        }
+
+        // Target unit of the event
+        OrganizationUnit targetUnit = null;
+        if (event.getProposal() != null && event.getProposal().getTargetOrganizationUnit() != null) {
+            targetUnit = event.getProposal().getTargetOrganizationUnit();
+        } else if (event.getCoordinator() != null && event.getCoordinator().getOrganizationUnit() != null) {
+            targetUnit = event.getCoordinator().getOrganizationUnit();
+        }
+
+        // If target unit is null or UNION level, it is open union-wide to all participants
+        if (targetUnit == null || targetUnit.getLevel() == OrganizationLevel.UNION) {
+            return true;
+        }
+
+        // If user has no specific organization unit, allow viewing
+        if (user == null || user.getOrganizationUnit() == null) {
+            return true;
+        }
+
+        Long userUnitId = user.getOrganizationUnit().getId();
+
+        // 1. If target unit is FIELD level
+        if (targetUnit.getLevel() == OrganizationLevel.FIELD) {
+            List<Long> unitsInField = organizationUnitRepository.findUnitIdsUnderField(targetUnit.getId());
+            return unitsInField.contains(userUnitId);
+        }
+
+        // 2. If target unit is DISTRICT level
+        if (targetUnit.getLevel() == OrganizationLevel.DISTRICT) {
+            List<Long> unitsInDistrict = organizationUnitRepository.findUnitIdsUnderDistrict(targetUnit.getId());
+            return unitsInDistrict.contains(userUnitId);
+        }
+
+        // 3. If target unit is CHURCH level
+        return targetUnit.getId().equals(userUnitId);
     }
 
     private void validateInsightAccess(Event event, User user) {

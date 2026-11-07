@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { authApi } from '../api';
+import { getSessionInactivityTimeout } from '../utils/sessionSecurity';
 
 const AuthContext = createContext(null);
 
@@ -7,19 +8,26 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const lastRecordedRef = useRef(Date.now());
+
+  // Check if user is logged in on mount
   useEffect(() => {
-    // Check if user is logged in on mount
     const checkAuth = async () => {
       const token = localStorage.getItem('token');
       const savedUser = localStorage.getItem('user');
       
       if (token && savedUser) {
         try {
-          setUser(JSON.parse(savedUser));
+          const parsed = JSON.parse(savedUser);
+          setUser(parsed);
+          if (!localStorage.getItem('camp_last_active_time')) {
+            localStorage.setItem('camp_last_active_time', Date.now().toString());
+          }
         } catch (error) {
           console.error('Error parsing user data:', error);
           localStorage.removeItem('token');
           localStorage.removeItem('user');
+          localStorage.removeItem('camp_last_active_time');
         }
       }
       setLoading(false);
@@ -27,6 +35,88 @@ export function AuthProvider({ children }) {
 
     checkAuth();
   }, []);
+
+  const logout = useCallback(() => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('camp_last_active_time');
+    setUser(null);
+  }, []);
+
+  // Record user activity across clicks, mouse, keyboard, touch, scroll
+  const recordActivity = useCallback(() => {
+    if (!user) return;
+    const now = Date.now();
+    if (now - lastRecordedRef.current > 3000) {
+      lastRecordedRef.current = now;
+      localStorage.setItem('camp_last_active_time', now.toString());
+    }
+  }, [user]);
+
+  // Listen to user interaction events to refresh idle timer
+  useEffect(() => {
+    if (!user) return;
+
+    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    const handleUserInteraction = () => {
+      recordActivity();
+    };
+
+    events.forEach((eventName) => {
+      window.addEventListener(eventName, handleUserInteraction, { passive: true });
+    });
+
+    return () => {
+      events.forEach((eventName) => {
+        window.removeEventListener(eventName, handleUserInteraction);
+      });
+    };
+  }, [user, recordActivity]);
+
+  // Multi-tab logout sync
+  useEffect(() => {
+    const handleStorageEvent = (e) => {
+      if (e.key === 'token' && !e.newValue) {
+        setUser(null);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageEvent);
+    return () => window.removeEventListener('storage', handleStorageEvent);
+  }, []);
+
+  // Periodic inactivity checker:
+  // - Admin & Coordinator with Finance role: 5 minutes idle -> auto logout
+  // - Standard Coordinator: 15 minutes idle -> auto logout
+  // - Participant: 5 hours idle -> auto logout
+  useEffect(() => {
+    if (!user) return;
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const lastActiveStr = localStorage.getItem('camp_last_active_time');
+      const lastActive = lastActiveStr ? parseInt(lastActiveStr, 10) : now;
+      const elapsed = now - lastActive;
+
+      const timeoutMs = getSessionInactivityTimeout(user);
+
+      if (elapsed >= timeoutMs) {
+        // Save user info for quick re-login on the standard login form
+        if (user.email) {
+          sessionStorage.setItem('timed_out_email', user.email);
+          sessionStorage.setItem('timed_out_portal', user.role !== 'PARTICIPANT' ? 'COORDINATOR_ADMIN' : 'PARTICIPANT');
+        }
+
+        // Automatic logout
+        logout();
+
+        // Redirect directly to the login form
+        window.location.href = '/login';
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [user, logout]);
 
   const login = async (email, password, portal) => {
     try {
@@ -42,6 +132,9 @@ export function AuthProvider({ children }) {
         // Save token and user data
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(userData));
+        localStorage.setItem('camp_last_active_time', Date.now().toString());
+        sessionStorage.removeItem('timed_out_email');
+        sessionStorage.removeItem('timed_out_portal');
         
         if (userData.preferredLanguage) {
           localStorage.setItem('app_language', userData.preferredLanguage);
@@ -49,6 +142,7 @@ export function AuthProvider({ children }) {
         }
 
         setUser(userData);
+        lastRecordedRef.current = Date.now();
         
         return { success: true, user: userData };
       } else {
@@ -80,12 +174,6 @@ export function AuthProvider({ children }) {
         validationErrors: errData?.validationErrors || null,
       };
     }
-  };
-
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setUser(null);
   };
 
   const updateUser = (updatedData) => {

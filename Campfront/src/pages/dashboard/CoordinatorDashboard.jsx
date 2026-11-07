@@ -5,7 +5,8 @@ import {
   Clock, AlertCircle, PlusCircle, Eye,
   CheckCircle, XCircle, ArrowRight, DollarSign,
   Smartphone, Receipt, ShieldCheck, Check,
-  Search, Filter, RefreshCw, QrCode, Sparkles, ShieldAlert
+  Search, Filter, RefreshCw, QrCode, Activity, ShieldAlert,
+  LayoutGrid, List
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
@@ -79,6 +80,7 @@ export default function CoordinatorDashboard() {
     return cachedPays.filter(p => eventIds.has(p.registration?.event?.id || p.eventId));
   }, [cachedEvents, cachedPays]);
 
+  const [attendeesViewMode, setAttendeesViewMode] = useState('grid');
   const [myEvents, setMyEvents] = useState(cachedEvents);
   const [myProposals, setMyProposals] = useState(cachedProposals.slice(0, 5));
   const [stats, setStats] = useState({
@@ -426,7 +428,7 @@ export default function CoordinatorDashboard() {
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2">
                   <span className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
-                    <Sparkles className="w-3 h-3 text-amber-300 animate-pulse" /> AI Early-Warning Telemetry
+                    <Activity className="w-3 h-3 text-emerald-400" /> Logistics Readiness Overview
                   </span>
                   <span className="text-xs text-slate-300">
                     {readinessList.length} Managed / Field Event(s) Evaluated
@@ -464,7 +466,7 @@ export default function CoordinatorDashboard() {
                     size="sm"
                     className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold py-2.5 px-4 shadow-sm"
                   >
-                    Open Readiness Radar <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+                    View Readiness Diagnostics <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
                   </Button>
                 </Link>
               </div>
@@ -574,6 +576,34 @@ export default function CoordinatorDashboard() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* View Switcher */}
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700/60">
+              <button
+                type="button"
+                onClick={() => setAttendeesViewMode('grid')}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                  attendeesViewMode === 'grid'
+                    ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                Cards
+              </button>
+              <button
+                type="button"
+                onClick={() => setAttendeesViewMode('table')}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                  attendeesViewMode === 'table'
+                    ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <List className="w-3.5 h-3.5" />
+                Table
+              </button>
+            </div>
+
             <Button
               variant="outline"
               size="sm"
@@ -699,6 +729,128 @@ export default function CoordinatorDashboard() {
               <Users className="w-10 h-10 text-slate-300 mx-auto mb-2" />
               <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">No attendees match your filter.</p>
               <p className="text-xs text-slate-500 mt-0.5">Attendee registrations for your camp events will be displayed here.</p>
+            </div>
+          ) : attendeesViewMode === 'grid' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {filteredAttendees.map((reg) => {
+                const eventFee = reg.event?.registrationFee || reg.eventRegistrationFee || 0;
+                const payment = reg.payment || (reg.payments && reg.payments[0]) || null;
+                const isFreeEvent = !eventFee || Number(eventFee) === 0;
+                const isConfirmed = reg.status === 'CONFIRMED' || reg.status === 'CHECKED_IN';
+                const isSubmitted = reg.status === 'PAYMENT_SUBMITTED';
+                const isMoMo = payment?.paymentMethod === 'MOBILE_MONEY' || payment?.transactionReference?.startsWith('MOMO');
+
+                return (
+                  <div
+                    key={reg.id}
+                    className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-xs hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200 flex flex-col justify-between"
+                  >
+                    <div className="space-y-3">
+                      {/* Top Bar: Event Fee & Status */}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                          {isFreeEvent ? 'Free Event' : formatCurrency(eventFee)}
+                        </span>
+                        {isConfirmed ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                            <Check className="w-3 h-3" /> Paid & Confirmed
+                          </span>
+                        ) : isSubmitted ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-2.5 py-0.5 rounded-full border border-amber-200 dark:border-amber-800 animate-pulse">
+                            <Clock className="w-3 h-3" /> Review Required
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-full border border-slate-200 dark:border-slate-700">
+                            <Clock className="w-3 h-3" /> Pending Payment
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Attendee Info */}
+                      <div>
+                        <h4 className="font-bold text-slate-900 dark:text-white text-sm">
+                          {reg.participantFirstName && reg.participantLastName
+                            ? `${reg.participantFirstName} ${reg.participantLastName}`
+                            : (reg.participantName || 'Attendee')}
+                        </h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                          {reg.participantPhone || reg.participantEmail || 'No phone'}
+                        </p>
+                        <p className="text-xs font-medium text-slate-600 dark:text-slate-300 mt-1 truncate">
+                          {reg.churchName || 'Church Unit'}
+                        </p>
+                        <p className="text-xs text-primary-700 dark:text-primary-400 font-semibold mt-1 truncate">
+                          {reg.event?.name || reg.eventName}
+                        </p>
+                      </div>
+
+                      {/* Payment Box */}
+                      <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs">
+                        {payment ? (
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-black text-slate-900 dark:text-white">
+                                {formatCurrency(payment.amount)}
+                              </span>
+                              {isMoMo ? (
+                                <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold text-[11px]">
+                                  <Smartphone className="w-3 h-3" /> MoMo Instant
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold text-[11px]">
+                                  <Receipt className="w-3 h-3" /> {payment.paymentMethod?.replace(/_/g, ' ') || 'Bank Slip'}
+                                </span>
+                              )}
+                            </div>
+                            {payment.transactionReference && (
+                              <p className="font-mono text-[10px] text-slate-400 truncate">
+                                Ref: {payment.transactionReference}
+                              </p>
+                            )}
+                          </div>
+                        ) : isFreeEvent ? (
+                          <span className="text-emerald-600 font-medium">No fee required</span>
+                        ) : (
+                          <span className="text-amber-600 font-medium">Awaiting fee submission</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Bottom Actions */}
+                    <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1.5">
+                      <Link to={`/app/registrations/${reg.id}`}>
+                        <Button size="sm" variant="outline" className="text-xs px-2.5 py-1">
+                          View Details
+                        </Button>
+                      </Link>
+
+                      <div className="flex items-center gap-1.5">
+                        {payment?.receiptUrl && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setPreviewReceiptUrl(payment.receiptUrl)}
+                            title="View Receipt Proof"
+                            icon={<Eye className="w-3.5 h-3.5 text-slate-600" />}
+                          />
+                        )}
+
+                        {isSubmitted && (
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            onClick={() => setQuickPaymentModal({ registration: reg, payment, action: 'verify' })}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-2.5 py-1 font-bold"
+                            icon={<Check className="w-3.5 h-3.5" />}
+                          >
+                            Approve
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">

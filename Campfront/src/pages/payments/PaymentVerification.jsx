@@ -12,7 +12,9 @@ import {
   Filter,
   TrendingUp,
   AlertCircle,
-  Calendar
+  Calendar,
+  LayoutGrid,
+  List as ListIcon
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -28,6 +30,7 @@ import EmptyState from '../../components/ui/EmptyState';
 export default function PaymentVerification() {
   const navigate = useNavigate();
   const { user, isAdmin, isCoordinator } = useAuth();
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'table'
   
   // Instant In-Memory Cache Initialization
   const cachedPayments = useMemo(() => {
@@ -289,15 +292,44 @@ export default function PaymentVerification() {
           </p>
         </div>
 
-        {selectedPayments.length > 0 && (
-          <Button
-            variant="primary"
-            icon={<CheckCircle className="w-4 h-4" />}
-            onClick={handleBulkVerify}
-          >
-            Verify Selected ({selectedPayments.length})
-          </Button>
-        )}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewMode === 'grid'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+              }`}
+              title="Cards View"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Cards</span>
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`p-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewMode === 'table'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+              }`}
+              title="Table View"
+            >
+              <ListIcon className="w-3.5 h-3.5" />
+              <span>Table</span>
+            </button>
+          </div>
+
+          {selectedPayments.length > 0 && (
+            <Button
+              variant="primary"
+              icon={<CheckCircle className="w-4 h-4" />}
+              onClick={handleBulkVerify}
+            >
+              Verify Selected ({selectedPayments.length})
+            </Button>
+          )}
+        </div>
       </div>
 
       {alert && (
@@ -410,6 +442,131 @@ export default function PaymentVerification() {
             />
           </CardBody>
         </Card>
+      ) : viewMode === 'grid' ? (
+        /* =========================================================================
+           CARD GRID VIEW (Matching modern Cards design)
+           ========================================================================= */
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {filteredPayments.map((payment) => {
+            const participantName = payment.participantName || 
+              `${payment.registration?.participantFirstName || ''} ${payment.registration?.participantLastName || ''}`.trim() || 'Participant';
+            const eventTitle = payment.eventName || payment.registration?.event?.name || 'Event';
+            const email = payment.participantEmail || payment.registration?.participantEmail || '';
+            const regId = payment.registrationId || payment.registration?.id;
+            const isSelected = selectedPayments.includes(payment.id);
+            const initials = participantName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'P';
+
+            return (
+              <div
+                key={payment.id}
+                className={`group bg-white dark:bg-slate-900 rounded-2xl border p-6 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between ${
+                  isSelected 
+                    ? 'border-primary-500 ring-2 ring-primary-500/20 bg-primary-50/10' 
+                    : 'border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                }`}
+              >
+                <div>
+                  {/* Top Header: Select Checkbox + Method on Left, Ref on Right */}
+                  <div className="flex items-center justify-between gap-2 mb-4">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleSelectPayment(payment.id)}
+                        className="w-4 h-4 text-primary-600 rounded cursor-pointer"
+                      />
+                      <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+                        {payment.paymentMethod?.replace(/_/g, ' ') || 'Payment'}
+                      </span>
+                    </label>
+
+                    <span className="font-mono text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 truncate max-w-[140px]">
+                      {payment.transactionReference || payment.referenceNumber || 'N/A'}
+                    </span>
+                  </div>
+
+                  {/* Amount */}
+                  <div className="mb-4">
+                    <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Submitted Amount</span>
+                    <div className="text-2xl font-black text-slate-900 dark:text-white tracking-tight mt-0.5">
+                      {formatCurrency(payment.amount)}
+                    </div>
+                  </div>
+
+                  {/* Participant & Event */}
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-600 via-indigo-600 to-sky-600 text-white font-bold flex items-center justify-center text-sm shadow-xs shrink-0 ring-1 ring-white dark:ring-slate-700">
+                      {initials}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-slate-900 dark:text-white text-sm truncate">
+                        {participantName}
+                      </p>
+                      {email && (
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                          {email}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Metadata Rows */}
+                  <div className="space-y-2 text-xs text-slate-600 dark:text-slate-400 pt-1">
+                    {/* Event Name */}
+                    <div className="flex items-center gap-2.5">
+                      <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
+                      <span className="truncate font-medium text-slate-800 dark:text-slate-200">{eventTitle}</span>
+                    </div>
+
+                    {/* Submitted Date */}
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px]">
+                      <span className="text-slate-500">Submitted:</span>
+                      <span className="font-mono text-slate-700 dark:text-slate-300">
+                        {formatDateTime(payment.paidAt || payment.createdAt)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card Footer Actions */}
+                <div className="mt-5 pt-3.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                  {payment.receiptUrl ? (
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      icon={<Eye className="w-3.5 h-3.5" />}
+                      onClick={() => setPreviewReceiptUrl(payment.receiptUrl)}
+                    >
+                      Proof
+                    </Button>
+                  ) : (
+                    <span className="text-xs text-slate-400 italic">No receipt</span>
+                  )}
+
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      variant="success"
+                      size="xs"
+                      icon={<CheckCircle className="w-3.5 h-3.5" />}
+                      onClick={() => handleVerifySingle(payment)}
+                    >
+                      Verify
+                    </Button>
+
+                    <Button
+                      variant="danger"
+                      size="xs"
+                      icon={<XCircle className="w-3.5 h-3.5" />}
+                      onClick={() => handleRejectSingle(payment)}
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <Card>
           <CardBody className="p-0">

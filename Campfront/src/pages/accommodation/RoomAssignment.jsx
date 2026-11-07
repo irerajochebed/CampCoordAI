@@ -20,7 +20,6 @@ import {
   DoorOpen,
   CheckCircle2,
   FileText,
-  Sparkles,
   ShieldCheck,
   AlertTriangle
 } from 'lucide-react';
@@ -328,7 +327,7 @@ export default function RoomAssignment() {
               <Button
                 variant="primary"
                 size="sm"
-                icon={<Sparkles className="w-3.5 h-3.5 mr-1" />}
+                icon={<Users className="w-3.5 h-3.5 mr-1" />}
                 onClick={handleAutoAssignAll}
                 loading={autoAssigning}
                 title="Automatically assign rooms according to participant gender without mixing"

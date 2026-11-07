@@ -25,7 +25,6 @@ import {
   RefreshCw,
   ExternalLink,
   ArrowRight,
-  Sparkles,
   ShieldAlert,
   Radio,
   MapPin,
@@ -40,7 +39,10 @@ import {
   Layers,
   Globe,
   Download,
-  Printer
+  Printer,
+  LayoutGrid,
+  List,
+  Activity
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
@@ -133,6 +135,7 @@ export default function AdminDashboard() {
   const [successMessage, setSuccessMessage] = useState(null);
 
   // Payments & Reconciliation State
+  const [paymentsViewMode, setPaymentsViewMode] = useState('grid');
   const [payments, setPayments] = useState(cachedPayments);
   const [registrations, setRegistrations] = useState(cachedRegistrations);
   const [paymentsLoading, setPaymentsLoading] = useState(false);
@@ -1111,7 +1114,7 @@ export default function AdminDashboard() {
             <div className="bg-gradient-to-r from-emerald-50/60 via-slate-50 to-primary-50/60 dark:from-emerald-950/20 dark:via-slate-800/60 dark:to-primary-950/20 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/80">
               <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-200/80 dark:border-slate-700/60">
                 <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 uppercase tracking-wider">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  <Activity className="w-3.5 h-3.5 text-blue-600" />
                   Live Operational Metrics for {activeDistrictName || activeFieldCode || 'Field'}
                 </span>
                 <span className="text-[11px] font-medium text-slate-500">
@@ -1277,6 +1280,35 @@ export default function AdminDashboard() {
               >
                 Export CSV
               </Button>
+
+              {/* View Switcher */}
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700/60">
+                <button
+                  type="button"
+                  onClick={() => setPaymentsViewMode('grid')}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                    paymentsViewMode === 'grid'
+                      ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  Cards
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentsViewMode('table')}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                    paymentsViewMode === 'table'
+                      ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <List className="w-3.5 h-3.5" />
+                  Table
+                </button>
+              </div>
+
               <Button
                 variant="outline"
                 size="sm"
@@ -1300,6 +1332,85 @@ export default function AdminDashboard() {
                 <p className="text-xs text-slate-500 mt-0.5">
                   Payments made by registered members from this entity will be automatically listed here.
                 </p>
+              </div>
+            ) : paymentsViewMode === 'grid' ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {filteredPayments.slice(0, 15).map((payment) => {
+                  const isMoMo = payment.paymentMethod === 'MOBILE_MONEY' || payment.transactionReference?.startsWith('MOMO');
+                  return (
+                    <div
+                      key={payment.id}
+                      className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-xs hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200 flex flex-col justify-between"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-mono text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                            {payment.transactionReference}
+                          </span>
+                          <Badge variant={
+                            payment.status === 'VERIFIED' ? 'success' :
+                            payment.status === 'PENDING' ? 'warning' : 'danger'
+                          }>
+                            {payment.status}
+                          </Badge>
+                        </div>
+
+                        <div>
+                          <h4 className="font-bold text-slate-900 dark:text-white text-sm">
+                            {payment.participantName || payment.registration?.participantName || 'Attendee'}
+                          </h4>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            {payment.registration?.churchName || 'Adventist Member'}
+                          </p>
+                          <p className="text-xs text-primary-700 dark:text-primary-400 font-semibold mt-1 truncate">
+                            {payment.eventName || payment.registration?.eventName || 'Event'}
+                          </p>
+                        </div>
+
+                        <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs flex items-center justify-between">
+                          <div>
+                            <p className="font-black text-slate-900 dark:text-white text-sm">
+                              {formatCurrency(payment.amount)}
+                            </p>
+                            <span className="text-[10px] text-slate-500">
+                              {isMoMo ? 'Mobile Money' : payment.paymentMethod || 'Bank Transfer'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1.5">
+                        <Link to={`/app/payments/${payment.id}`}>
+                          <Button size="sm" variant="outline" className="text-xs px-2.5 py-1">
+                            Audit Details
+                          </Button>
+                        </Link>
+
+                        <div className="flex items-center gap-1.5">
+                          {payment.receiptUrl && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setPreviewReceiptUrl(payment.receiptUrl)}
+                              title="View Receipt Proof"
+                              icon={<Eye className="w-3.5 h-3.5 text-slate-600" />}
+                            />
+                          )}
+                          {payment.status === 'PENDING' && (
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              onClick={() => handleOpenPaymentAction(payment, 'verify')}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-2.5 py-1 font-bold"
+                            >
+                              Approve
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
@@ -1455,7 +1566,7 @@ export default function AdminDashboard() {
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2">
                   <span className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
-                    <Sparkles className="w-3 h-3 text-amber-300 animate-pulse" /> AI Early-Warning Radar
+                    <Activity className="w-3 h-3 text-emerald-400" /> Logistics Readiness Overview
                   </span>
                   <span className="text-xs text-slate-300">
                     {scopedReadiness.length} Upcoming Event(s) Evaluated in 30–90 Day Window
@@ -1465,7 +1576,7 @@ export default function AdminDashboard() {
                   Executive Logistics & Preparation Health Index
                 </h3>
                 <p className="text-xs text-slate-300 max-w-2xl">
-                  Autonomous 5-pillar diagnostic scanning lodging capacity, registration velocity lag, MoMo cashflow clearance, sound A/V bottlenecks, and speaker confirmation.
+                  Automated pre-camp diagnostics evaluating lodging capacity, registration pace, verified payment clearance, A/V equipment availability, and speaker confirmations.
                 </p>
               </div>
 
@@ -1493,7 +1604,7 @@ export default function AdminDashboard() {
                     size="sm"
                     className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold py-2.5 px-4 shadow-sm"
                   >
-                    Open Full Radar <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+                    View Readiness Diagnostics <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
                   </Button>
                 </Link>
               </div>
@@ -1609,6 +1720,34 @@ export default function AdminDashboard() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* View Switcher */}
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700/60">
+              <button
+                type="button"
+                onClick={() => setPaymentsViewMode('grid')}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                  paymentsViewMode === 'grid'
+                    ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                Cards
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentsViewMode('table')}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                  paymentsViewMode === 'table'
+                    ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <List className="w-3.5 h-3.5" />
+                Table
+              </button>
+            </div>
+
             <Button
               variant="outline"
               size="sm"
@@ -1730,6 +1869,118 @@ export default function AdminDashboard() {
               <DollarSign className="w-10 h-10 text-slate-300 mx-auto mb-2" />
               <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">{t('dashboard.noPaymentsMatch', 'No payment records match the selected filter.')}</p>
               <p className="text-xs text-slate-500 mt-0.5">{t('dashboard.allPaymentsAppear', 'All event attendee payments will appear here as they register.')}</p>
+            </div>
+          ) : paymentsViewMode === 'grid' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {filteredPayments.slice(0, 10).map((payment) => {
+                const isMoMo = payment.paymentMethod === 'MOBILE_MONEY' || payment.transactionReference?.startsWith('MOMO');
+                return (
+                  <div
+                    key={payment.id}
+                    className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-xs hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200 flex flex-col justify-between"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                          {payment.transactionReference}
+                        </span>
+                        <Badge variant={
+                          payment.status === 'VERIFIED' ? 'success' :
+                            payment.status === 'PENDING' ? 'warning' : 'danger'
+                        }>
+                          {payment.status}
+                        </Badge>
+                      </div>
+
+                      <div>
+                        <h4 className="font-bold text-slate-900 dark:text-white text-sm">
+                          {payment.participantName || payment.registration?.participantName || 'Attendee'}
+                        </h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                          {payment.registration?.churchName || 'Adventist Member'}
+                        </p>
+                        <p className="text-xs text-primary-700 dark:text-primary-400 font-semibold mt-1 truncate">
+                          {payment.eventName || payment.registration?.eventName || 'Event'}
+                        </p>
+                      </div>
+
+                      <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs flex items-center justify-between">
+                        <div>
+                          <p className="font-black text-slate-900 dark:text-white text-sm">
+                            {formatCurrency(payment.amount)}
+                          </p>
+                          <div className="flex items-center gap-1 text-[11px] text-slate-500 font-medium">
+                            {isMoMo ? (
+                              <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                                <Smartphone className="w-3 h-3" /> MoMo Instant
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
+                                <Receipt className="w-3 h-3" /> {payment.paymentMethod?.replace(/_/g, ' ') || 'Bank Slip'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {payment.status === 'VERIFIED' ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                            <Check className="w-3 h-3" /> Fee Matched
+                          </span>
+                        ) : payment.status === 'PENDING' ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
+                            <Clock className="w-3 h-3" /> Review Needed
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-800">
+                            <XCircle className="w-3 h-3" /> Rejected
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1.5">
+                      <Link to={`/app/payments/${payment.id}`}>
+                        <Button size="sm" variant="outline" className="text-xs px-2.5 py-1">
+                          Audit
+                        </Button>
+                      </Link>
+
+                      <div className="flex items-center gap-1.5">
+                        {payment.receiptUrl && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setPreviewReceiptUrl(payment.receiptUrl)}
+                            title="View Receipt Proof"
+                            icon={<Eye className="w-3.5 h-3.5 text-slate-600" />}
+                          />
+                        )}
+
+                        {payment.status === 'PENDING' && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              onClick={() => handleOpenPaymentAction(payment, 'verify')}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-2.5 py-1 font-bold"
+                            >
+                              Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              onClick={() => handleOpenPaymentAction(payment, 'reject')}
+                              className="text-xs px-2.5 py-1 font-bold"
+                            >
+                              Reject
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">

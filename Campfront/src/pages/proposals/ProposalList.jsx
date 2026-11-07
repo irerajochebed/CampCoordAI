@@ -13,7 +13,13 @@ import {
   Clock,
   RefreshCw,
   Inbox,
-  CheckCheck
+  CheckCheck,
+  LayoutGrid,
+  List as ListIcon,
+  Calendar,
+  MapPin,
+  Building,
+  DollarSign
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/Table';
@@ -42,6 +48,7 @@ export default function ProposalList() {
   const [proposals, setProposals] = useState(initialData);
   const [filteredProposals, setFilteredProposals] = useState(initialData);
   const [loading, setLoading] = useState(initialData.length === 0);
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'table'
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState(isAdmin ? 'PENDING' : 'ALL'); // 'PENDING', 'APPROVED', 'REVISION', 'ALL'
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -239,17 +246,46 @@ export default function ProposalList() {
             {t('proposals.subtitle', 'Submit, track, and manage official RUM event proposals')}
           </p>
         </div>
-        {canCreateProposal && (
-          <Link to="/app/proposals/new">
-            <Button 
-              variant="primary" 
-              icon={<Plus className="w-4 h-4" />}
-              className="whitespace-nowrap"
+        <div className="flex items-center gap-3">
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewMode === 'grid'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+              }`}
+              title="Cards View"
             >
-              + {t('proposals.newProposal', 'New Proposal')}
-            </Button>
-          </Link>
-        )}
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Cards</span>
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`p-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewMode === 'table'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+              }`}
+              title="Table View"
+            >
+              <ListIcon className="w-3.5 h-3.5" />
+              <span>Table</span>
+            </button>
+          </div>
+
+          {canCreateProposal && (
+            <Link to="/app/proposals/new">
+              <Button 
+                variant="primary" 
+                icon={<Plus className="w-4 h-4" />}
+                className="whitespace-nowrap"
+              >
+                + {t('proposals.newProposal', 'New Proposal')}
+              </Button>
+            </Link>
+          )}
+        </div>
       </div>
 
       {alert && (
@@ -389,6 +425,174 @@ export default function ProposalList() {
                 )
               }
             />
+          ) : viewMode === 'grid' ? (
+            /* =========================================================================
+               CARD GRID VIEW (Matching modern Cards design)
+               ========================================================================= */
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 bg-slate-50/50 dark:bg-slate-950/20">
+              {filteredProposals.map((proposal) => {
+                const creatorName = proposal.proposedByName
+                  || (proposal.proposedBy ? `${proposal.proposedBy.firstName} ${proposal.proposedBy.lastName}` : null)
+                  || (proposal.createdBy ? `${proposal.createdBy.firstName} ${proposal.createdBy.lastName}` : null)
+                  || 'System User';
+
+                const deptName = proposal.departmentName
+                  || proposal.department?.name
+                  || 'General Ministries';
+
+                const targetUnitName = proposal.targetOrganizationUnitName
+                  || proposal.targetOrganizationUnit?.name
+                  || '';
+
+                const isPendingReview = ['SUBMITTED', 'PENDING_LEADER_REVIEW', 'RECOMMENDED_BY_LEADER', 'UNDER_REVIEW'].includes(proposal.status);
+
+                const isAuthor = Boolean(
+                  (user?.id && (proposal.proposedById === user.id || proposal.proposedBy?.id === user.id || proposal.createdById === user.id)) ||
+                  (user?.email && (proposal.proposedBy?.email === user.email || proposal.createdBy?.email === user.email))
+                );
+
+                const isDistrictScope = proposal.scope === 'DISTRICT';
+                const isFieldScope = proposal.scope === 'FIELD';
+                const isUnionScope = proposal.scope === 'UNION' || !proposal.scope;
+
+                const canApprove = !isAuthor && (
+                  (isDistrictScope && (isFieldLeader || isUnionAdmin)) ||
+                  (isFieldScope && (isFieldLeader || isUnionAdmin)) ||
+                  (isUnionScope && (isUnionAdmin || (isDepartmentLeader && proposal.status === 'SUBMITTED')))
+                );
+
+                return (
+                  <div
+                    key={proposal.id}
+                    className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-6 shadow-xs hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200 flex flex-col justify-between"
+                  >
+                    <div>
+                      {/* Top Header: Scope Badge on Left, Status Badge on Right */}
+                      <div className="flex items-center justify-between gap-2 mb-4">
+                        <Badge variant={proposal.scope === 'UNION' ? 'primary' : proposal.scope === 'FIELD' ? 'info' : 'warning'}>
+                          {proposal.scope || 'FIELD'} SCOPE
+                        </Badge>
+                        <div>
+                          {getStatusBadge(proposal.status)}
+                        </div>
+                      </div>
+
+                      {/* Proposal Title */}
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight leading-snug group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                        {proposal.eventName}
+                      </h3>
+
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        {t('proposals.proposedBy', 'Proposed by')}: <span className="font-semibold text-slate-700 dark:text-slate-300">{creatorName}</span>
+                      </p>
+
+                      {/* Metadata Rows */}
+                      <div className="mt-4 space-y-2.5 text-xs text-slate-600 dark:text-slate-400 pt-3 border-t border-slate-100 dark:border-slate-800">
+                        {/* Ministry / Department */}
+                        <div className="flex items-center gap-2.5">
+                          <Building className="w-4 h-4 text-slate-400 shrink-0" />
+                          <span className="font-medium text-slate-800 dark:text-slate-200 truncate">{deptName}</span>
+                        </div>
+
+                        {/* Jurisdiction */}
+                        {targetUnitName && (
+                          <div className="flex items-center gap-2.5">
+                            <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
+                            <span className="truncate">{targetUnitName}</span>
+                          </div>
+                        )}
+
+                        {/* Dates */}
+                        <div className="flex items-center gap-2.5">
+                          <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
+                          <span className="font-mono text-slate-700 dark:text-slate-300 font-medium">
+                            {proposal.startDate ? new Date(proposal.startDate).toLocaleDateString() : 'TBA'}
+                            {proposal.endDate ? ` – ${new Date(proposal.endDate).toLocaleDateString()}` : ''}
+                          </span>
+                        </div>
+
+                        {/* Budget */}
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+                          <span className="text-slate-500 text-[11px] font-medium">Est. Budget:</span>
+                          <span className="font-bold text-slate-900 dark:text-white text-sm">
+                            {proposal.estimatedBudget != null ? new Intl.NumberFormat('en-RW', { 
+                              style: 'currency', 
+                              currency: 'RWF',
+                              maximumFractionDigits: 0 
+                            }).format(proposal.estimatedBudget) : 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Footer Actions */}
+                    <div className="mt-5 pt-3.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap">
+                      <Link to={`/app/proposals/${proposal.id}`} state={{ proposal }}>
+                        <Button 
+                          variant="outline" 
+                          size="xs" 
+                          icon={<Eye className="w-3.5 h-3.5" />}
+                        >
+                          {t('common.view', 'View')}
+                        </Button>
+                      </Link>
+
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {proposal.status === 'DRAFT' && (isAuthor || canCreateProposal) && (
+                          <>
+                            <Link to={`/app/proposals/${proposal.id}/edit`}>
+                              <Button 
+                                variant="ghost" 
+                                size="xs" 
+                                icon={<Edit className="w-3.5 h-3.5" />}
+                              >
+                                {t('common.edit', 'Edit')}
+                              </Button>
+                            </Link>
+                            <Button
+                              variant="primary"
+                              size="xs"
+                              onClick={() => handleSubmit(proposal.id)}
+                            >
+                              {t('common.submit', 'Submit')}
+                            </Button>
+                          </>
+                        )}
+
+                        {canApprove && isPendingReview && (
+                          <>
+                            <Button
+                              variant="success"
+                              size="xs"
+                              icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+                              onClick={() => handleReviewAction(proposal, 'approve')}
+                            >
+                              {isUnionScope && isDepartmentLeader ? t('proposals.endorse', 'Endorse') : t('proposals.approveAndCreate', 'Approve')}
+                            </Button>
+                            <Button
+                              variant="warning"
+                              size="xs"
+                              icon={<RefreshCw className="w-3.5 h-3.5" />}
+                              onClick={() => handleReviewAction(proposal, 'revision')}
+                            >
+                              {t('proposals.requestRevision', 'Revision')}
+                            </Button>
+                            <Button
+                              variant="danger"
+                              size="xs"
+                              icon={<XCircle className="w-3.5 h-3.5" />}
+                              onClick={() => handleReviewAction(proposal, 'reject')}
+                            >
+                              {t('proposals.rejectProposal', 'Reject')}
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           ) : (
             <Table>
               <TableHeader>

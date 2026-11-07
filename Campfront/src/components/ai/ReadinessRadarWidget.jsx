@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Sparkles,
   ShieldAlert,
   AlertTriangle,
   CheckCircle2,
@@ -24,7 +23,9 @@ import {
   Flame,
   Radio,
   ExternalLink,
-  Info
+  Info,
+  FileSpreadsheet,
+  Download
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardBody } from '../ui/Card';
 import Badge from '../ui/Badge';
@@ -34,9 +35,12 @@ import Modal from '../ui/Modal';
 import Textarea from '../ui/Textarea';
 import { readinessApi, getCachedData } from '../../api';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTranslation } from '../../contexts/LanguageContext';
+import { exportReadinessAuditToExcel } from '../../utils/excelExport';
 
-export default function ReadinessRadarWidget({ compact = false, onNavigateEvent }) {
+export default function ReadinessRadarWidget({ compact = false, onNavigateEvent, onAssessmentChange }) {
   const { user } = useAuth();
+  const { t } = useTranslation();
 
   // Instant In-Memory Cache Initialization (Zero-Delay Instant UI Rendering)
   const cachedReadiness = useMemo(() => {
@@ -82,7 +86,7 @@ export default function ReadinessRadarWidget({ compact = false, onNavigateEvent 
     } catch (err) {
       console.error('Failed to fetch readiness assessments:', err);
       if (assessments.length === 0) {
-        setError(err.response?.data?.message || 'Failed to load AI Early-Warning & Readiness diagnostics');
+        setError(err.response?.data?.message || 'Failed to load readiness diagnostics');
       }
     } finally {
       setLoading(false);
@@ -91,6 +95,13 @@ export default function ReadinessRadarWidget({ compact = false, onNavigateEvent 
   };
 
   const currentAssessment = assessments.find(a => a.eventId === selectedEventId) || assessments[0] || null;
+
+  // Notify parent of selected assessment
+  useEffect(() => {
+    if (onAssessmentChange && currentAssessment) {
+      onAssessmentChange(currentAssessment);
+    }
+  }, [currentAssessment, onAssessmentChange]);
 
   // Filter distinct field names for Union Leaders/Admins
   const availableFields = Array.from(new Set(assessments.map(a => a.fieldName).filter(Boolean)));
@@ -134,9 +145,26 @@ export default function ReadinessRadarWidget({ compact = false, onNavigateEvent 
       }, 1000);
     } catch (err) {
       console.error('Failed to execute mitigation action:', err);
-      setError(err.response?.data?.message || 'Failed to dispatch AI mitigation action');
+      setError(err.response?.data?.message || 'Failed to dispatch coordinator notification');
     } finally {
       setActionSubmitting(false);
+    }
+  };
+
+  const handleSingleExport = () => {
+    if (!currentAssessment) return;
+    try {
+      const filename = exportReadinessAuditToExcel({
+        currentAssessment,
+        aiData: null,
+        simulationResult: null,
+        user,
+        t
+      });
+      setActionSuccess(`${t('analytics.exportSuccess', 'Readiness audit exported to Excel successfully.')} (${filename})`);
+    } catch (err) {
+      console.error('Failed to export Excel report:', err);
+      setError('Failed to generate Excel document. Please try again.');
     }
   };
 
@@ -148,44 +176,45 @@ export default function ReadinessRadarWidget({ compact = false, onNavigateEvent 
     }).format(val || 0);
   };
 
-  const getScoreColorInfo = (score) => {
+  // Humanized, meaningful score styling
+  const getScoreTheme = (score = 0) => {
     if (score >= 85) {
       return {
         text: 'text-emerald-700 dark:text-emerald-400',
-        bg: 'bg-emerald-50 dark:bg-emerald-950/40',
-        border: 'border-emerald-200 dark:border-emerald-800',
-        stroke: '#10b981',
-        badge: 'emerald',
-        label: 'Optimal Readiness',
+        bgBox: 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60',
+        badgeClass: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200 border-emerald-300 dark:border-emerald-700',
+        stroke: '#059669',
+        label: t('analytics.optimalReadiness', 'Optimal Readiness'),
+        icon: CheckCircle2,
       };
     }
     if (score >= 65) {
       return {
         text: 'text-amber-700 dark:text-amber-400',
-        bg: 'bg-amber-50 dark:bg-amber-950/40',
-        border: 'border-amber-200 dark:border-amber-800',
-        stroke: '#f59e0b',
-        badge: 'warning',
-        label: 'Moderate Risk',
+        bgBox: 'bg-amber-50/70 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/60',
+        badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 border-amber-300 dark:border-amber-700',
+        stroke: '#d97706',
+        label: t('analytics.moderateRisk', 'Moderate Risk'),
+        icon: AlertTriangle,
       };
     }
     return {
       text: 'text-rose-700 dark:text-rose-400',
-      bg: 'bg-rose-50 dark:bg-rose-950/40',
-      border: 'border-rose-200 dark:border-rose-800',
-      stroke: '#f43f5e',
-      badge: 'danger',
-      label: 'Critical Shortfall Risk',
+      bgBox: 'bg-rose-50/70 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/60',
+      badgeClass: 'bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-200 border-rose-300 dark:border-rose-700',
+      stroke: '#e11d48',
+      label: t('analytics.criticalRisk', 'Critical Shortfall Risk'),
+      icon: ShieldAlert,
     };
   };
 
   if (loading && assessments.length === 0) {
     return (
-      <Card className="dark:bg-slate-900 dark:border-slate-800 p-8 text-center">
+      <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 p-8 text-center shadow-sm">
         <div className="flex flex-col items-center justify-center space-y-3">
           <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm font-semibold text-gray-600 dark:text-gray-300">
-            Scanning upcoming events & computing 5-pillar readiness telemetry...
+          <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+            {t('analytics.loadingDiagnostics', 'Calculating readiness scores and logistics indicators...')}
           </p>
         </div>
       </Card>
@@ -194,26 +223,27 @@ export default function ReadinessRadarWidget({ compact = false, onNavigateEvent 
 
   if (assessments.length === 0) {
     return (
-      <Card className="dark:bg-slate-900 dark:border-slate-800 p-6 text-center">
+      <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 p-8 text-center shadow-sm">
         <div className="flex flex-col items-center justify-center max-w-md mx-auto space-y-3">
           <div className="p-3 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl">
             <Calendar className="w-8 h-8" />
           </div>
-          <h3 className="text-base font-bold text-gray-900 dark:text-white">
-            No Upcoming Events in Diagnostic Window
+          <h3 className="text-base font-bold text-slate-900 dark:text-white">
+            {t('analytics.noUpcomingEvents', 'No Upcoming Events in Diagnostic Window')}
           </h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            The AI Early-Warning engine continuously evaluates events starting within 30 to 90 days. No pending logistics risks detected.
+          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            {t('analytics.noUpcomingEventsDesc', 'The readiness assessment monitors camps scheduled within 30 to 90 days. No critical logistics flags detected.')}
           </p>
           <Button variant="outline" size="sm" onClick={() => fetchReadinessData(true)}>
-            <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Re-scan Database
+            <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> {t('analytics.rescanDatabase', 'Re-scan Database')}
           </Button>
         </div>
       </Card>
     );
   }
 
-  const scoreInfo = getScoreColorInfo(currentAssessment?.overallReadinessScore || 0);
+  const scoreTheme = getScoreTheme(currentAssessment?.overallReadinessScore || 0);
+  const ScoreIcon = scoreTheme.icon;
 
   return (
     <div className="space-y-6">
@@ -225,40 +255,48 @@ export default function ReadinessRadarWidget({ compact = false, onNavigateEvent 
         <Alert type="success" message={actionSuccess} onClose={() => setActionSuccess(null)} dismissible />
       )}
 
-      {/* Main Radar Card */}
-      <Card className="dark:bg-slate-900 dark:border-slate-800 border border-slate-200 shadow-sm overflow-hidden">
-        {/* Header Bar */}
-        <CardHeader className="bg-slate-900 text-white p-5 border-b border-slate-800">
+      {/* Main Readiness Assessment Card */}
+      <Card className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-xl overflow-hidden">
+        {/* Humanized, Meaningful Header Bar (Replaces harsh pitch-black AI background) */}
+        <CardHeader className="bg-gradient-to-r from-blue-50/70 via-slate-50 to-indigo-50/50 dark:from-slate-850 dark:via-slate-800 dark:to-slate-850 p-5 sm:p-6 border-b border-slate-200 dark:border-slate-750">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <div className="flex items-center gap-2.5 flex-wrap">
-                <span className="flex items-center gap-1.5 text-xs font-mono font-medium px-2.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                  AI Diagnostic Radar
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-700/60 shadow-xs">
+                  <Activity className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  {t('analytics.diagnosticBadge', 'Operational Assessment')}
                 </span>
-                <span className="text-xs text-slate-400 font-medium">
-                  Autonomous 30–90 Day Preparation Engine
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                  {t('analytics.operationalTracking', 'Pre-Camp Operational Tracking (30–90 Days)')}
                 </span>
               </div>
-              <h2 className="text-lg sm:text-xl font-bold tracking-tight text-white flex items-center gap-2 mt-1">
+
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
                 {currentAssessment?.eventName || 'Upcoming Event Readiness'}
               </h2>
-              <p className="text-xs text-slate-400 flex items-center gap-3 flex-wrap">
-                <span>📍 {currentAssessment?.venue || 'Venue TBD'}</span>
-                <span>🏛️ {currentAssessment?.fieldName}</span>
-                <span>📅 T-{currentAssessment?.daysUntilStart} Days ({currentAssessment?.startDate} to {currentAssessment?.endDate})</span>
+
+              <p className="text-xs text-slate-600 dark:text-slate-300 flex items-center gap-3 flex-wrap font-medium">
+                <span className="inline-flex items-center gap-1">
+                  📍 {currentAssessment?.venue || t('analytics.venueTbd', 'Venue TBD')}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  🏛️ {currentAssessment?.fieldName}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  📅 T-{currentAssessment?.daysUntilStart} {t('analytics.days', 'Days')} ({currentAssessment?.startDate} to {currentAssessment?.endDate})
+                </span>
               </p>
             </div>
 
-            {/* Event Selector & Actions */}
-            <div className="flex flex-wrap items-center gap-2">
+            {/* Event Selector & Controls */}
+            <div className="flex flex-wrap items-center gap-2.5">
               {availableFields.length > 1 && (
                 <select
                   value={selectedFieldFilter}
                   onChange={(e) => setSelectedFieldFilter(e.target.value)}
-                  className="text-xs bg-slate-800 text-slate-200 border border-slate-700 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                  className="text-xs bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 font-medium shadow-sm hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="ALL">All Fields Scope ({assessments.length})</option>
+                  <option value="ALL">{t('analytics.allFieldsScope', 'All Fields Scope')} ({assessments.length})</option>
                   {availableFields.map(f => (
                     <option key={f} value={f}>{f}</option>
                   ))}
@@ -268,11 +306,11 @@ export default function ReadinessRadarWidget({ compact = false, onNavigateEvent 
               <select
                 value={selectedEventId || ''}
                 onChange={(e) => setSelectedEventId(Number(e.target.value))}
-                className="text-xs bg-slate-800 text-slate-200 border border-slate-700 rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-500 max-w-[220px] font-medium"
+                className="text-xs bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 font-medium shadow-sm hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-[240px]"
               >
                 {filteredAssessments.map(ev => (
                   <option key={ev.eventId} value={ev.eventId}>
-                    {ev.eventName} (Score: {ev.overallReadinessScore}/100)
+                    {ev.eventName} ({t('analytics.scoreOutOf', 'Score')}: {ev.overallReadinessScore}/100)
                   </option>
                 ))}
               </select>
@@ -282,20 +320,31 @@ export default function ReadinessRadarWidget({ compact = false, onNavigateEvent 
                 size="sm"
                 onClick={() => fetchReadinessData(true)}
                 disabled={refreshing}
-                className="bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700 text-xs py-1.5 rounded-md"
+                className="bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 text-xs py-2 px-3 rounded-lg font-semibold shadow-sm"
               >
-                <RefreshCw className={`w-3.5 h-3.5 mr-1 ${refreshing ? 'animate-spin' : ''}`} />
-                {refreshing ? 'Evaluating...' : 'Re-evaluate'}
+                <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${refreshing ? 'animate-spin' : ''}`} />
+                {refreshing ? t('analytics.evaluating', 'Evaluating...') : t('analytics.reevaluate', 'Re-evaluate')}
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSingleExport}
+                className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 text-xs py-2 px-3 rounded-lg font-semibold shadow-sm"
+                title="Export this event readiness audit to Excel (.xlsx)"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5 text-emerald-600 dark:text-emerald-400" />
+                Excel
               </Button>
             </div>
           </div>
         </CardHeader>
 
         <CardBody className="p-6 space-y-6">
-          {/* Top Section: Health Index Gauge + Core Warning Banner */}
+          {/* Top Section: Health Index Gauge + 5 Core Criteria */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-            {/* 0-100 Gauge Widget */}
-            <div className="lg:col-span-4 flex flex-col items-center justify-center p-5 rounded-2xl border dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 text-center">
+            {/* Meaningful Score Gauge Widget (Dynamic Background reflecting readiness health) */}
+            <div className={`lg:col-span-4 flex flex-col items-center justify-center p-6 rounded-2xl border ${scoreTheme.bgBox} text-center shadow-xs transition-colors duration-300`}>
               <div className="relative w-36 h-36 flex items-center justify-center">
                 <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                   {/* Background Track */}
@@ -305,7 +354,7 @@ export default function ReadinessRadarWidget({ compact = false, onNavigateEvent 
                     r="40"
                     stroke="currentColor"
                     strokeWidth="8"
-                    className="text-slate-200 dark:text-slate-700"
+                    className="text-slate-200/80 dark:text-slate-700/60"
                     fill="transparent"
                   />
                   {/* Active Progress */}
@@ -313,7 +362,7 @@ export default function ReadinessRadarWidget({ compact = false, onNavigateEvent 
                     cx="50"
                     cy="50"
                     r="40"
-                    stroke={scoreInfo.stroke}
+                    stroke={scoreTheme.stroke}
                     strokeWidth="8"
                     strokeDasharray={`${(currentAssessment?.overallReadinessScore || 0) * 2.51} 251.2`}
                     strokeLinecap="round"
@@ -323,145 +372,174 @@ export default function ReadinessRadarWidget({ compact = false, onNavigateEvent 
                 </svg>
 
                 <div className="absolute flex flex-col items-center justify-center">
-                  <span className={`text-3xl font-black tracking-tight ${scoreInfo.text}`}>
+                  <span className={`text-3xl font-black tracking-tight ${scoreTheme.text}`}>
                     {currentAssessment?.overallReadinessScore}
                   </span>
-                  <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase">
-                    / 100 Health
+                  <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">
+                    {t('analytics.scoreOutOf', '/ 100 Score')}
                   </span>
                 </div>
               </div>
 
-              <div className="mt-3">
-                <span className={`inline-flex items-center gap-1 text-xs font-extrabold px-3 py-1 rounded-full ${scoreInfo.bg} ${scoreInfo.text} border ${scoreInfo.border}`}>
-                  {currentAssessment?.overallReadinessScore < 65 ? (
-                    <ShieldAlert className="w-3.5 h-3.5" />
-                  ) : currentAssessment?.overallReadinessScore < 85 ? (
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                  ) : (
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                  )}
-                  {scoreInfo.label}
+              <div className="mt-3.5">
+                <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full border shadow-xs ${scoreTheme.badgeClass}`}>
+                  <ScoreIcon className="w-3.5 h-3.5" />
+                  {scoreTheme.label}
                 </span>
-                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1.5 font-medium">
-                  Evaluated at milestone T-{currentAssessment?.daysUntilStart} days before start
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-2 font-medium">
+                  {t('analytics.evaluatedAtMilestone', 'Evaluated at milestone T-{{days}} days before start').replace('{{days}}', currentAssessment?.daysUntilStart || 0)}
                 </p>
               </div>
             </div>
 
-            {/* Pillar Performance Breakdown */}
+            {/* 5 Core Readiness Criteria Breakdown */}
             <div className="lg:col-span-8 space-y-3">
               <div className="flex items-center justify-between pb-1">
-                <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                  5 Core Readiness Pillars Telemetry
+                <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  {t('analytics.fivePillarsTitle', '5 Core Readiness Criteria Breakdown')}
                 </h3>
-                <span className="text-xs text-gray-500">Target Baseline: 20 pts per pillar</span>
+                <span className="text-xs text-slate-500 font-medium">
+                  {t('analytics.targetBenchmark', 'Target Benchmark: 20 pts per pillar')}
+                </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Pillar 1 */}
-                <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 rounded-lg">
+                {/* Pillar 1: Registration Velocity */}
+                <div className="p-3.5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-xs flex items-center justify-between hover:border-blue-300 dark:hover:border-blue-700 transition">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
                       <Users className="w-4 h-4" />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-gray-900 dark:text-white">Registration Velocity</p>
-                      <p className="text-[11px] text-gray-500">
-                        {currentAssessment?.currentRegistrations} / {currentAssessment?.expectedParticipants} signed up
+                      <p className="text-xs font-bold text-slate-900 dark:text-white">
+                        {t('analytics.pillarRegistration', 'Registration Trajectory')}
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                        {currentAssessment?.currentRegistrations} / {currentAssessment?.expectedParticipants} {t('analytics.signedUp', 'signed up')}
                       </p>
                     </div>
                   </div>
-                  <span className={`text-xs font-extrabold ${currentAssessment?.registrationScore >= 16 ? 'text-emerald-600' : currentAssessment?.registrationScore >= 12 ? 'text-amber-600' : 'text-rose-600'}`}>
+                  <span className={`text-xs font-extrabold px-2 py-0.5 rounded ${
+                    (currentAssessment?.registrationScore ?? 0) >= 16 ? 'text-emerald-700 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/40' :
+                    (currentAssessment?.registrationScore ?? 0) >= 12 ? 'text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/40' :
+                    'text-rose-700 bg-rose-50 dark:text-rose-300 dark:bg-rose-950/40'
+                  }`}>
                     {currentAssessment?.registrationScore}/20
                   </span>
                 </div>
 
-                {/* Pillar 2 */}
-                <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-2 bg-amber-50 dark:bg-amber-900/30 text-amber-600 rounded-lg">
+                {/* Pillar 2: Lodging Capacity */}
+                <div className="p-3.5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-xs flex items-center justify-between hover:border-amber-300 dark:hover:border-amber-700 transition">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-lg">
                       <Bed className="w-4 h-4" />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-gray-900 dark:text-white">Lodging & Dorm Capacity</p>
-                      <p className="text-[11px] text-gray-500">
-                        {currentAssessment?.totalBedCapacity} beds vs {currentAssessment?.projectedBedDemand} needed
+                      <p className="text-xs font-bold text-slate-900 dark:text-white">
+                        {t('analytics.pillarLodging', 'Lodging & Dorm Capacity')}
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                        {t('analytics.bedsVsNeeded', '{{beds}} beds vs {{needed}} needed')
+                          .replace('{{beds}}', currentAssessment?.totalBedCapacity ?? 0)
+                          .replace('{{needed}}', currentAssessment?.projectedBedDemand ?? 0)}
                       </p>
                     </div>
                   </div>
-                  <span className={`text-xs font-extrabold ${currentAssessment?.lodgingScore >= 16 ? 'text-emerald-600' : currentAssessment?.lodgingScore >= 12 ? 'text-amber-600' : 'text-rose-600'}`}>
+                  <span className={`text-xs font-extrabold px-2 py-0.5 rounded ${
+                    (currentAssessment?.lodgingScore ?? 0) >= 16 ? 'text-emerald-700 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/40' :
+                    (currentAssessment?.lodgingScore ?? 0) >= 12 ? 'text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/40' :
+                    'text-rose-700 bg-rose-50 dark:text-rose-300 dark:bg-rose-950/40'
+                  }`}>
                     {currentAssessment?.lodgingScore}/20
                   </span>
                 </div>
 
-                {/* Pillar 3 */}
-                <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-2 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 rounded-lg">
+                {/* Pillar 3: Financial & MoMo Inflow */}
+                <div className="p-3.5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-xs flex items-center justify-between hover:border-emerald-300 dark:hover:border-emerald-700 transition">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg">
                       <DollarSign className="w-4 h-4" />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-gray-900 dark:text-white">Financial & MoMo Inflow</p>
-                      <p className="text-[11px] text-gray-500 truncate max-w-[170px]">
-                        {formatCurrency(currentAssessment?.collectedRevenue)} verified
+                      <p className="text-xs font-bold text-slate-900 dark:text-white">
+                        {t('analytics.pillarFinance', 'Financial & MoMo Inflow')}
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[170px] font-medium">
+                        {formatCurrency(currentAssessment?.collectedRevenue)} {t('analytics.verified', 'verified')}
                       </p>
                     </div>
                   </div>
-                  <span className={`text-xs font-extrabold ${currentAssessment?.financeScore >= 16 ? 'text-emerald-600' : currentAssessment?.financeScore >= 12 ? 'text-amber-600' : 'text-rose-600'}`}>
+                  <span className={`text-xs font-extrabold px-2 py-0.5 rounded ${
+                    (currentAssessment?.financeScore ?? 0) >= 16 ? 'text-emerald-700 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/40' :
+                    (currentAssessment?.financeScore ?? 0) >= 12 ? 'text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/40' :
+                    'text-rose-700 bg-rose-50 dark:text-rose-300 dark:bg-rose-950/40'
+                  }`}>
                     {currentAssessment?.financeScore}/20
                   </span>
                 </div>
 
-                {/* Pillar 4 */}
-                <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-2 bg-purple-50 dark:bg-purple-900/30 text-purple-600 rounded-lg">
+                {/* Pillar 4: A/V Sound & Tech Clashes */}
+                <div className="p-3.5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-xs flex items-center justify-between hover:border-purple-300 dark:hover:border-purple-700 transition">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg">
                       <Volume2 className="w-4 h-4" />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-gray-900 dark:text-white">A/V Sound & Tech Clashes</p>
-                      <p className="text-[11px] text-gray-500">
-                        {currentAssessment?.allocatedSoundSystems}/{currentAssessment?.requiredSoundSystems} Sound Systems
+                      <p className="text-xs font-bold text-slate-900 dark:text-white">
+                        {t('analytics.pillarResources', 'A/V Sound & Tech Allocation')}
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                        {currentAssessment?.allocatedSoundSystems}/{currentAssessment?.requiredSoundSystems} {t('analytics.soundSystems', 'Sound Systems')}
                       </p>
                     </div>
                   </div>
-                  <span className={`text-xs font-extrabold ${currentAssessment?.resourcesScore >= 16 ? 'text-emerald-600' : currentAssessment?.resourcesScore >= 12 ? 'text-amber-600' : 'text-rose-600'}`}>
+                  <span className={`text-xs font-extrabold px-2 py-0.5 rounded ${
+                    (currentAssessment?.resourcesScore ?? 0) >= 16 ? 'text-emerald-700 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/40' :
+                    (currentAssessment?.resourcesScore ?? 0) >= 12 ? 'text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/40' :
+                    'text-rose-700 bg-rose-50 dark:text-rose-300 dark:bg-rose-950/40'
+                  }`}>
                     {currentAssessment?.resourcesScore}/20
                   </span>
                 </div>
               </div>
 
-              {/* Pillar 5 */}
-              <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-cyan-50 dark:bg-cyan-900/30 text-cyan-600 rounded-lg">
+              {/* Pillar 5: Program & Keynote Speakers */}
+              <div className="p-3.5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-xs flex items-center justify-between hover:border-cyan-300 dark:hover:border-cyan-700 transition">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-cyan-50 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400 rounded-lg">
                     <Mic2 className="w-4 h-4" />
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-gray-900 dark:text-white">Program & Keynote Speakers</p>
-                    <p className="text-[11px] text-gray-500">
-                      {currentAssessment?.confirmedSessions} / {currentAssessment?.totalSessions} sessions confirmed
-                      {currentAssessment?.unassignedSpeakersCount > 0 && ` (${currentAssessment?.unassignedSpeakersCount} pending speakers)`}
+                    <p className="text-xs font-bold text-slate-900 dark:text-white">
+                      {t('analytics.pillarProgram', 'Program & Keynote Speakers')}
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                      {currentAssessment?.confirmedSessions} / {currentAssessment?.totalSessions} {t('analytics.sessionsConfirmed', 'sessions confirmed')}
+                      {currentAssessment?.unassignedSpeakersCount > 0 && ` (${currentAssessment?.unassignedSpeakersCount} ${t('analytics.pendingSpeakers', 'pending speakers')})`}
                     </p>
                   </div>
                 </div>
-                <span className={`text-xs font-extrabold ${currentAssessment?.programScore >= 16 ? 'text-emerald-600' : currentAssessment?.programScore >= 12 ? 'text-amber-600' : 'text-rose-600'}`}>
+                <span className={`text-xs font-extrabold px-2 py-0.5 rounded ${
+                  (currentAssessment?.programScore ?? 0) >= 16 ? 'text-emerald-700 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/40' :
+                  (currentAssessment?.programScore ?? 0) >= 12 ? 'text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/40' :
+                  'text-rose-700 bg-rose-50 dark:text-rose-300 dark:bg-rose-950/40'
+                }`}>
                   {currentAssessment?.programScore}/20
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Categorized Preparation Checklist & Warning Badges */}
-          <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-slate-800">
+          {/* Categorized Preparation Checklist & Shortfalls */}
+          <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-800">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <ShieldAlert className="w-4 h-4 text-amber-500" />
-                Detected Preparation Shortfalls & Automated Diagnosis
+                {t('analytics.shortfallsTitle', 'Detected Preparation Shortfalls & Automated Diagnosis')}
               </h3>
-              <span className="text-xs text-gray-500 font-medium">
-                {currentAssessment?.warnings?.length || 0} Flagged Item(s)
+              <span className="text-xs text-slate-500 font-medium">
+                {currentAssessment?.warnings?.length || 0} {t('analytics.flaggedItems', 'Flagged Item(s)')}
               </span>
             </div>
 
@@ -469,7 +547,7 @@ export default function ReadinessRadarWidget({ compact = false, onNavigateEvent 
               <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center gap-3">
                 <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
                 <p className="text-xs text-emerald-900 dark:text-emerald-300 font-medium">
-                  All preparation pillars are operating within optimal historical parameters. No logistical crises detected.
+                  {t('analytics.allPillarsOptimal', 'All preparation pillars are operating within optimal parameters. No logistical crises detected.')}
                 </p>
               </div>
             ) : (
@@ -477,18 +555,18 @@ export default function ReadinessRadarWidget({ compact = false, onNavigateEvent 
                 {currentAssessment?.warnings?.map((warning, idx) => {
                   const isHigh = warning.severity === 'HIGH';
                   let icon = <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />;
-                  let categoryBadge = '⛺ Lodging Capacity';
+                  let categoryBadge = t('analytics.catLodging', '⛺ Lodging Capacity');
                   if (warning.category === 'REGISTRATION') {
-                    categoryBadge = '👥 Registration Trajectory';
+                    categoryBadge = t('analytics.catRegistration', '👥 Registration Trajectory');
                     icon = <Users className="w-4 h-4 text-blue-600 shrink-0" />;
                   } else if (warning.category === 'FINANCE') {
-                    categoryBadge = '💳 Financial Inflow';
+                    categoryBadge = t('analytics.catFinance', '💳 Financial Inflow');
                     icon = <DollarSign className="w-4 h-4 text-emerald-600 shrink-0" />;
                   } else if (warning.category === 'RESOURCES') {
-                    categoryBadge = '🔊 A/V & Technical Allocation';
+                    categoryBadge = t('analytics.catResources', '🔊 A/V & Technical Allocation');
                     icon = <Volume2 className="w-4 h-4 text-purple-600 shrink-0" />;
                   } else if (warning.category === 'PROGRAM') {
-                    categoryBadge = '📋 Program & Speakers';
+                    categoryBadge = t('analytics.catProgram', '📋 Program & Speakers');
                     icon = <Mic2 className="w-4 h-4 text-cyan-600 shrink-0" />;
                   }
 
@@ -504,21 +582,21 @@ export default function ReadinessRadarWidget({ compact = false, onNavigateEvent 
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2">
                           {icon}
-                          <span className="text-xs font-bold text-gray-900 dark:text-white">
+                          <span className="text-xs font-bold text-slate-900 dark:text-white">
                             {warning.title}
                           </span>
                         </div>
                         <Badge variant={isHigh ? 'danger' : 'warning'} size="sm">
-                          {warning.severity} SEVERITY
+                          {warning.severity} {t('analytics.severity', 'SEVERITY')}
                         </Badge>
                       </div>
 
-                      <p className="text-xs text-gray-700 dark:text-gray-300 mt-2 leading-relaxed">
+                      <p className="text-xs text-slate-700 dark:text-slate-300 mt-2 leading-relaxed">
                         {warning.details}
                       </p>
 
-                      <div className="mt-3 pt-2.5 border-t border-gray-200/60 dark:border-slate-800 flex items-center justify-between text-[11px]">
-                        <span className="font-semibold text-gray-600 dark:text-gray-400">
+                      <div className="mt-3 pt-2.5 border-t border-slate-200/70 dark:border-slate-800 flex items-center justify-between text-[11px]">
+                        <span className="font-semibold text-slate-600 dark:text-slate-400">
                           {categoryBadge}
                         </span>
                         <span className="text-slate-500 font-mono text-[10px]">
@@ -532,36 +610,36 @@ export default function ReadinessRadarWidget({ compact = false, onNavigateEvent 
             )}
           </div>
 
-          {/* One-Click AI Mitigation Actions Drawer / Bar */}
-          <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-slate-800">
+          {/* Recommended Action Items & Leader Alerts */}
+          <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-800">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-blue-600" />
-                  One-Click AI Mitigation Workflow Shortcuts
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Send className="w-4 h-4 text-blue-600" />
+                  {t('analytics.actionItemsTitle', 'Recommended Action Items & Leader Alerts')}
                 </h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                  Execute direct automated interventions across pastoral, lodging, and logistics leadership
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {t('analytics.actionItemsSubtitle', 'Dispatch direct notifications across pastoral, lodging, and logistics leadership')}
                 </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
               {currentAssessment?.recommendations?.map((rec, idx) => (
                 <div
                   key={idx}
-                  className="p-4 bg-white dark:bg-slate-800/80 rounded-lg border border-slate-200 dark:border-slate-700 flex flex-col justify-between space-y-3 hover:border-slate-400 dark:hover:border-slate-600 transition"
+                  className="p-4 bg-white dark:bg-slate-800/90 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col justify-between space-y-3 shadow-xs hover:border-blue-400 dark:hover:border-blue-600 transition"
                 >
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between gap-1">
-                      <span className="text-xs font-semibold text-slate-900 dark:text-white">
+                      <span className="text-xs font-bold text-slate-900 dark:text-white">
                         {rec.actionTitle}
                       </span>
-                      <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
-                        {rec.targetRole?.replace('_', ' ')}
+                      <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                        {rec.targetRole?.replace(/_/g, ' ')}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                       {rec.suggestedAction}
                     </p>
                   </div>
@@ -569,11 +647,11 @@ export default function ReadinessRadarWidget({ compact = false, onNavigateEvent 
                   <Button
                     variant="primary"
                     size="sm"
-                    className="w-full text-xs font-medium justify-center bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white rounded-md"
+                    className="w-full text-xs font-semibold justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-xs"
                     onClick={() => handleOpenMitigation(rec)}
                   >
                     <Send className="w-3.5 h-3.5 mr-1.5" />
-                    {rec.buttonLabel || 'Trigger Mitigation'}
+                    {rec.buttonLabel || t('analytics.sendAlert', 'Send Leader Alert')}
                   </Button>
                 </div>
               ))}
@@ -582,7 +660,7 @@ export default function ReadinessRadarWidget({ compact = false, onNavigateEvent 
         </CardBody>
       </Card>
 
-      {/* Mitigation Action Confirmation Modal / Drawer */}
+      {/* Mitigation Action Modal */}
       <Modal
         isOpen={mitigationModalOpen}
         onClose={() => {
@@ -591,32 +669,32 @@ export default function ReadinessRadarWidget({ compact = false, onNavigateEvent 
             setActiveRecommendation(null);
           }
         }}
-        title="Execute AI Mitigation Action"
+        title={t('analytics.modalTitle', 'Dispatch Operational Notification')}
       >
         {activeRecommendation && (
           <div className="space-y-4">
-            <div className="p-4 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 rounded-xl space-y-2">
+            <div className="p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl space-y-2">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-indigo-600" />
-                <h4 className="text-sm font-bold text-gray-900 dark:text-white">
+                <Send className="w-4 h-4 text-blue-600" />
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white">
                   {activeRecommendation.actionTitle}
                 </h4>
               </div>
-              <p className="text-xs text-gray-700 dark:text-gray-300">
+              <p className="text-xs text-slate-700 dark:text-slate-300">
                 {activeRecommendation.suggestedAction}
               </p>
               <div className="text-[11px] text-indigo-700 dark:text-indigo-300 font-semibold pt-1">
-                Target Stakeholders: {activeRecommendation.targetRole?.replace('_', ' ')} & Camp Coordinators
+                {t('analytics.targetStakeholders', 'Target Stakeholders')}: {activeRecommendation.targetRole?.replace(/_/g, ' ')} & {t('analytics.campCoordinators', 'Camp Coordinators')}
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                Custom Urgent Directives (Optional):
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {t('analytics.customDirectivesLabel', 'Custom Urgent Directives (Optional):')}
               </label>
               <Textarea
                 rows={3}
-                placeholder="Include custom instructions or specific deadlines for the field leadership team..."
+                placeholder={t('analytics.customDirectivesPlaceholder', 'Include custom instructions or specific deadlines for the field leadership team...')}
                 value={customActionMessage}
                 onChange={(e) => setCustomActionMessage(e.target.value)}
                 className="text-xs"
@@ -630,24 +708,24 @@ export default function ReadinessRadarWidget({ compact = false, onNavigateEvent 
                 onClick={() => setMitigationModalOpen(false)}
                 disabled={actionSubmitting}
               >
-                Cancel
+                {t('common.cancel', 'Cancel')}
               </Button>
               <Button
                 variant="primary"
                 size="sm"
                 onClick={handleExecuteMitigation}
                 disabled={actionSubmitting}
-                className="bg-indigo-600 hover:bg-indigo-700"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 {actionSubmitting ? (
                   <>
                     <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                    Dispatching Directives...
+                    {t('analytics.dispatchingDirectives', 'Dispatching Directives...')}
                   </>
                 ) : (
                   <>
                     <Send className="w-3.5 h-3.5 mr-1.5" />
-                    Confirm & Dispatch Directives
+                    {t('analytics.confirmDispatch', 'Confirm & Dispatch Directives')}
                   </>
                 )}
               </Button>

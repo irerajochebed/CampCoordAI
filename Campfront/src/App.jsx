@@ -224,7 +224,7 @@ function AppRoutes() {
           </ProtectedRoute>
         } />
         <Route path="accommodation/:id" element={
-          <ProtectedRoute requiredNav={NAV_KEYS.ACCOMMODATION}>
+          <ProtectedRoute requiredNav={NAV_KEYS.ACCOMMODATION} allowedRoles={['COORDINATOR', 'ADMINISTRATOR']}>
             <AccommodationDetail />
           </ProtectedRoute>
         } />

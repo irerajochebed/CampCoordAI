@@ -16,7 +16,7 @@ import {
   Home, 
   DollarSign, 
   Package, 
-  Brain, 
+  TrendingUp, 
   MessageSquare,
   Building2, 
   Layers, 
@@ -118,9 +118,9 @@ export default function Sidebar() {
     },
     { 
       key: NAV_KEYS.ANALYTICS,
-      name: t('nav.analytics', 'AI Insights'), 
+      name: t('nav.analytics', 'Readiness Analytics'), 
       href: '/app/analytics', 
-      icon: Brain,
+      icon: TrendingUp,
     },
     { 
       key: NAV_KEYS.COMMUNICATION,
@@ -210,8 +210,8 @@ export default function Sidebar() {
             {user?.organizationUnitName || user?.organization || t('header.unionName', 'Rwanda Union Mission')}
           </p>
         </div>
-        <p className="text-[11px] text-slate-400 mt-1 pl-5 font-mono tracking-tight">
-          SDA CampCoordAI • RUM
+        <p className="text-[11px] text-slate-400 mt-1 pl-5 font-medium tracking-tight">
+          SDA Camp Meeting Management
         </p>
       </div>
     </aside>

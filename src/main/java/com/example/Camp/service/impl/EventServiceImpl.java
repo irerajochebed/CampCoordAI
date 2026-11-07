@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -183,6 +184,7 @@ public class EventServiceImpl implements EventService {
                 .map(this::autoUpdateEventStatus)
                 .filter(e -> isUserAllowedToAccessEvent(currentUser, e))
                 .map(this::buildEventResponse)
+                .sorted(eventResponseComparator())
                 .collect(Collectors.toList());
     }
     
@@ -195,6 +197,7 @@ public class EventServiceImpl implements EventService {
                 .map(this::autoUpdateEventStatus)
                 .filter(e -> e.getStatus() == status)
                 .map(this::buildEventResponse)
+                .sorted(eventResponseComparator())
                 .collect(Collectors.toList());
     }
     
@@ -215,6 +218,7 @@ public class EventServiceImpl implements EventService {
                                      (e.getProposal() != null && e.getProposal().getDepartment() != null && e.getProposal().getDepartment().getId().equals(dept.getId())) ||
                                      e.getCoordinator().getId().equals(coordinatorId))
                         .map(this::buildEventResponse)
+                        .sorted(eventResponseComparator())
                         .collect(Collectors.toList());
             }
         }
@@ -223,6 +227,7 @@ public class EventServiceImpl implements EventService {
                 .map(this::autoUpdateEventStatus)
                 .filter(e -> isUserAllowedToAccessEvent(currentUser, e))
                 .map(this::buildEventResponse)
+                .sorted(eventResponseComparator())
                 .collect(Collectors.toList());
     }
     
@@ -485,5 +490,61 @@ public class EventServiceImpl implements EventService {
         }
 
         return true;
+    }
+
+    private Comparator<EventResponse> eventResponseComparator() {
+        return (a, b) -> {
+            int priorityA = getEventResponsePriority(a);
+            int priorityB = getEventResponsePriority(b);
+            if (priorityA != priorityB) {
+                return Integer.compare(priorityA, priorityB);
+            }
+            if (priorityA >= 4) {
+                // Completed or cancelled: most recently completed first
+                if (a.getStartDate() == null && b.getStartDate() == null) return 0;
+                if (a.getStartDate() == null) return 1;
+                if (b.getStartDate() == null) return -1;
+                return b.getStartDate().compareTo(a.getStartDate());
+            } else {
+                // Upcoming / open / closed: next one coming soonest first
+                if (a.getStartDate() == null && b.getStartDate() == null) return 0;
+                if (a.getStartDate() == null) return 1;
+                if (b.getStartDate() == null) return -1;
+                return a.getStartDate().compareTo(b.getStartDate());
+            }
+        };
+    }
+
+    private int getEventResponsePriority(EventResponse event) {
+        if (event == null) return 6;
+        LocalDate today = LocalDate.now();
+
+        // 1. Completed if explicitly COMPLETED or past endDate
+        if (event.getStatus() == EventStatus.COMPLETED || 
+            (event.getEndDate() != null && event.getEndDate().isBefore(today))) {
+            return 4;
+        }
+
+        // Cancelled
+        if (event.getStatus() == EventStatus.CANCELLED) {
+            return 5;
+        }
+
+        // 2. Closed for registration if explicitly REGISTRATION_CLOSED or past registrationEndDate
+        if (event.getStatus() == EventStatus.REGISTRATION_CLOSED || 
+            (event.getRegistrationEndDate() != null && event.getRegistrationEndDate().isBefore(today))) {
+            return 3;
+        }
+
+        // 3. Planned / Draft / Planning
+        if (event.getStatus() == EventStatus.PLANNED || 
+            event.getStatus() == EventStatus.PLANNING || 
+            event.getStatus() == EventStatus.PREPARATION || 
+            event.getStatus() == EventStatus.DRAFT) {
+            return 2;
+        }
+
+        // 4. Registration Open / Ongoing / In Progress (Coming soonest)
+        return 1;
     }
 }

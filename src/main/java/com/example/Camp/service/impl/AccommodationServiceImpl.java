@@ -1,16 +1,17 @@
 package com.example.Camp.service.impl;
 
+import com.example.Camp.dto.accommodation.AccommodationIssueRequest;
 import com.example.Camp.dto.accommodation.AccommodationRequest;
+import com.example.Camp.dto.accommodation.ParticipantAccommodationResponse;
 import com.example.Camp.dto.accommodation.RoomAssignmentRequest;
 import com.example.Camp.dto.accommodation.RoomRequest;
 import com.example.Camp.entity.*;
+import com.example.Camp.enums.NotificationType;
+import com.example.Camp.enums.Role;
 import com.example.Camp.exception.BadRequestException;
 import com.example.Camp.exception.BusinessRuleException;
 import com.example.Camp.exception.ResourceNotFoundException;
-import com.example.Camp.repository.AccommodationRepository;
-import com.example.Camp.repository.RegistrationRepository;
-import com.example.Camp.repository.RoomAssignmentRepository;
-import com.example.Camp.repository.RoomRepository;
+import com.example.Camp.repository.*;
 import com.example.Camp.service.AccommodationService;
 import com.example.Camp.service.EventService;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,9 @@ public class AccommodationServiceImpl implements AccommodationService {
     private final RoomRepository roomRepository;
     private final RoomAssignmentRepository roomAssignmentRepository;
     private final RegistrationRepository registrationRepository;
+    private final UserRepository userRepository;
+    private final NotificationRepository notificationRepository;
+    private final EventRepository eventRepository;
     private final EventService eventService;
     
     @Override
@@ -435,5 +439,203 @@ public class AccommodationServiceImpl implements AccommodationService {
         }
         log.info("Completed auto-assignment for event {}: assigned {} participants", eventId, newAssignments.size());
         return newAssignments;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ParticipantAccommodationResponse getMyAccommodation(Long currentUserId, Long eventId) {
+        List<Registration> registrations = registrationRepository.findActiveByParticipant(currentUserId);
+
+        List<ParticipantAccommodationResponse.EventOptionDto> registeredEvents = registrations.stream()
+                .filter(r -> r.getEvent() != null)
+                .map(r -> {
+                    Event ev = r.getEvent();
+                    boolean hasAcc = roomAssignmentRepository.findActiveByRegistration(r.getId()).isPresent();
+                    return ParticipantAccommodationResponse.EventOptionDto.builder()
+                            .id(ev.getId())
+                            .name(ev.getName())
+                            .startDate(ev.getStartDate())
+                            .endDate(ev.getEndDate())
+                            .venue(ev.getVenue())
+                            .hasAccommodation(hasAcc)
+                            .build();
+                })
+                .collect(Collectors.toList());
+
+        if (registrations.isEmpty()) {
+            return ParticipantAccommodationResponse.builder()
+                    .hasAssignment(false)
+                    .registeredEvents(Collections.emptyList())
+                    .build();
+        }
+
+        Registration targetRegistration;
+        if (eventId != null) {
+            targetRegistration = registrations.stream()
+                    .filter(r -> r.getEvent() != null && r.getEvent().getId().equals(eventId))
+                    .findFirst()
+                    .orElse(registrations.get(0));
+        } else {
+            targetRegistration = registrations.get(0);
+        }
+
+        Event event = targetRegistration.getEvent();
+        User coordinator = event != null ? event.getCoordinator() : null;
+
+        Optional<RoomAssignment> assignmentOpt = roomAssignmentRepository.findActiveByRegistration(targetRegistration.getId());
+
+        ParticipantAccommodationResponse.ParticipantAccommodationResponseBuilder builder = ParticipantAccommodationResponse.builder()
+                .registeredEvents(registeredEvents)
+                .registrationId(targetRegistration.getId())
+                .registrationNumber(targetRegistration.getRegistrationNumber());
+
+        if (event != null) {
+            builder.eventId(event.getId())
+                   .eventName(event.getName())
+                   .eventStartDate(event.getStartDate())
+                   .eventEndDate(event.getEndDate())
+                   .eventVenue(event.getVenue());
+        }
+
+        if (coordinator != null) {
+            builder.hasCoordinator(true)
+                   .coordinatorId(coordinator.getId())
+                   .coordinatorName(coordinator.getFirstName() + " " + coordinator.getLastName())
+                   .coordinatorEmail(coordinator.getEmail())
+                   .coordinatorPhone(coordinator.getPhoneNumber());
+        } else {
+            builder.hasCoordinator(false);
+        }
+
+        if (assignmentOpt.isPresent()) {
+            RoomAssignment assignment = assignmentOpt.get();
+            Room room = assignment.getRoom();
+            Accommodation accommodation = room != null ? room.getAccommodation() : null;
+
+            builder.hasAssignment(true)
+                   .assignmentId(assignment.getId())
+                   .bedNumber(assignment.getBedNumber())
+                   .checkInDate(assignment.getCheckInDate())
+                   .checkOutDate(assignment.getCheckOutDate())
+                   .active(assignment.getActive())
+                   .notes(assignment.getNotes());
+
+            if (room != null) {
+                builder.roomId(room.getId())
+                       .roomNumber(room.getRoomNumber())
+                       .floor(room.getFloor())
+                       .capacity(room.getCapacity())
+                       .genderRestriction(room.getGenderRestriction())
+                       .amenities(room.getAmenities());
+
+                // Find roommates in the same room (excluding current registration)
+                List<RoomAssignment> activeRoommates = roomAssignmentRepository.findActiveByRoom(room.getId());
+                List<ParticipantAccommodationResponse.RoommateDto> roommates = activeRoommates.stream()
+                        .filter(ra -> ra != null && !ra.getId().equals(assignment.getId()) && ra.getRegistration() != null)
+                        .map(ra -> {
+                            User part = ra.getRegistration().getParticipant();
+                            String name = part != null ? (part.getFirstName() + " " + part.getLastName()) : "Participant";
+                            String church = (part != null && part.getOrganizationUnit() != null) ? part.getOrganizationUnit().getName() : "";
+                            return ParticipantAccommodationResponse.RoommateDto.builder()
+                                    .id(ra.getId())
+                                    .name(name)
+                                    .bedNumber(ra.getBedNumber())
+                                    .gender(part != null ? part.getGender() : null)
+                                    .churchName(church)
+                                    .build();
+                        })
+                        .collect(Collectors.toList());
+                builder.roommates(roommates);
+            }
+
+            if (accommodation != null) {
+                builder.accommodationId(accommodation.getId())
+                       .buildingName(accommodation.getBuildingName())
+                       .buildingCode(accommodation.getBuildingCode())
+                       .location(accommodation.getLocation());
+            }
+        } else {
+            builder.hasAssignment(false);
+        }
+
+        return builder.build();
+    }
+
+    @Override
+    public void reportAccommodationIssue(Long currentUserId, AccommodationIssueRequest request) {
+        User participant = userRepository.findById(currentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", currentUserId));
+        
+        Event event = eventRepository.findById(request.getEventId())
+                .orElseThrow(() -> new ResourceNotFoundException("Event", "id", request.getEventId()));
+
+        Optional<Registration> regOpt = registrationRepository.findActiveByParticipant(currentUserId).stream()
+                .filter(r -> r.getEvent() != null && r.getEvent().getId().equals(event.getId()))
+                .findFirst();
+
+        String currentRoomInfo = "Not assigned yet";
+        if (regOpt.isPresent()) {
+            Optional<RoomAssignment> raOpt = roomAssignmentRepository.findActiveByRegistration(regOpt.get().getId());
+            if (raOpt.isPresent()) {
+                Room room = raOpt.get().getRoom();
+                String bName = (room != null && room.getAccommodation() != null) ? room.getAccommodation().getBuildingName() : "Main";
+                String rNum = room != null ? room.getRoomNumber() : "?";
+                currentRoomInfo = bName + " - Room " + rNum + " (Bed " + raOpt.get().getBedNumber() + ")";
+            }
+        }
+
+        // Determine recipient: Coordinator in charge, or if none, System Admin ONLY!
+        User coordinator = event.getCoordinator();
+        List<User> recipients = new ArrayList<>();
+
+        if (coordinator != null) {
+            recipients.add(coordinator);
+        } else {
+            // Event has NO coordinator in charge -> communicate to System Admin ONLY!
+            List<User> admins = userRepository.findActiveByRole(Role.ADMINISTRATOR);
+            recipients.addAll(admins);
+        }
+
+        if (recipients.isEmpty()) {
+            throw new BusinessRuleException("No event coordinator or system administrator found to receive the accommodation request.");
+        }
+
+        String participantFullName = participant.getFirstName() + " " + participant.getLastName();
+        String title = "Accommodation Request: " + request.getIssueType().replace("_", " ") + " - " + participantFullName;
+
+        StringBuilder msg = new StringBuilder();
+        msg.append("Accommodation request from participant: ").append(participantFullName)
+           .append(" (").append(participant.getEmail());
+        if (participant.getPhoneNumber() != null && !participant.getPhoneNumber().isBlank()) {
+            msg.append(", ").append(participant.getPhoneNumber());
+        }
+        msg.append(")\n");
+        msg.append("Event: ").append(event.getName()).append("\n");
+        msg.append("Current Location / Bed: ").append(currentRoomInfo).append("\n");
+        msg.append("Issue Category: ").append(request.getIssueType()).append("\n");
+        if (request.getPreferredRoomOrBed() != null && !request.getPreferredRoomOrBed().isBlank()) {
+            msg.append("Preferred Switch / Need: ").append(request.getPreferredRoomOrBed().trim()).append("\n");
+        }
+        if (request.getContactPhone() != null && !request.getContactPhone().isBlank()) {
+            msg.append("Contact Phone: ").append(request.getContactPhone().trim()).append("\n");
+        }
+        msg.append("Details: ").append(request.getDetails().trim());
+
+        for (User targetUser : recipients) {
+            Notification notification = Notification.builder()
+                    .sender(participant)
+                    .recipient(targetUser)
+                    .event(event)
+                    .type(NotificationType.ACCOMMODATION_NOTICE)
+                    .title(title)
+                    .message(msg.toString())
+                    .actionUrl("/app/accommodation")
+                    .isRead(false)
+                    .build();
+            notificationRepository.save(notification);
+        }
+
+        log.info("Accommodation issue recorded by participant {} for event {}. Recipient count: {}", 
+                currentUserId, event.getId(), recipients.size());
     }
 }

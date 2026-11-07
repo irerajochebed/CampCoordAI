@@ -6,7 +6,8 @@ import {
   MapPin,
   CheckCircle,
   ArrowRight,
-  Sparkles,
+  TrendingUp,
+  Building2,
   Shield,
   Zap,
   Heart,
@@ -59,9 +60,9 @@ export default function LandingPage() {
       description: t('landing.featuresSection.feature5Desc', 'Safe payment verification system with proof of payment tracking')
     },
     {
-      icon: Sparkles,
-      title: t('landing.featuresSection.feature6Title', 'AI Insights'),
-      description: t('landing.featuresSection.feature6Desc', 'Predictive analytics and smart recommendations for better planning')
+      icon: TrendingUp,
+      title: t('landing.featuresSection.feature6Title', 'Readiness & Forecasting'),
+      description: t('landing.featuresSection.feature6Desc', 'Logistics diagnostics and capacity projections for proactive planning')
     }
   ];
 
@@ -334,7 +335,7 @@ export default function LandingPage() {
           {/* Section Header */}
           <div className="text-center mb-14">
             <div className="inline-flex items-center space-x-2 bg-cyan-100 dark:bg-cyan-950/70 border border-cyan-300 dark:border-cyan-500/40 rounded-full px-4 py-1.5 mb-4 shadow-xs">
-              <Sparkles className="w-4 h-4 text-cyan-700 dark:text-cyan-400" />
+              <Building2 className="w-4 h-4 text-cyan-700 dark:text-cyan-400" />
               <span className="text-cyan-800 dark:text-cyan-300 text-xs sm:text-sm font-semibold uppercase tracking-wider">
                 {t('landing.gallerySection.badge', 'Official Event Archives')}
               </span>
@@ -605,17 +606,17 @@ export default function LandingPage() {
                   </div>
                 </div>
 
-                <div className="bg-white dark:bg-[#111D38] border border-slate-200 dark:border-[#1E2E4E] rounded-2xl p-4 sm:p-5 shadow-md border-l-4 border-l-purple-500">
+                <div className="bg-white dark:bg-[#111D38] border border-slate-200 dark:border-[#1E2E4E] rounded-2xl p-4 sm:p-5 shadow-md border-l-4 border-l-blue-600">
                   <div className="flex items-center space-x-4">
-                    <div className="w-11 h-11 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center shadow-md">
-                      <Sparkles className="w-5 h-5 text-white" />
+                    <div className="w-11 h-11 bg-blue-600 rounded-full flex items-center justify-center shadow-md">
+                      <TrendingUp className="w-5 h-5 text-white" />
                     </div>
                     <div>
                       <h4 className="font-bold text-slate-900 dark:text-white text-base">
-                        {t('landing.aboutSection.card3Title', 'AI-Enhanced')}
+                        {t('landing.aboutSection.card3Title', 'Decision Analytics')}
                       </h4>
                       <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-300">
-                        {t('landing.aboutSection.card3Desc', 'Smart insights for better events')}
+                        {t('landing.aboutSection.card3Desc', 'Automated readiness & capacity forecasting')}
                       </p>
                     </div>
                   </div>

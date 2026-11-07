@@ -16,7 +16,7 @@ import {
   Building,
   ShieldCheck,
   Award,
-  Sparkles,
+  Send,
   ExternalLink,
   ChevronRight,
   MessageSquare
@@ -344,7 +344,7 @@ export default function ProposalDetail() {
           )}
           
           {canSubmit && (
-            <Button variant="primary" onClick={handleSubmitProposal} icon={<Sparkles className="w-4 h-4" />}>
+            <Button variant="primary" onClick={handleSubmitProposal} icon={<Send className="w-4 h-4" />}>
               Submit for Review
             </Button>
           )}

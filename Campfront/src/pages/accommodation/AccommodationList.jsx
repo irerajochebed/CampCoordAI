@@ -27,11 +27,18 @@ import { PageSpinner } from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
 import Modal from '../../components/ui/Modal';
 import { useTranslation } from '../../contexts/LanguageContext';
+import ParticipantAccommodationView from './ParticipantAccommodationView';
 
 export default function AccommodationList() {
   const navigate = useNavigate();
   const { user, isAdmin, isCoordinator } = useAuth();
   const { t } = useTranslation();
+
+  const isParticipant = user?.role === 'PARTICIPANT';
+
+  if (isParticipant) {
+    return <ParticipantAccommodationView />;
+  }
   
   const [accommodations, setAccommodations] = useState([]);
   const [events, setEvents] = useState([]);

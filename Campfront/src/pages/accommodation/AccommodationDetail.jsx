@@ -49,8 +49,12 @@ export default function AccommodationDetail() {
   const canManage = isUnionAdmin || isCoordinator || isAccommodationOfficer;
 
   useEffect(() => {
+    if (user?.role === 'PARTICIPANT') {
+      navigate('/app/accommodation', { replace: true });
+      return;
+    }
     fetchAccommodationData();
-  }, [id]);
+  }, [id, user]);
 
   const fetchAccommodationData = async () => {
     if (!id || id === 'undefined') {

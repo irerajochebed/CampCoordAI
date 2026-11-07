@@ -15,7 +15,6 @@ import {
   QrCode,
   ArrowRight,
   Lock,
-  Sparkles,
   RefreshCw,
   Building2,
   Calendar,
@@ -624,7 +623,7 @@ export default function PaymentForm() {
                         </div>
 
                         <p className="text-xs text-center text-slate-500 dark:text-slate-400 flex items-center justify-center gap-1.5">
-                          <Sparkles className="w-4 h-4 text-emerald-600" />
+                          <ShieldCheck className="w-4 h-4 text-emerald-600" />
                           Testing with Free Developer Sandbox Mode. Click "Authorize" to simulate instant payment verification.
                         </p>
                       </div>

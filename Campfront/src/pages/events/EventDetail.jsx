@@ -27,7 +27,9 @@ import {
   Check,
   Eye,
   RefreshCw,
-  QrCode
+  QrCode,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -43,6 +45,7 @@ export default function EventDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams();
+  const [attendeeViewMode, setAttendeeViewMode] = useState('grid');
   const { user, isAdmin } = useAuth();
   
   // Instant initial data from route state or API memory cache
@@ -636,12 +639,145 @@ export default function EventDetail() {
                   >
                     Unpaid ({unpaidList.length})
                   </button>
+
+                  {/* View Switcher */}
+                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700/60 ml-auto">
+                    <button
+                      type="button"
+                      onClick={() => setAttendeeViewMode('grid')}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                        attendeeViewMode === 'grid'
+                          ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                      Cards
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAttendeeViewMode('table')}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                        attendeeViewMode === 'table'
+                          ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <List className="w-3.5 h-3.5" />
+                      Table
+                    </button>
+                  </div>
                 </div>
 
-                {/* Attendee Table */}
+                {/* Attendee Content */}
                 {filteredEventAttendees.length === 0 ? (
                   <div className="text-center py-6 border border-dashed border-slate-200 dark:border-slate-700 rounded-xl">
                     <p className="text-xs text-slate-500 font-medium">No attendees found for the selected filter.</p>
+                  </div>
+                ) : attendeeViewMode === 'grid' ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {filteredEventAttendees.map((reg) => {
+                      const payment = reg.payment || (reg.payments && reg.payments[0]) || null;
+                      const isConfirmed = reg.status === 'CONFIRMED' || reg.status === 'CHECKED_IN';
+                      const isSubmitted = reg.status === 'PAYMENT_SUBMITTED';
+                      const isMoMo = payment?.paymentMethod === 'MOBILE_MONEY' || payment?.transactionReference?.startsWith('MOMO');
+
+                      return (
+                        <div
+                          key={reg.id}
+                          className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-xs hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200 flex flex-col justify-between"
+                        >
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-mono text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                #{reg.id}
+                              </span>
+                              {isConfirmed ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200">
+                                  <Check className="w-3 h-3" /> Paid & Confirmed
+                                </span>
+                              ) : isSubmitted ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-200 animate-pulse">
+                                  <Clock className="w-3 h-3" /> Pending Review
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                                  Pending Payment
+                                </span>
+                              )}
+                            </div>
+
+                            <div>
+                              <h4 className="font-bold text-slate-900 dark:text-white text-sm">
+                                {reg.participantFirstName && reg.participantLastName
+                                  ? `${reg.participantFirstName} ${reg.participantLastName}`
+                                  : (reg.participantName || 'Participant')}
+                              </h4>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                {reg.participantPhone || reg.participantEmail || 'No contact'}
+                              </p>
+                              <p className="text-xs font-medium text-slate-600 dark:text-slate-300 mt-1">
+                                {reg.churchName || 'Church Unit'}
+                              </p>
+                            </div>
+
+                            <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs">
+                              {payment ? (
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="font-bold text-slate-900 dark:text-white">{formatCurrency(payment.amount)}</p>
+                                    <span className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                      {isMoMo ? <Smartphone className="w-3 h-3 text-emerald-600" /> : <Receipt className="w-3 h-3 text-blue-600" />}
+                                      {payment.paymentMethod?.replace(/_/g, ' ')}
+                                    </span>
+                                  </div>
+                                  {payment.transactionReference && (
+                                    <span className="font-mono text-[10px] text-slate-400 truncate max-w-[120px]">
+                                      {payment.transactionReference}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : isFree ? (
+                                <span className="text-emerald-600 font-semibold">Free Event Registration</span>
+                              ) : (
+                                <span className="text-slate-400 italic">Awaiting payment submission</span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1.5">
+                            <Link to={`/app/registrations/${reg.id}`}>
+                              <Button size="sm" variant="outline" className="text-xs px-2.5 py-1">
+                                Details
+                              </Button>
+                            </Link>
+
+                            <div className="flex items-center gap-1.5">
+                              {payment?.receiptUrl && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setPreviewReceiptUrl(payment.receiptUrl)}
+                                  title="View Receipt"
+                                  icon={<Eye className="w-3.5 h-3.5 text-slate-600" />}
+                                />
+                              )}
+
+                              {isSubmitted && (
+                                <Button
+                                  size="sm"
+                                  variant="primary"
+                                  onClick={() => setVerifyModalAttendee(reg)}
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-2.5 py-1 font-bold"
+                                >
+                                  Approve
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-xl">

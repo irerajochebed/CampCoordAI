@@ -103,6 +103,10 @@ export default function RegistrationForm() {
             if (regEnd < now) return false;
           }
           return true;
+        }).sort((a, b) => {
+          const dateA = a?.startDate ? new Date(a.startDate).getTime() : Infinity;
+          const dateB = b?.startDate ? new Date(b.startDate).getTime() : Infinity;
+          return dateA - dateB;
         });
 
         setAvailableEvents(activeEvents);

@@ -16,7 +16,6 @@ import {
   Minimize2, 
   Play, 
   Pause, 
-  Sparkles, 
   Sliders, 
   FileText, 
   Search, 
@@ -494,7 +493,7 @@ export default function MediaPADashboard() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 bg-white/20 rounded-lg">
-                    <Sparkles className="w-5 h-5 text-amber-300" />
+                    <Sliders className="w-5 h-5 text-amber-300" />
                   </div>
                   <div>
                     <CardTitle className="text-lg text-white font-black uppercase tracking-wide">

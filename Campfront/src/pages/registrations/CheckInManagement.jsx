@@ -13,7 +13,9 @@ import {
   Phone,
   Home,
   AlertCircle,
-  Filter
+  Filter,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -29,6 +31,7 @@ export default function CheckInManagement() {
   const { eventId } = useParams();
   const { user, isAdmin, isCoordinator } = useAuth();
   
+  const [viewMode, setViewMode] = useState('grid');
   const [event, setEvent] = useState(null);
   const [registrations, setRegistrations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -279,18 +282,44 @@ export default function CheckInManagement() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <Button
             variant="ghost"
             icon={<ArrowLeft className="w-4 h-4" />}
             onClick={() => navigate(`/app/events/${eventId}`)}
-            className="mb-4"
+            className="mb-2"
           >
             Back to Event
           </Button>
-          <h1 className="text-2xl font-bold text-gray-900">Check-In Management</h1>
-          <p className="text-gray-600 mt-1">{event?.name}</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Check-In Management</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">{event?.name}</p>
+        </div>
+
+        {/* View Switcher */}
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700/60 self-start sm:self-auto">
+          <button
+            onClick={() => setViewMode('grid')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+              viewMode === 'grid'
+                ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <LayoutGrid className="w-4 h-4" />
+            Cards
+          </button>
+          <button
+            onClick={() => setViewMode('table')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+              viewMode === 'table'
+                ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <List className="w-4 h-4" />
+            Table
+          </button>
         </div>
       </div>
 
@@ -477,6 +506,111 @@ export default function CheckInManagement() {
             />
           </CardBody>
         </Card>
+      ) : viewMode === 'grid' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {filteredRegistrations.map((registration) => (
+            <div
+              key={registration.id}
+              className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-5 shadow-xs hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200 flex flex-col justify-between"
+            >
+              <div className="space-y-4">
+                {/* Top Bar: ID Pill & Status */}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                    #{registration.id}
+                  </span>
+                  {getStatusBadge(registration.status)}
+                </div>
+
+                {/* Participant Header */}
+                <div className="flex items-start gap-3.5 pt-1">
+                  <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white font-bold flex items-center justify-center text-sm shadow-xs shrink-0">
+                    {registration.participantFirstName?.[0]}{registration.participantLastName?.[0]}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-bold text-slate-900 dark:text-white text-base leading-snug truncate">
+                      {registration.participantFirstName} {registration.participantLastName}
+                    </h3>
+                    <div className="flex flex-col gap-1 mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      <span className="flex items-center gap-1.5 truncate">
+                        <Mail className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                        <span className="truncate">{registration.participantEmail}</span>
+                      </span>
+                      {registration.participantPhone && (
+                        <span className="flex items-center gap-1.5">
+                          <Phone className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                          <span>{registration.participantPhone}</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Accommodation badge / box */}
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs">
+                  <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300 font-medium">
+                    <Home className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400 shrink-0" />
+                    {registration.accommodation ? (
+                      <div className="truncate">
+                        <span className="font-semibold text-slate-900 dark:text-white">
+                          {registration.accommodation.room.accommodation.name}
+                        </span>
+                        <span className="text-slate-500 dark:text-slate-400 ml-1">
+                          (Room {registration.accommodation.room.roomNumber})
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-slate-400 dark:text-slate-500 italic">No room assigned</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Actions */}
+              <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                  onClick={() => navigate(`/app/registrations/${registration.id}`)}
+                >
+                  View Details
+                </Button>
+
+                <div className="flex items-center gap-2">
+                  {canManage && !isEventPassed && registration.status === 'CONFIRMED' && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      icon={<CheckCircle className="w-4 h-4" />}
+                      onClick={() => handleCheckIn(registration.id)}
+                    >
+                      Check In
+                    </Button>
+                  )}
+
+                  {isEventPassed && registration.status === 'CONFIRMED' && (
+                    <span className="text-xs text-slate-400 dark:text-slate-500 italic">Event Ended</span>
+                  )}
+                  
+                  {registration.status === 'CHECKED_IN' && (
+                    <Badge variant="success" className="flex items-center gap-1 py-1">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      Checked In
+                    </Badge>
+                  )}
+
+                  {registration.status === 'CHECKED_OUT' && (
+                    <Badge variant="default" className="flex items-center gap-1 py-1">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      Checked Out
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
         <Card>
           <CardBody className="p-0">

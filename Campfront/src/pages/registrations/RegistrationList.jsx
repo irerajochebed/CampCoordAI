@@ -12,7 +12,12 @@ import {
   Plus,
   QrCode,
   DollarSign,
-  Calendar
+  Calendar,
+  LayoutGrid,
+  List as ListIcon,
+  MapPin,
+  Church,
+  User as UserIcon
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -39,6 +44,7 @@ export default function RegistrationList() {
   const [registrations, setRegistrations] = useState(cachedRegs);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(cachedRegs.length === 0);
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'table'
   const [alert, setAlert] = useState(null);
   
   const [filters, setFilters] = useState({
@@ -250,15 +256,44 @@ export default function RegistrationList() {
           </p>
         </div>
 
-        <Button
-          variant="primary"
-          icon={<Plus className="w-4 h-4" />}
-          onClick={() => navigate('/app/registrations/new')}
-        >
-          {isParticipant 
-            ? t('registrations.registerForEvent', 'Register for Event') 
-            : t('registrations.registerParticipant', 'Register Participant')}
-        </Button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewMode === 'grid'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+              }`}
+              title="Cards View"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Cards</span>
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`p-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewMode === 'table'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+              }`}
+              title="Table View"
+            >
+              <ListIcon className="w-3.5 h-3.5" />
+              <span>Table</span>
+            </button>
+          </div>
+
+          <Button
+            variant="primary"
+            icon={<Plus className="w-4 h-4" />}
+            onClick={() => navigate('/app/registrations/new')}
+          >
+            {isParticipant 
+              ? t('registrations.registerForEvent', 'Register for Event') 
+              : t('registrations.registerParticipant', 'Register Participant')}
+          </Button>
+        </div>
       </div>
 
       {alert && (
@@ -349,6 +384,176 @@ export default function RegistrationList() {
             />
           </CardBody>
         </Card>
+      ) : viewMode === 'grid' ? (
+        /* =========================================================================
+           CARD GRID VIEW (Matching modern Cards design)
+           ========================================================================= */
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {filteredRegistrations.map((registration) => {
+            const participantName = registration.participantName || 
+              `${registration.participantFirstName || ''} ${registration.participantLastName || ''}`.trim() || 'Participant';
+            const eventTitle = registration.event?.name || registration.eventName || 'Event';
+            const startDate = registration.event?.startDate || registration.eventStartDate;
+            const endDate = registration.event?.endDate || registration.eventEndDate;
+            const venue = registration.event?.venue || registration.eventVenue;
+            const regFee = registration.event?.registrationFee || registration.eventRegistrationFee;
+            const isFree = !regFee || Number(regFee) === 0;
+            const initials = participantName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'P';
+
+            return (
+              <div
+                key={registration.id}
+                className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-6 shadow-xs hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200 flex flex-col justify-between"
+              >
+                <div>
+                  {/* Top Header: Registration Code on Left, Status Badge on Right */}
+                  <div className="flex items-center justify-between gap-2 mb-4">
+                    <span className="font-mono px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+                      {registration.registrationNumber || `REG-#${registration.id}`}
+                    </span>
+                    <div>
+                      {getStatusBadge(registration.status)}
+                    </div>
+                  </div>
+
+                  {/* Event Title */}
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight leading-snug group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                    {eventTitle}
+                  </h3>
+
+                  {/* Participant Info */}
+                  <div className="flex items-center gap-3 mt-3 mb-4 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-600 via-indigo-600 to-sky-600 text-white font-bold flex items-center justify-center text-sm shadow-xs shrink-0 ring-1 ring-white dark:ring-slate-700">
+                      {initials}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-slate-900 dark:text-white text-sm truncate">
+                        {participantName}
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                        {registration.participantEmail || registration.participantPhone || 'Registered Participant'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Metadata Rows */}
+                  <div className="space-y-2 text-xs text-slate-600 dark:text-slate-400 pt-1">
+                    {/* Event Dates */}
+                    {startDate && (
+                      <div className="flex items-center gap-2.5">
+                        <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
+                        <span className="font-mono text-slate-700 dark:text-slate-300 font-medium">
+                          {new Date(startDate).toLocaleDateString()} {endDate ? `– ${new Date(endDate).toLocaleDateString()}` : ''}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Venue */}
+                    {venue && (
+                      <div className="flex items-center gap-2.5">
+                        <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
+                        <span className="truncate">{venue}</span>
+                      </div>
+                    )}
+
+                    {/* Church */}
+                    {registration.churchName && (
+                      <div className="flex items-center gap-2.5">
+                        <Church className="w-4 h-4 text-slate-400 shrink-0" />
+                        <span className="truncate">{registration.churchName}</span>
+                      </div>
+                    )}
+
+                    {/* Fee & Payment */}
+                    <div className="flex items-center justify-between pt-2.5 border-t border-slate-100 dark:border-slate-800">
+                      <span className="text-slate-500 text-[11px] font-medium">Payment Status:</span>
+                      <div className="flex items-center gap-2">
+                        {isFree ? (
+                          <Badge variant="success" size="sm">Free Event</Badge>
+                        ) : (
+                          <>
+                            <span className="font-bold text-slate-900 dark:text-white">
+                              {formatCurrency(regFee)}
+                            </span>
+                            {getPaymentStatusBadge(registration.payment)}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card Footer Actions */}
+                <div className="mt-5 pt-3.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    icon={<Eye className="w-3.5 h-3.5" />}
+                    onClick={() => navigate(`/app/registrations/${registration.id}`, { state: { registration } })}
+                  >
+                    {t('common.details', 'Details')}
+                  </Button>
+
+                  <div className="flex items-center gap-1.5">
+                    {isParticipant && registration.status === 'PENDING' && !isFree && (
+                      <Button
+                        variant="primary"
+                        size="xs"
+                        icon={<DollarSign className="w-3.5 h-3.5" />}
+                        onClick={() => navigate(`/app/payments/new?registrationId=${registration.id}`)}
+                      >
+                        Pay Fee
+                      </Button>
+                    )}
+
+                    {isParticipant && (registration.status === 'CONFIRMED' || registration.status === 'CHECKED_IN') && (
+                      <Button
+                        variant="primary"
+                        size="xs"
+                        icon={<QrCode className="w-3.5 h-3.5" />}
+                        onClick={() => navigate(`/app/registrations/${registration.id}`, { state: { registration } })}
+                      >
+                        Ticket
+                      </Button>
+                    )}
+
+                    {!isParticipant && registration.status === 'CONFIRMED' && registration.status !== 'CHECKED_IN' && (
+                      <Button
+                        variant="secondary"
+                        size="xs"
+                        icon={<QrCode className="w-3.5 h-3.5 text-primary-600" />}
+                        onClick={() => handleQuickCheckIn(registration.id)}
+                        title="Quick check-in"
+                      >
+                        Check In
+                      </Button>
+                    )}
+
+                    {!isParticipant && (registration.status === 'PAYMENT_VERIFIED' || registration.status === 'PAYMENT_SUBMITTED') && (
+                      <button
+                        onClick={() => handleConfirm(registration.id)}
+                        className="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-lg transition-colors cursor-pointer"
+                        title="Confirm registration"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                      </button>
+                    )}
+
+                    {registration.status !== 'CANCELLED' && registration.status !== 'CHECKED_IN' && (
+                      <button
+                        onClick={() => handleCancel(registration.id)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                        title="Cancel registration"
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <Card>
           <CardBody className="p-0">

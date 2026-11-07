@@ -16,7 +16,9 @@ import {
   Smartphone, 
   ShieldCheck, 
   RefreshCw, 
-  ArrowLeft 
+  ArrowLeft,
+  LayoutGrid,
+  List as ListIcon
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -42,6 +44,7 @@ export default function PaymentList() {
   const [payments, setPayments] = useState(cachedPayments);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(cachedPayments.length === 0);
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'table'
   const [alert, setAlert] = useState(null);
   const [previewReceiptUrl, setPreviewReceiptUrl] = useState(null);
   
@@ -231,6 +234,32 @@ export default function PaymentList() {
         </div>
 
         <div className="flex items-center gap-2">
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewMode === 'grid'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+              }`}
+              title="Cards View"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Cards</span>
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`p-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewMode === 'table'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+              }`}
+              title="Table View"
+            >
+              <ListIcon className="w-3.5 h-3.5" />
+              <span>Table</span>
+            </button>
+          </div>
           <Button
             variant="outline"
             icon={<RefreshCw className="w-4 h-4" />}
@@ -387,6 +416,121 @@ export default function PaymentList() {
             />
           </CardBody>
         </Card>
+      ) : viewMode === 'grid' ? (
+        /* =========================================================================
+           CARD GRID VIEW (Matching modern Cards design)
+           ========================================================================= */
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {filteredPayments.map((payment) => {
+            const participantName = payment.participantName || 
+              `${payment.registration?.participantFirstName || ''} ${payment.registration?.participantLastName || ''}`.trim() || 'Participant';
+            const eventName = payment.eventName || payment.registration?.event?.name || 'Event';
+            const isMoMo = payment.paymentMethod === 'MOBILE_MONEY' || payment.transactionReference?.startsWith('MOMO');
+            const initials = participantName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'P';
+
+            return (
+              <div
+                key={payment.id}
+                className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-6 shadow-xs hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200 flex flex-col justify-between"
+              >
+                <div>
+                  {/* Top Header: Payment Method on Left, Status Badge on Right */}
+                  <div className="flex items-center justify-between gap-2 mb-4">
+                    <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+                      {isMoMo ? <Smartphone className="w-3.5 h-3.5 text-emerald-600" /> : <Receipt className="w-3.5 h-3.5 text-blue-600" />}
+                      <span>{payment.paymentMethod?.replace(/_/g, ' ') || 'Payment'}</span>
+                    </span>
+                    <div>
+                      {getStatusBadge(payment.status)}
+                    </div>
+                  </div>
+
+                  {/* Amount Display */}
+                  <div className="mb-4">
+                    <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Amount Paid</span>
+                    <div className="text-2xl font-black text-slate-900 dark:text-white tracking-tight mt-0.5">
+                      {formatCurrency(payment.amount)}
+                    </div>
+                    <div className="font-mono text-xs text-slate-500 dark:text-slate-400 font-bold mt-1 truncate">
+                      Ref: {payment.transactionReference}
+                    </div>
+                  </div>
+
+                  {/* Participant Info */}
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 via-teal-600 to-primary-600 text-white font-bold flex items-center justify-center text-sm shadow-xs shrink-0 ring-1 ring-white dark:ring-slate-700">
+                      {initials}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-slate-900 dark:text-white text-sm truncate">
+                        {participantName}
+                      </p>
+                      {(payment.churchName || payment.registration?.churchName) && (
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                          {payment.churchName || payment.registration?.churchName}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Metadata Rows */}
+                  <div className="space-y-2 text-xs text-slate-600 dark:text-slate-400 pt-1">
+                    {/* Event Name */}
+                    <div className="flex items-center gap-2.5">
+                      <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
+                      <span className="truncate font-medium text-slate-800 dark:text-slate-200">{eventName}</span>
+                    </div>
+
+                    {/* Date Paid */}
+                    <div className="flex items-center gap-2.5">
+                      <Clock className="w-4 h-4 text-slate-400 shrink-0" />
+                      <span className="truncate font-mono text-slate-500 dark:text-slate-400">
+                        {formatDateTime(payment.paidAt || payment.createdAt)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card Footer Actions */}
+                <div className="mt-5 pt-3.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                  {payment.receiptUrl ? (
+                    <button
+                      onClick={() => setPreviewReceiptUrl(payment.receiptUrl)}
+                      className="text-xs font-semibold text-primary-600 dark:text-primary-400 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Receipt className="w-3.5 h-3.5" />
+                      <span>View Receipt</span>
+                    </button>
+                  ) : (
+                    <span className="text-xs text-slate-400 italic">No receipt attached</span>
+                  )}
+
+                  <div className="flex items-center gap-1.5">
+                    {payment.status === 'PENDING' && (
+                      <Button
+                        variant="primary"
+                        size="xs"
+                        icon={<CheckCircle className="w-3.5 h-3.5" />}
+                        onClick={() => handleQuickVerify(payment.id)}
+                      >
+                        Verify
+                      </Button>
+                    )}
+
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      icon={<Eye className="w-3.5 h-3.5" />}
+                      onClick={() => navigate(`/app/payments/${payment.id}`, { state: { payment } })}
+                    >
+                      Audit
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <Card>
           <CardBody className="p-0">

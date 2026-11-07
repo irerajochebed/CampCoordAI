@@ -20,7 +20,6 @@ import {
   LayoutGrid,
   List as ListIcon,
   Filter,
-  Sparkles,
   ShieldCheck,
   Clock
 } from 'lucide-react';
@@ -35,6 +34,72 @@ import EmptyState from '../../components/ui/EmptyState';
 import { useTranslation } from '../../contexts/LanguageContext';
 import { getMinistryAgeRule, getEventAgeDisplay, getEventGenderRule } from '../../utils/ageRangeHelper';
 
+/**
+ * Categorize event status for display ordering:
+ * 1: Registration Open / Ongoing / Active (Coming soonest first)
+ * 2: Planned / Preparation / Draft
+ * 3: Closed for registration
+ * 4: Completed
+ * 5: Cancelled
+ */
+export const getEventStatusCategory = (event) => {
+  if (!event) return 5;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const endDate = event.endDate ? new Date(event.endDate) : null;
+  if (endDate) endDate.setHours(23, 59, 59, 999);
+
+  // Completed if explicitly completed or endDate is past
+  if (event.status === 'COMPLETED' || (endDate && endDate < today)) {
+    return 4; // Completed
+  }
+
+  // Cancelled
+  if (event.status === 'CANCELLED') {
+    return 5; // Cancelled
+  }
+
+  // Closed for registration if explicitly closed or registrationEndDate is past
+  const regEndDate = event.registrationEndDate ? new Date(event.registrationEndDate) : null;
+  if (regEndDate) regEndDate.setHours(23, 59, 59, 999);
+
+  if (event.status === 'REGISTRATION_CLOSED' || (regEndDate && regEndDate < today)) {
+    return 3; // Closed for registration
+  }
+
+  // Planned / Draft / Planning
+  if (event.status === 'PLANNED' || event.status === 'PLANNING' || event.status === 'PREPARATION' || event.status === 'DRAFT') {
+    return 2; // Upcoming planned
+  }
+
+  // Registration Open / Ongoing / In Progress
+  return 1; // Registration Open (coming soonest)
+};
+
+export const sortEvents = (list) => {
+  if (!Array.isArray(list)) return [];
+  return [...list].sort((a, b) => {
+    const catA = getEventStatusCategory(a);
+    const catB = getEventStatusCategory(b);
+
+    if (catA !== catB) {
+      return catA - catB;
+    }
+
+    // For completed / cancelled, sort by most recent date first
+    if (catA >= 4) {
+      const dateA = a?.startDate ? new Date(a.startDate).getTime() : 0;
+      const dateB = b?.startDate ? new Date(b.startDate).getTime() : 0;
+      return dateB - dateA;
+    }
+
+    // For open registration / upcoming / closed, sort by start date ascending (next one coming soon first!)
+    const dateA = a?.startDate ? new Date(a.startDate).getTime() : Infinity;
+    const dateB = b?.startDate ? new Date(b.startDate).getTime() : Infinity;
+    return dateA - dateB;
+  });
+};
+
 export default function EventList() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -45,8 +110,8 @@ export default function EventList() {
   
   const cachedEvents = useMemo(() => {
     const cached = getCachedData('/events');
-    if (cached?.data && Array.isArray(cached.data)) return cached.data;
-    if (Array.isArray(cached)) return cached;
+    if (cached?.data && Array.isArray(cached.data)) return sortEvents(cached.data);
+    if (Array.isArray(cached)) return sortEvents(cached);
     return [];
   }, []);
 
@@ -233,13 +298,15 @@ export default function EventList() {
         ];
       }
 
-      setEvents(list);
+      setEvents(sortEvents(list));
     } catch (error) {
       console.error('Error fetching events:', error);
       let errorMessage = 'An unexpected error occurred while fetching events';
       if (error.response) {
         if (error.response.status === 401) {
-          errorMessage = 'Session expired. Redirecting to login...';
+          // Axios interceptor will automatically redirect to login
+          setLoading(false);
+          return;
         } else {
           errorMessage = error.response.data?.message || 'Failed to fetch events';
         }
@@ -303,6 +370,9 @@ export default function EventList() {
     if (departmentFilter !== 'ALL') {
       filtered = filtered.filter((e) => e.department?.id === parseInt(departmentFilter) || e.department?.type === departmentFilter);
     }
+
+    // Sort events: Registration open & coming soon first, then closed, then completed
+    filtered = sortEvents(filtered);
 
     setFilteredEvents(filtered);
   };

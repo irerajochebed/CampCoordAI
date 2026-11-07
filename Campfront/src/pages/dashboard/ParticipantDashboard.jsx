@@ -46,7 +46,12 @@ export default function ParticipantDashboard() {
       try {
         const openEventsRes = await eventApi.getByStatus('REGISTRATION_OPEN');
         const eventsData = openEventsRes.data?.data || openEventsRes.data || [];
-        setAvailableEvents(Array.isArray(eventsData) ? eventsData : []);
+        const sortedEvents = (Array.isArray(eventsData) ? eventsData : []).sort((a, b) => {
+          const dateA = a?.startDate ? new Date(a.startDate).getTime() : Infinity;
+          const dateB = b?.startDate ? new Date(b.startDate).getTime() : Infinity;
+          return dateA - dateB;
+        });
+        setAvailableEvents(sortedEvents);
       } catch (e) {
         console.error('Error fetching open events:', e);
       }

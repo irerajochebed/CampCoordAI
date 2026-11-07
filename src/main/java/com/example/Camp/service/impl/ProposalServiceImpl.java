@@ -238,6 +238,24 @@ public class ProposalServiceImpl implements ProposalService {
         }
     }
 
+    private void notifyFieldScopeUnionLeaders(Proposal proposal) {
+        if (notificationService == null || proposal == null) return;
+        try {
+            List<User> unionLeaders = userRepository.findByPosition(com.example.Camp.enums.Position.UNION_LEADER);
+            for (User leader : unionLeaders) {
+                com.example.Camp.dto.notification.NotificationRequest notif = new com.example.Camp.dto.notification.NotificationRequest();
+                notif.setRecipientId(leader.getId());
+                notif.setActionUrl("/app/proposals/" + proposal.getId());
+                notif.setType(NotificationType.GENERAL_ANNOUNCEMENT);
+                notif.setTitle("New Field Proposal: " + proposal.getEventName());
+                notif.setMessage("A new field-level proposal '" + proposal.getEventName() + "' has been submitted.");
+                notificationService.createNotification(notif);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to notify union leaders of field scope proposal: {}", e.getMessage());
+        }
+    }
+
     // ── CREATE ────────────────────────────────────────────────────────────────
 
     @Override

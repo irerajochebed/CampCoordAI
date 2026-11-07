@@ -7,7 +7,7 @@ import {
   Play, 
   Maximize2, 
   X, 
-  Sparkles, 
+  ShieldCheck, 
   ArrowRight,
   MapPin
 } from 'lucide-react';
@@ -170,7 +170,7 @@ export default function HeroSlideshow({ stats = [] }) {
           
           {/* Badge: CampCoordAI System */}
           <div className="inline-flex items-center space-x-2 bg-slate-900/70 backdrop-blur-md border border-cyan-400/50 rounded-full px-4 py-1.5 shadow-lg shadow-cyan-950/40">
-            <Sparkles className="w-4 h-4 text-cyan-400" />
+            <ShieldCheck className="w-4 h-4 text-cyan-400" />
             <span className="text-cyan-300 text-xs sm:text-sm font-semibold tracking-wide">
               {t('landing.hero.badge', 'CampCoordAI System')}
             </span>

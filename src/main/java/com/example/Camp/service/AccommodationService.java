@@ -50,4 +50,8 @@ public interface AccommodationService {
     RoomAssignment autoAssignParticipant(com.example.Camp.entity.Registration registration);
 
     List<RoomAssignment> autoAssignEventParticipants(Long eventId);
+
+    com.example.Camp.dto.accommodation.ParticipantAccommodationResponse getMyAccommodation(Long currentUserId, Long eventId);
+
+    void reportAccommodationIssue(Long currentUserId, com.example.Camp.dto.accommodation.AccommodationIssueRequest request);
 }

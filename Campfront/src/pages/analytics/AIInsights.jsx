@@ -22,7 +22,8 @@ import {
   Building2,
   Info,
   Layers,
-  Bed
+  Bed,
+  FileSpreadsheet
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -42,11 +43,15 @@ import {
 } from 'recharts';
 import { analyticsApi, eventApi, getCachedData } from '../../api';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTranslation } from '../../contexts/LanguageContext';
 import ReadinessRadarWidget from '../../components/ai/ReadinessRadarWidget';
+import { exportReadinessAuditToExcel } from '../../utils/excelExport';
 
 export default function AIInsights() {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('radar'); // 'radar' | 'predictions'
+  const [currentAssessment, setCurrentAssessment] = useState(null);
 
   // Instant In-Memory Cache Initialization (Zero-Delay Instant UI Rendering)
   const cachedAiData = useMemo(() => {
@@ -163,17 +168,17 @@ export default function AIInsights() {
     const bedDeficit = Math.max(0, bedsRequired - availableBeds);
 
     let riskType = 'OPTIMAL'; // 'OPTIMAL' | 'STRAIN' | 'DEFICIT' | 'UNASSIGNED'
-    let riskTitle = 'Optimal Capacity';
+    let riskTitle = t('analytics.optimalCapacity', 'Optimal Capacity');
 
     if (totalBedCap === 0 && bedsRequired > 0) {
       riskType = 'UNASSIGNED';
-      riskTitle = 'Unassigned Lodging Infrastructure';
+      riskTitle = t('analytics.unassignedLodging', 'Unassigned Lodging Infrastructure');
     } else if (bedDeficit > 0) {
       riskType = 'DEFICIT';
-      riskTitle = 'Lodging Capacity Deficit';
+      riskTitle = t('analytics.deficitRisk', 'Lodging Capacity Deficit');
     } else if (availableBeds > 0 && bedsRequired > availableBeds * 0.85) {
       riskType = 'STRAIN';
-      riskTitle = 'Moderate Capacity Strain';
+      riskTitle = t('analytics.moderateStrain', 'Moderate Capacity Strain');
     }
 
     setSimulationResult({
@@ -185,6 +190,9 @@ export default function AIInsights() {
       bedDeficit,
       riskType,
       riskTitle,
+      simParticipants,
+      simFee,
+      simLodgingPercent,
       soundSystemsNeeded: Math.max(1, Math.ceil(projectedAttendees / 300)),
       projectorsNeeded: Math.max(1, Math.ceil(projectedAttendees / 250))
     });
@@ -200,46 +208,23 @@ export default function AIInsights() {
   };
 
   const handleExportReport = () => {
-    if (!aiData) return;
-    const reportData = {
-      title: "CampCoordAI Predictive Intelligence & Readiness Audit",
-      generatedAt: new Date().toISOString(),
-      generatedBy: user?.name || user?.email || 'Administrator',
-      groundTruthMetrics: {
-        totalEvents: aiData.totalEvents,
-        completedEvents: aiData.completedEventsCount,
-        upcomingEvents: aiData.upcomingEventsCount,
-        totalRegistrations: aiData.totalRegistrations,
-        totalConfirmedRegistrations: aiData.totalConfirmedRegistrations,
-        historicalTurnoutRate: `${aiData.predictedTurnoutRate}%`,
-        hasSufficientHistoricalData: aiData.hasSufficientHistoricalData,
-        confidenceScore: `${aiData.turnoutConfidenceScore}%`,
-        totalVerifiedRevenue: `${aiData.totalVerifiedRevenue || 0} RWF`,
-        totalRevenueVolume: `${aiData.totalRevenue || 0} RWF`,
-        totalBedCapacity: aiData.totalBedCapacity,
-        occupiedBeds: aiData.totalOccupiedBeds,
-        occupancyRate: `${aiData.overallOccupancyRate}%`,
-        totalResources: aiData.totalResources,
-        allocatedResources: aiData.totalAllocatedResources
-      },
-      monthlyAttendanceTrends: aiData.attendanceTrends || [],
-      departmentEngagement: aiData.departmentPerformance || [],
-      dynamicInsights: aiData.dynamicInsights || [],
-      activeSimulation: simulationResult
-    };
-
-    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `AI_Insights_Executive_Report_${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setSuccess('AI Intelligence executive audit exported successfully.');
+    try {
+      const filename = exportReadinessAuditToExcel({
+        currentAssessment,
+        aiData,
+        simulationResult,
+        user,
+        t
+      });
+      setSuccess(`${t('analytics.exportSuccess', 'Readiness audit exported to Excel successfully.')} (${filename})`);
+    } catch (err) {
+      console.error('Failed to export Excel report:', err);
+      setError('Failed to generate Excel spreadsheet. Please try again.');
+    }
   };
 
   if (loading && !aiData) {
-    return <PageSpinner message="Computing PostgreSQL ground-truth telemetry and AI forecasts..." />;
+    return <PageSpinner message={t('analytics.loadingDiagnostics', 'Loading attendance records and readiness indicators...')} />;
   }
 
   const turnoutRate = aiData?.predictedTurnoutRate ?? 0;
@@ -254,15 +239,11 @@ export default function AIInsights() {
         <div>
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
-              AI Insights & Operational Readiness
+              {t('analytics.pageTitle', 'Readiness Analytics & Logistics Forecasts')}
             </h1>
-            <span className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded border border-slate-200 dark:border-slate-700">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              PostgreSQL Ground Truth
-            </span>
           </div>
           <p className="text-slate-600 dark:text-slate-400 mt-1 text-sm">
-            Live database telemetry, automated shortfall diagnostics, and predictive scenario modeling.
+            {t('analytics.pageSubtitle', 'Real-time registration metrics, automated logistics shortfall diagnostics, and turnout projections.')}
           </p>
         </div>
 
@@ -274,54 +255,55 @@ export default function AIInsights() {
             disabled={refreshing}
             className="text-xs font-semibold text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
           >
-            {refreshing ? 'Recalculating...' : 'Refresh Telemetry'}
+            {refreshing ? t('analytics.recalculating', 'Recalculating...') : t('analytics.recalculateDiagnostics', 'Recalculate Diagnostics')}
           </Button>
 
+          {/* Meaningful, Humanized Excel Export Button */}
           <Button
             variant="primary"
-            icon={<Download className="w-4 h-4 mr-1.5" />}
+            icon={<FileSpreadsheet className="w-4 h-4 mr-1.5" />}
             onClick={handleExportReport}
-            className="text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+            className="text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition"
           >
-            Export Audit
+            {t('analytics.exportAudit', 'Export Audit (Excel)')}
           </Button>
         </div>
       </div>
 
-      {/* Understated Executive Tab Switcher */}
+      {/* Humanized & Meaningful Tab Switcher */}
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
         <button
           onClick={() => setActiveTab('radar')}
-          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
             activeTab === 'radar'
-              ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm'
-              : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
           }`}
         >
           <Radio className="w-4 h-4" />
-          Readiness Detection Radar
+          {t('analytics.tabReadiness', 'Readiness Assessment')}
         </button>
 
         <button
           onClick={() => setActiveTab('predictions')}
-          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
             activeTab === 'predictions'
-              ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm'
-              : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
           }`}
         >
           <Activity className="w-4 h-4" />
-          Predictive Forecaster & Simulator
+          {t('analytics.tabModeling', 'Turnout & Capacity Modeling')}
         </button>
       </div>
 
       {/* Historical Data Limitation Notice */}
       {aiData && !aiData.hasSufficientHistoricalData && (
         <div className="flex items-start sm:items-center gap-3 p-3.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 text-slate-700 dark:text-slate-300 text-xs">
-          <Info className="w-4 h-4 text-slate-500 shrink-0 mt-0.5 sm:mt-0" />
+          <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5 sm:mt-0" />
           <div className="flex-1">
-            <span className="font-semibold text-slate-900 dark:text-white">Live Data Mode: </span>
-            Insufficient historical completed events to project long-term regression curves. Turnout and demand models are currently computed from {aiData.totalEvents || 0} active/scoped {aiData.totalEvents === 1 ? 'event' : 'events'} and {aiData.totalRegistrations || 0} verified registrations.
+            <span className="font-semibold text-slate-900 dark:text-white">{t('analytics.liveDataNotice', 'Live Data Mode')}: </span>
+            Turnout and demand models are currently computed from {aiData.totalEvents || 0} active/scoped {aiData.totalEvents === 1 ? 'event' : 'events'} and {aiData.totalRegistrations || 0} verified registrations.
           </div>
         </div>
       )}
@@ -344,37 +326,37 @@ export default function AIInsights() {
         />
       )}
 
-      {/* TAB 1: AI Future Preparation & Readiness Radar */}
+      {/* TAB 1: Preparation & Readiness Assessment */}
       {activeTab === 'radar' && (
         <div className="space-y-6">
-          <ReadinessRadarWidget />
+          <ReadinessRadarWidget onAssessmentChange={setCurrentAssessment} />
         </div>
       )}
 
-      {/* TAB 2: Machine Learning Forecaster & Simulator */}
+      {/* TAB 2: Turnout & Capacity Modeling */}
       {activeTab === 'predictions' && (
         <div className="space-y-6">
-          {/* Top Primary Executive Metrics (Monochrome & Mono Numbers) */}
+          {/* Top Primary Executive Metrics */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Predicted Turnout Rate */}
-            <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
               <CardBody className="p-5">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    Historical Turnout
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    {t('analytics.historicalTurnout', 'Historical Turnout')}
                   </p>
-                  <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-mono border border-slate-200 dark:border-slate-700">
-                    {confidenceScore}% Conf
+                  <span className="text-xs px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-mono font-semibold border border-blue-200 dark:border-blue-800">
+                    {confidenceScore}% {t('analytics.confidence', 'Conf')}
                   </span>
                 </div>
                 <div className="mt-2">
-                  <p className="text-3xl font-semibold font-mono text-slate-900 dark:text-white">
+                  <p className="text-3xl font-bold font-mono text-slate-900 dark:text-white">
                     {turnoutRate}%
                   </p>
                 </div>
                 <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                  <span>Completed Events:</span>
-                  <span className="font-mono font-medium text-slate-900 dark:text-slate-200">
+                  <span>{t('analytics.completedEvents', 'Completed Events')}:</span>
+                  <span className="font-mono font-semibold text-slate-900 dark:text-slate-200">
                     {aiData?.completedEventsCount || 0}
                   </span>
                 </div>
@@ -382,24 +364,24 @@ export default function AIInsights() {
             </Card>
 
             {/* Verified Revenue */}
-            <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
               <CardBody className="p-5">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    Verified Revenue
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    {t('analytics.verifiedRevenue', 'Verified Revenue')}
                   </p>
-                  <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-mono border border-slate-200 dark:border-slate-700">
-                    MoMo & Treasury
+                  <span className="text-xs px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-mono font-semibold border border-emerald-200 dark:border-emerald-800">
+                    {t('analytics.momoTreasury', 'MoMo & Treasury')}
                   </span>
                 </div>
                 <div className="mt-2">
-                  <p className="text-2xl sm:text-3xl font-semibold font-mono text-slate-900 dark:text-white truncate">
+                  <p className="text-2xl sm:text-3xl font-bold font-mono text-slate-900 dark:text-white truncate">
                     {formatCurrency(totalVerifiedRevenue)}
                   </p>
                 </div>
                 <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                  <span>Total Inflow Pipeline:</span>
-                  <span className="font-mono font-medium text-slate-900 dark:text-slate-200 truncate ml-2">
+                  <span>{t('analytics.totalInflowPipeline', 'Total Inflow Pipeline')}:</span>
+                  <span className="font-mono font-semibold text-slate-900 dark:text-slate-200 truncate ml-2">
                     {formatCurrency(aiData?.totalRevenue)}
                   </span>
                 </div>
@@ -407,68 +389,68 @@ export default function AIInsights() {
             </Card>
 
             {/* Bed Occupancy */}
-            <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
               <CardBody className="p-5">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    Lodging Utilization
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    {t('analytics.lodgingUtilization', 'Lodging Utilization')}
                   </p>
-                  <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-mono border border-slate-200 dark:border-slate-700">
-                    {aiData?.totalOccupiedBeds || 0} / {aiData?.totalBedCapacity || 0} Beds
+                  <span className="text-xs px-2 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 font-mono font-semibold border border-amber-200 dark:border-amber-800">
+                    {aiData?.totalOccupiedBeds || 0} / {aiData?.totalBedCapacity || 0} {t('analytics.beds', 'Beds')}
                   </span>
                 </div>
                 <div className="mt-2">
-                  <p className="text-3xl font-semibold font-mono text-slate-900 dark:text-white">
+                  <p className="text-3xl font-bold font-mono text-slate-900 dark:text-white">
                     {occupancyRate}%
                   </p>
                 </div>
                 <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                  <span>Capacity Status:</span>
-                  <span className="font-medium text-slate-900 dark:text-slate-200">
-                    {(aiData?.totalBedCapacity || 0) === 0 ? 'No Bed Records' : occupancyRate > 90 ? 'Near Capacity' : 'Available'}
+                  <span>{t('analytics.capacityStatus', 'Capacity Status')}:</span>
+                  <span className="font-semibold text-slate-900 dark:text-slate-200">
+                    {(aiData?.totalBedCapacity || 0) === 0 ? t('analytics.noBedRecords', 'No Bed Records') : occupancyRate > 90 ? t('analytics.nearCapacity', 'Near Capacity') : t('analytics.available', 'Available')}
                   </span>
                 </div>
               </CardBody>
             </Card>
 
             {/* Active Pipeline */}
-            <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
               <CardBody className="p-5">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    Registration Pipeline
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    {t('analytics.registrationPipeline', 'Registration Pipeline')}
                   </p>
-                  <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-mono border border-slate-200 dark:border-slate-700">
-                    {aiData?.totalConfirmedRegistrations || 0} Confirmed
+                  <span className="text-xs px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-mono font-semibold border border-indigo-200 dark:border-indigo-800">
+                    {aiData?.totalConfirmedRegistrations || 0} {t('analytics.confirmed', 'Confirmed')}
                   </span>
                 </div>
                 <div className="mt-2">
-                  <p className="text-3xl font-semibold font-mono text-slate-900 dark:text-white">
+                  <p className="text-3xl font-bold font-mono text-slate-900 dark:text-white">
                     {aiData?.totalRegistrations || 0}
                   </p>
                 </div>
                 <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                  <span>Scoped Events:</span>
-                  <span className="font-mono font-medium text-slate-900 dark:text-slate-200">
-                    {aiData?.totalEvents || 0} Active
+                  <span>{t('analytics.scopedEvents', 'Scoped Events')}:</span>
+                  <span className="font-mono font-semibold text-slate-900 dark:text-slate-200">
+                    {aiData?.totalEvents || 0} {t('analytics.active', 'Active')}
                   </span>
                 </div>
               </CardBody>
             </Card>
           </div>
 
-          {/* Interactive AI Scenario Simulator */}
-          <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
-            <CardHeader className="bg-slate-50 dark:bg-slate-800/50 pb-4 border-b border-slate-200 dark:border-slate-800">
+          {/* Scenario & Turnout Simulator */}
+          <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs rounded-xl overflow-hidden">
+            <CardHeader className="bg-gradient-to-r from-blue-50/70 to-slate-50 dark:from-slate-800/80 dark:to-slate-900/80 pb-4 border-b border-slate-200 dark:border-slate-800">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="flex items-center gap-2.5">
-                  <SlidersHorizontal className="w-4 h-4 text-slate-700 dark:text-slate-300" />
+                  <SlidersHorizontal className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                   <div>
-                    <CardTitle className="text-sm sm:text-base font-semibold text-slate-900 dark:text-white">
-                      Scenario & Turnout Simulator
+                    <CardTitle className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
+                      {t('analytics.simulatorTitle', 'Scenario & Turnout Simulator')}
                     </CardTitle>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Adjust participant volume, registration fees, and lodging ratios to project operational demand.
+                      {t('analytics.simulatorSubtitle', 'Adjust participant volume, registration fees, and lodging ratios to project operational demand.')}
                     </p>
                   </div>
                 </div>
@@ -476,13 +458,15 @@ export default function AIInsights() {
                 {/* Preset Scoped Event Selector */}
                 {events.length > 0 && (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-500 dark:text-slate-400">Event Preset:</span>
+                    <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                      {t('analytics.eventPreset', 'Event Preset')}:
+                    </span>
                     <select
                       value={simEventId}
                       onChange={(e) => handleSelectSimEvent(e.target.value)}
-                      className="text-xs bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                      className="text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 font-medium shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      <option value="ALL">Overall Scoped Territory</option>
+                      <option value="ALL">{t('analytics.allAggregatedEvents', 'All Scoped Events')}</option>
                       {events.map(ev => (
                         <option key={ev.id} value={ev.id}>
                           {ev.name} ({ev.maxParticipants || 100} max)
@@ -496,12 +480,14 @@ export default function AIInsights() {
 
             <CardBody className="p-6">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Simulator Controls with Neutral Slate Tracks */}
+                {/* Simulator Controls */}
                 <div className="space-y-5 lg:col-span-1 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 pb-5 lg:pb-0 lg:pr-6">
                   <div>
-                    <div className="flex items-center justify-between text-xs mb-1.5">
-                      <span className="text-slate-600 dark:text-slate-400">Target Sign-ups:</span>
-                      <span className="font-mono font-semibold text-slate-900 dark:text-white">{simParticipants}</span>
+                    <div className="flex items-center justify-between text-xs mb-1.5 font-medium">
+                      <span className="text-slate-700 dark:text-slate-300">
+                        {t('analytics.targetParticipants', 'Target Participant Capacity')}:
+                      </span>
+                      <span className="font-mono font-bold text-blue-600 dark:text-blue-400">{simParticipants}</span>
                     </div>
                     <input
                       type="range"
@@ -510,7 +496,7 @@ export default function AIInsights() {
                       step="10"
                       value={simParticipants}
                       onChange={(e) => setSimParticipants(Number(e.target.value))}
-                      className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-slate-900 dark:accent-slate-100"
+                      className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
                     />
                     <div className="flex justify-between text-[10px] font-mono text-slate-400 mt-1">
                       <span>20</span>
@@ -520,9 +506,11 @@ export default function AIInsights() {
                   </div>
 
                   <div>
-                    <div className="flex items-center justify-between text-xs mb-1.5">
-                      <span className="text-slate-600 dark:text-slate-400">Registration Fee:</span>
-                      <span className="font-mono font-semibold text-slate-900 dark:text-white">{simFee.toLocaleString()} RWF</span>
+                    <div className="flex items-center justify-between text-xs mb-1.5 font-medium">
+                      <span className="text-slate-700 dark:text-slate-300">
+                        {t('analytics.registrationFee', 'Registration Fee (RWF)')}:
+                      </span>
+                      <span className="font-mono font-bold text-blue-600 dark:text-blue-400">{simFee.toLocaleString()} RWF</span>
                     </div>
                     <input
                       type="range"
@@ -531,19 +519,21 @@ export default function AIInsights() {
                       step="2500"
                       value={simFee}
                       onChange={(e) => setSimFee(Number(e.target.value))}
-                      className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-slate-900 dark:accent-slate-100"
+                      className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
                     />
                     <div className="flex justify-between text-[10px] font-mono text-slate-400 mt-1">
-                      <span>Free</span>
+                      <span>0</span>
                       <span>50,000</span>
                       <span>100,000</span>
                     </div>
                   </div>
 
                   <div>
-                    <div className="flex items-center justify-between text-xs mb-1.5">
-                      <span className="text-slate-600 dark:text-slate-400">Lodging Required:</span>
-                      <span className="font-mono font-semibold text-slate-900 dark:text-white">{simLodgingPercent}%</span>
+                    <div className="flex items-center justify-between text-xs mb-1.5 font-medium">
+                      <span className="text-slate-700 dark:text-slate-300">
+                        {t('analytics.lodgingRequirement', 'Lodging / Bed Requirement')}:
+                      </span>
+                      <span className="font-mono font-bold text-blue-600 dark:text-blue-400">{simLodgingPercent}%</span>
                     </div>
                     <input
                       type="range"
@@ -552,74 +542,84 @@ export default function AIInsights() {
                       step="5"
                       value={simLodgingPercent}
                       onChange={(e) => setSimLodgingPercent(Number(e.target.value))}
-                      className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-slate-900 dark:accent-slate-100"
+                      className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
                     />
                     <div className="flex justify-between text-[10px] font-mono text-slate-400 mt-1">
-                      <span>0% (Day Camp)</span>
+                      <span>0%</span>
                       <span>50%</span>
-                      <span>100% (Residential)</span>
+                      <span>100%</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Simulated AI Output */}
+                {/* Simulated Output with meaningful color alerts */}
                 {simulationResult && (
                   <div className="lg:col-span-2 space-y-4">
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200 dark:border-slate-700">
-                        <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Projected Turnout</p>
-                        <p className="text-xl font-semibold font-mono text-slate-900 dark:text-white mt-1">
+                      <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700">
+                        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                          {t('analytics.projectedAttendees', 'Projected Attendees')}
+                        </p>
+                        <p className="text-xl font-bold font-mono text-slate-900 dark:text-white mt-1">
                           {simulationResult.projectedAttendees}
                         </p>
-                        <p className="text-[10px] font-mono text-slate-400 mt-0.5">({turnoutRate}% historical)</p>
+                        <p className="text-[10px] font-mono text-slate-500 mt-0.5">({turnoutRate}% {t('analytics.historicalTurnout', 'historical')})</p>
                       </div>
 
-                      <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200 dark:border-slate-700">
-                        <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Projected Revenue</p>
-                        <p className="text-base sm:text-lg font-semibold font-mono text-slate-900 dark:text-white mt-1 truncate">
+                      <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700">
+                        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                          {t('analytics.projectedRevenue', 'Projected Revenue')}
+                        </p>
+                        <p className="text-base sm:text-lg font-bold font-mono text-slate-900 dark:text-white mt-1 truncate">
                           {formatCurrency(simulationResult.projectedRevenue)}
                         </p>
-                        <p className="text-[10px] font-mono text-slate-400 mt-0.5">Gross collections</p>
+                        <p className="text-[10px] font-mono text-slate-500 mt-0.5">Gross collections</p>
                       </div>
 
-                      <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200 dark:border-slate-700">
-                        <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Beds Required</p>
-                        <p className="text-xl font-semibold font-mono text-slate-900 dark:text-white mt-1">
+                      <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700">
+                        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                          {t('analytics.bedDemand', 'Beds Required')}
+                        </p>
+                        <p className="text-xl font-bold font-mono text-slate-900 dark:text-white mt-1">
                           {simulationResult.bedsRequired}
                         </p>
-                        <p className="text-[10px] font-mono text-slate-400 mt-0.5">avail: {simulationResult.availableBeds}</p>
+                        <p className="text-[10px] font-mono text-slate-500 mt-0.5">
+                          {t('analytics.bedsAvailable', 'Avail')}: {simulationResult.availableBeds}
+                        </p>
                       </div>
 
-                      <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200 dark:border-slate-700">
-                        <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">A/V Sound Units</p>
-                        <p className="text-xl font-semibold font-mono text-slate-900 dark:text-white mt-1">
+                      <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700">
+                        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                          {t('analytics.soundSystemsNeeded', 'A/V Sound Units')}
+                        </p>
+                        <p className="text-xl font-bold font-mono text-slate-900 dark:text-white mt-1">
                           {simulationResult.soundSystemsNeeded}
                         </p>
-                        <p className="text-[10px] font-mono text-slate-400 mt-0.5">Recommended</p>
+                        <p className="text-[10px] font-mono text-slate-500 mt-0.5">Recommended</p>
                       </div>
                     </div>
 
-                    {/* Executive Clean Risk Assessment Alert Banners */}
+                    {/* Meaningful Risk Assessment Alert Banners */}
                     {simulationResult.riskType === 'DEFICIT' || simulationResult.riskType === 'UNASSIGNED' ? (
-                      <div className="border-l-4 border-l-rose-500 bg-rose-50/50 dark:bg-rose-950/20 text-rose-800 dark:text-rose-300 p-4 rounded-r-lg flex items-start gap-3">
+                      <div className="border-l-4 border-l-rose-500 bg-rose-50/80 dark:bg-rose-950/30 text-rose-800 dark:text-rose-300 p-4 rounded-r-xl flex items-start gap-3 shadow-xs">
                         <ShieldAlert className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
                         <div className="text-xs space-y-1">
-                          <p className="font-semibold text-rose-900 dark:text-rose-200">
-                            Readiness Alert: {simulationResult.riskTitle}
+                          <p className="font-bold text-rose-900 dark:text-rose-200">
+                            {t('analytics.deficitRisk', 'Readiness Alert')}: {simulationResult.riskTitle}
                           </p>
                           <p className="text-rose-700 dark:text-rose-300">
                             {simulationResult.riskType === 'UNASSIGNED'
-                              ? 'No accommodation room infrastructure has been configured in the database for this venue. Register dormitory blocks or off-site lodge allocations.'
+                              ? t('analytics.unassignedLodging', 'No accommodation room infrastructure has been configured in the database for this venue. Register dormitory blocks or off-site lodge allocations.')
                               : `Simulated lodging demand (${simulationResult.bedsRequired} beds) exceeds available accommodation capacity (${simulationResult.availableBeds} beds) by ${simulationResult.bedDeficit} beds.`}
                           </p>
                         </div>
                       </div>
                     ) : simulationResult.riskType === 'STRAIN' ? (
-                      <div className="border-l-4 border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 p-4 rounded-r-lg flex items-start gap-3">
+                      <div className="border-l-4 border-l-amber-500 bg-amber-50/80 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 p-4 rounded-r-xl flex items-start gap-3 shadow-xs">
                         <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                         <div className="text-xs space-y-1">
-                          <p className="font-semibold text-amber-900 dark:text-amber-200">
-                            Readiness Notice: {simulationResult.riskTitle}
+                          <p className="font-bold text-amber-900 dark:text-amber-200">
+                            {t('analytics.moderateStrain', 'Readiness Notice')}: {simulationResult.riskTitle}
                           </p>
                           <p className="text-amber-700 dark:text-amber-300">
                             Lodging demand ({simulationResult.bedsRequired} beds) utilizes over 85% of available capacity ({simulationResult.availableBeds} beds). Minimal buffer remains for walk-ins.
@@ -627,11 +627,11 @@ export default function AIInsights() {
                         </div>
                       </div>
                     ) : (
-                      <div className="border-l-4 border-l-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 p-4 rounded-r-lg flex items-start gap-3">
+                      <div className="border-l-4 border-l-emerald-500 bg-emerald-50/80 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 p-4 rounded-r-xl flex items-start gap-3 shadow-xs">
                         <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                         <div className="text-xs space-y-1">
-                          <p className="font-semibold text-emerald-900 dark:text-emerald-200">
-                            Readiness Confirmed: {simulationResult.riskTitle}
+                          <p className="font-bold text-emerald-900 dark:text-emerald-200">
+                            {t('analytics.optimalCapacity', 'Readiness Confirmed')}: {simulationResult.riskTitle}
                           </p>
                           <p className="text-emerald-700 dark:text-emerald-300">
                             Venue infrastructure comfortably accommodates this scenario with {Math.max(0, simulationResult.availableBeds - simulationResult.bedsRequired)} reserve beds remaining.
@@ -645,14 +645,14 @@ export default function AIInsights() {
             </CardBody>
           </Card>
 
-          {/* Clean Executive Monotone Charts */}
+          {/* Clean Executive Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Monthly Attendance Trends */}
-            <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
               <CardHeader className="pb-2 border-b border-slate-100 dark:border-slate-800">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-sm font-semibold text-slate-900 dark:text-white">
+                    <CardTitle className="text-sm font-bold text-slate-900 dark:text-white">
                       Monthly Attendance & Dynamic Turnout
                     </CardTitle>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -704,12 +704,12 @@ export default function AIInsights() {
               </CardBody>
             </Card>
 
-            {/* Department Engagement (Uniform Executive Navy Bars) */}
-            <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+            {/* Department Engagement */}
+            <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
               <CardHeader className="pb-2 border-b border-slate-100 dark:border-slate-800">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-sm font-semibold text-slate-900 dark:text-white">
+                    <CardTitle className="text-sm font-bold text-slate-900 dark:text-white">
                       Department & Ministry Engagement
                     </CardTitle>
                     <p className="text-xs text-slate-500 dark:text-slate-400">

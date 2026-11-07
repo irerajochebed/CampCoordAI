@@ -39,7 +39,7 @@ public class UpcomingEventAiController {
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMINISTRATOR', 'COORDINATOR', 'PARTICIPANT')")
     public ResponseEntity<ApiResponse<List<UpcomingEventResponse>>> getUpcomingEvents(
-            @RequestParam(defaultValue = "30") Integer days,
+            @RequestParam(defaultValue = "365") Integer days,
             Authentication authentication) {
         User currentUser = resolveUser(authentication);
         List<UpcomingEventResponse> events = upcomingEventAiService.findUpcomingEvents(days, currentUser);

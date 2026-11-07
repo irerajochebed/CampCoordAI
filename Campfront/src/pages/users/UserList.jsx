@@ -17,7 +17,9 @@ import {
   Award,
   RefreshCw,
   Phone,
-  Mail
+  Mail,
+  LayoutGrid,
+  List as ListIcon
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/Table';
@@ -37,6 +39,7 @@ export default function UserList() {
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'table'
   const [searchTerm, setSearchTerm] = useState('');
   const [leadershipCategory, setLeadershipCategory] = useState('ALL'); // 'ALL', 'DISTRICT_PASTORS', 'MINISTRY_DIRECTORS', 'OFFICERS'
   const [roleFilter, setRoleFilter] = useState('ALL');
@@ -271,6 +274,32 @@ export default function UserList() {
           <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">{t('users.subtitle', 'Complete register of Rwanda Union Mission (RUM) leaders, field officers, ministry directors, and district pastors across 8 fields')}</p>
         </div>
         <div className="flex items-center gap-3">
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewMode === 'grid'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+              }`}
+              title="Cards View"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Cards</span>
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`p-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewMode === 'table'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+              }`}
+              title="Table View"
+            >
+              <ListIcon className="w-3.5 h-3.5" />
+              <span>Table</span>
+            </button>
+          </div>
           <Button 
             variant="secondary" 
             icon={<RefreshCw className="w-4 h-4" />}
@@ -425,6 +454,145 @@ export default function UserList() {
                   : t('users.noUsersFound', 'No users have been registered yet')
               }
             />
+          ) : viewMode === 'grid' ? (
+            /* =========================================================================
+               CARD GRID VIEW (Matching modern Cards design)
+               ========================================================================= */
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 bg-slate-50/50 dark:bg-slate-950/20">
+              {filteredUsers.map((user) => {
+                const initials = `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`.toUpperCase() || 'U';
+                return (
+                  <div
+                    key={user.id}
+                    className={`group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-5 shadow-xs hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200 flex flex-col justify-between ${
+                      !user.active ? 'opacity-60 bg-slate-50/70 dark:bg-slate-900/40' : ''
+                    }`}
+                  >
+                    <div>
+                      {/* Top Header: Position Pill & Status Tag */}
+                      <div className="flex items-center justify-between gap-2 mb-4">
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold border truncate max-w-[190px] ${
+                          user.position === 'DISTRICT_PASTOR' || user.position === 'PASTOR'
+                            ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800/60' 
+                            : user.position === 'DEPARTMENT_LEADER' || user.position === 'MINISTRY_LEADER'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60'
+                            : user.position === 'FIELD_LEADER' || user.position === 'UNION_LEADER' || user.position === 'UNION_ADMINISTRATOR'
+                            ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/60'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                        }`}>
+                          {user.position ? t(`positions.${user.position}`, user.position.replace(/_/g, ' ')) : user.role}
+                        </span>
+
+                        {user.active ? (
+                          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/60 dark:text-emerald-300 shrink-0">
+                            {t('status.ACTIVE', 'Active')}
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 shrink-0">
+                            {t('status.INACTIVE', 'Inactive')}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* User Profile Header */}
+                      <div className="flex items-center gap-3.5 mb-4">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 via-primary-600 to-sky-600 text-white font-bold flex items-center justify-center text-base shadow-sm shrink-0 ring-2 ring-white dark:ring-slate-800">
+                          {initials}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-base font-bold text-slate-900 dark:text-white truncate group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                            {user.firstName} {user.lastName}
+                          </h3>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500">
+                              ID: #{user.id}
+                            </span>
+                            <span className="text-slate-300 dark:text-slate-700">•</span>
+                            <div>
+                              {getRoleBadge(user.role)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Metadata Rows */}
+                      <div className="space-y-2 text-xs text-slate-600 dark:text-slate-400 pt-3 border-t border-slate-100 dark:border-slate-800">
+                        {/* Email */}
+                        <div className="flex items-center gap-2.5">
+                          <Mail className="w-4 h-4 text-slate-400 shrink-0" />
+                          <span className="truncate font-medium text-slate-700 dark:text-slate-200">{user.email}</span>
+                        </div>
+
+                        {/* Phone */}
+                        <div className="flex items-center gap-2.5">
+                          <Phone className="w-4 h-4 text-slate-400 shrink-0" />
+                          <span className="truncate">{user.phoneNumber || user.phone || '—'}</span>
+                        </div>
+
+                        {/* Unit / District */}
+                        {(user.organizationUnitName || user.sdaDistrict) && (
+                          <div className="flex items-center gap-2.5">
+                            <Building className="w-4 h-4 text-slate-400 shrink-0" />
+                            <span className="truncate">{user.organizationUnitName || user.sdaDistrict}</span>
+                          </div>
+                        )}
+
+                        {/* Ministry */}
+                        {user.departmentName && (
+                          <div className="flex items-center gap-2 pt-0.5">
+                            <span className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/60 dark:border-emerald-800/40 px-2 py-0.5 rounded-md truncate">
+                              <BookOpen className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <span className="truncate">{user.departmentName}</span>
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Footer Actions */}
+                    <div className="mt-5 pt-3.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        icon={<UserCog className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" />}
+                        onClick={() => handleEdit(user)}
+                        className="font-semibold text-xs"
+                      >
+                        {t('common.edit', 'Manage')}
+                      </Button>
+
+                      <div className="flex items-center gap-1">
+                        {user.active ? (
+                          <button
+                            onClick={() => handleDeactivate(user.id)}
+                            className="p-1.5 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                            title={t('users.deactivate', 'Deactivate user')}
+                          >
+                            <XCircle className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleActivate(user.id)}
+                            className="p-1.5 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                            title={t('users.activate', 'Activate user')}
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => handleDelete(user.id)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                          title={t('users.deleteUser', 'Soft delete user account')}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           ) : (
             <Table>
               <TableHeader>

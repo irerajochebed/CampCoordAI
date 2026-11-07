@@ -17,14 +17,18 @@ import {
   RefreshCw,
   Printer,
   Check,
-  Sparkles,
   Plus,
   ArrowRight,
   ShieldCheck,
   UserCheck,
   UserX,
   Camera,
-  ExternalLink
+  ExternalLink,
+  LayoutGrid,
+  List,
+  Mail,
+  Phone,
+  Building
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
@@ -52,6 +56,8 @@ export default function AttendanceList() {
     return Array.isArray(list) ? list : [];
   }, []);
 
+  const [rosterViewMode, setRosterViewMode] = useState('grid');
+  const [sessionsViewMode, setSessionsViewMode] = useState('grid');
   const [events, setEvents] = useState(cachedEvents);
   const [selectedEvent, setSelectedEvent] = useState(eventIdParam || (cachedEvents.length > 0 ? cachedEvents[0].id : ''));
   const [loading, setLoading] = useState(cachedEvents.length === 0);
@@ -769,11 +775,39 @@ export default function AttendanceList() {
             </CardBody>
           </Card>
 
-          {/* Participant Attendance Table */}
+          {/* Participant Attendance Roster */}
           <Card className="shadow-sm">
             <CardHeader 
               action={
                 <div className="flex items-center gap-2">
+                  {/* View Switcher */}
+                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700/60">
+                    <button
+                      type="button"
+                      onClick={() => setRosterViewMode('grid')}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                        rosterViewMode === 'grid'
+                          ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                      Cards
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRosterViewMode('table')}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                        rosterViewMode === 'table'
+                          ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <List className="w-3.5 h-3.5" />
+                      Table
+                    </button>
+                  </div>
+
                   <Button
                     variant="outline"
                     size="sm"
@@ -795,9 +829,9 @@ export default function AttendanceList() {
             >
               <CardTitle className="flex items-center justify-between w-full">
                 <span>
-                  Participant Roster &mdash; <strong className="text-primary-800">{currentSession?.title || 'Session'}</strong>
+                  Participant Roster &mdash; <strong className="text-primary-800 dark:text-primary-400">{currentSession?.title || 'Session'}</strong>
                 </span>
-                <span className="text-xs font-normal text-gray-500">
+                <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
                   Showing {filteredRoster.length} of {roster.length} participants
                 </span>
               </CardTitle>
@@ -818,6 +852,102 @@ export default function AttendanceList() {
                         : 'No confirmed registrations found for this event.'
                     }
                   />
+                </div>
+              ) : rosterViewMode === 'grid' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 p-5 bg-slate-50/60 dark:bg-slate-900/40">
+                  {filteredRoster.map((item) => (
+                    <div
+                      key={item.registrationId}
+                      className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-5 shadow-xs hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200 flex flex-col justify-between"
+                    >
+                      <div className="space-y-3.5">
+                        {/* Top: Ticket Pill & Attendance Status */}
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-mono text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                            {item.registrationNumber}
+                          </span>
+                          {item.isAttended ? (
+                            <Badge variant="success" className="flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Present
+                            </Badge>
+                          ) : (
+                            <Badge variant="warning" className="flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" />
+                              Absent
+                            </Badge>
+                          )}
+                        </div>
+
+                        {/* Participant Name & Contact */}
+                        <div>
+                          <h4 className="font-bold text-slate-900 dark:text-white text-base leading-snug">
+                            {item.participantName}
+                          </h4>
+                          <div className="flex flex-col gap-1 mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            {item.email && (
+                              <span className="flex items-center gap-1.5 truncate">
+                                <Mail className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                                <span className="truncate">{item.email}</span>
+                              </span>
+                            )}
+                            {item.phone && (
+                              <span className="flex items-center gap-1.5">
+                                <Phone className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                                <span>{item.phone}</span>
+                              </span>
+                            )}
+                            {item.church && (
+                              <span className="flex items-center gap-1.5 mt-0.5 font-medium text-slate-600 dark:text-slate-300">
+                                <Building className="w-3.5 h-3.5 shrink-0 text-primary-500" />
+                                <span className="truncate">{item.church}</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Check-In Time & Method if Present */}
+                        {item.isAttended && item.checkInTime && (
+                          <div className="p-2.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-800/40 text-xs">
+                            <div className="flex items-center justify-between text-emerald-800 dark:text-emerald-300">
+                              <span className="font-semibold">
+                                {new Date(item.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                              <span className="text-[11px] opacity-80">
+                                {item.checkInMethod === 'QR_SCAN' ? 'QR Code' : 'Staff Check-In'}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Bottom Action */}
+                      <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-end">
+                        {item.isAttended ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 border-red-200 dark:border-red-800/60"
+                            onClick={() => handleUndoAttendance(item)}
+                            loading={actionLoading === item.registrationId}
+                          >
+                            Undo Check-In
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            className="text-xs"
+                            icon={<Check className="w-3.5 h-3.5" />}
+                            onClick={() => handleMarkPresent(item)}
+                            loading={actionLoading === item.registrationId}
+                          >
+                            Mark Present
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -919,67 +1049,176 @@ export default function AttendanceList() {
           {/* All Sessions Overview Matrix */}
           {sessionStats.length > 0 && (
             <Card className="shadow-sm">
-              <CardHeader>
+              <CardHeader
+                action={
+                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700/60">
+                    <button
+                      type="button"
+                      onClick={() => setSessionsViewMode('grid')}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                        sessionsViewMode === 'grid'
+                          ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                      Cards
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSessionsViewMode('table')}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                        sessionsViewMode === 'table'
+                          ? 'bg-white dark:bg-slate-900 text-primary-600 dark:text-primary-400 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <List className="w-3.5 h-3.5" />
+                      Table
+                    </button>
+                  </div>
+                }
+              >
                 <CardTitle className="flex items-center gap-2">
                   <BarChart3 className="w-5 h-5 text-primary-600" />
                   Event Sessions Attendance Overview
                 </CardTitle>
               </CardHeader>
               <CardBody className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase">
-                      <tr>
-                        <th className="px-5 py-3">Session Title</th>
-                        <th className="px-4 py-3">Type</th>
-                        <th className="px-4 py-3">Date & Time</th>
-                        <th className="px-4 py-3">Venue</th>
-                        <th className="px-4 py-3">Attendees</th>
-                        <th className="px-5 py-3 text-right">Switch to Session</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 text-sm">
-                      {sessionStats.map((s) => {
-                        const isCurrent = s.sessionId.toString() === selectedSession;
-                        const sessionRate = registrations.length > 0 
-                          ? Math.round((s.checkedIn / registrations.length) * 100) 
-                          : 0;
+                {sessionsViewMode === 'grid' ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 p-5 bg-slate-50/60 dark:bg-slate-900/40">
+                    {sessionStats.map((s) => {
+                      const isCurrent = s.sessionId.toString() === selectedSession;
+                      const sessionRate = registrations.length > 0 
+                        ? Math.round((s.checkedIn / registrations.length) * 100) 
+                        : 0;
 
-                        return (
-                          <tr key={s.sessionId} className={isCurrent ? 'bg-primary-50/40 font-semibold' : 'hover:bg-gray-50'}>
-                            <td className="px-5 py-3">
-                              <span className="text-gray-900">{s.sessionTitle}</span>
-                              {isCurrent && <Badge variant="primary" className="ml-2 text-xs">Active</Badge>}
-                            </td>
-                            <td className="px-4 py-3 text-xs text-gray-600">{s.sessionType || 'General'}</td>
-                            <td className="px-4 py-3 text-xs text-gray-600">
-                              {s.sessionTime ? new Date(s.sessionTime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'TBD'}
-                            </td>
-                            <td className="px-4 py-3 text-xs text-gray-600">{s.venue || 'Main Hall'}</td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-gray-900">{s.checkedIn}</span>
-                                <span className="text-xs text-gray-500">/ {registrations.length}</span>
-                                <span className="text-xs text-primary-700 font-semibold">({sessionRate}%)</span>
-                              </div>
-                            </td>
-                            <td className="px-5 py-3 text-right">
-                              {!isCurrent && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => setSelectedSession(s.sessionId.toString())}
-                                >
-                                  Select & View
-                                </Button>
+                      return (
+                        <div
+                          key={s.sessionId}
+                          className={`group rounded-2xl border p-5 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between ${
+                            isCurrent
+                              ? 'bg-primary-50/40 dark:bg-primary-950/20 border-primary-300 dark:border-primary-700/80 ring-1 ring-primary-500/20'
+                              : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="space-y-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                {s.sessionType || 'General'}
+                              </span>
+                              {isCurrent && (
+                                <Badge variant="primary" className="text-xs">Active Session</Badge>
                               )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                            </div>
+
+                            <div>
+                              <h4 className="font-bold text-slate-900 dark:text-white text-base leading-snug">
+                                {s.sessionTitle}
+                              </h4>
+                              <div className="mt-2 space-y-1 text-xs text-slate-500 dark:text-slate-400">
+                                <p className="flex items-center gap-1.5">
+                                  <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <span>{s.sessionTime ? new Date(s.sessionTime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'TBD'}</span>
+                                </p>
+                                <p className="flex items-center gap-1.5">
+                                  <Building className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <span>{s.venue || 'Main Hall'}</span>
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Progress bar */}
+                            <div className="pt-2">
+                              <div className="flex items-center justify-between text-xs mb-1">
+                                <span className="font-medium text-slate-700 dark:text-slate-300">
+                                  {s.checkedIn} / {registrations.length} Checked In
+                                </span>
+                                <span className="font-bold text-primary-600 dark:text-primary-400">{sessionRate}%</span>
+                              </div>
+                              <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                                <div
+                                  className="bg-primary-600 h-2 rounded-full transition-all duration-300"
+                                  style={{ width: `${Math.min(100, sessionRate)}%` }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-end">
+                            {isCurrent ? (
+                              <span className="text-xs font-semibold text-primary-600 dark:text-primary-400">Currently Selected</span>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-xs"
+                                onClick={() => setSelectedSession(s.sessionId.toString())}
+                              >
+                                Select & View
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase">
+                        <tr>
+                          <th className="px-5 py-3">Session Title</th>
+                          <th className="px-4 py-3">Type</th>
+                          <th className="px-4 py-3">Date & Time</th>
+                          <th className="px-4 py-3">Venue</th>
+                          <th className="px-4 py-3">Attendees</th>
+                          <th className="px-5 py-3 text-right">Switch to Session</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 text-sm">
+                        {sessionStats.map((s) => {
+                          const isCurrent = s.sessionId.toString() === selectedSession;
+                          const sessionRate = registrations.length > 0 
+                            ? Math.round((s.checkedIn / registrations.length) * 100) 
+                            : 0;
+
+                          return (
+                            <tr key={s.sessionId} className={isCurrent ? 'bg-primary-50/40 font-semibold' : 'hover:bg-gray-50'}>
+                              <td className="px-5 py-3">
+                                <span className="text-gray-900">{s.sessionTitle}</span>
+                                {isCurrent && <Badge variant="primary" className="ml-2 text-xs">Active</Badge>}
+                              </td>
+                              <td className="px-4 py-3 text-xs text-gray-600">{s.sessionType || 'General'}</td>
+                              <td className="px-4 py-3 text-xs text-gray-600">
+                                {s.sessionTime ? new Date(s.sessionTime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'TBD'}
+                              </td>
+                              <td className="px-4 py-3 text-xs text-gray-600">{s.venue || 'Main Hall'}</td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-gray-900">{s.checkedIn}</span>
+                                  <span className="text-xs text-gray-500">/ {registrations.length}</span>
+                                  <span className="text-xs text-primary-700 font-semibold">({sessionRate}%)</span>
+                                </div>
+                              </td>
+                              <td className="px-5 py-3 text-right">
+                                {!isCurrent && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => setSelectedSession(s.sessionId.toString())}
+                                  >
+                                    Select & View
+                                  </Button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </CardBody>
             </Card>
           )}

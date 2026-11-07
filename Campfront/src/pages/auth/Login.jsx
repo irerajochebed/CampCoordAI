@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { Mail, Lock, Eye, EyeOff, Shield, ArrowLeft, ArrowRight, Sparkles } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowLeft, ArrowRight, Building2 } from 'lucide-react';
 import Alert from '../../components/ui/Alert';
 import sdaLogo from '../../assets/sda-logo.jpg';
 import heroImage from '../../assets/hero.png';
@@ -27,6 +27,23 @@ export default function Login() {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const timedOutEmail = sessionStorage.getItem('timed_out_email');
+    const timedOutPortal = sessionStorage.getItem('timed_out_portal');
+
+    if (timedOutEmail) {
+      setFormData(prev => ({ ...prev, email: timedOutEmail }));
+      if (timedOutPortal === 'COORDINATOR_ADMIN') {
+        setIsStaff(true);
+      }
+    }
+
+    if (params.get('timeout') === 'true' || params.get('expired') === 'true') {
+      navigate('/login', { replace: true });
+    }
+  }, [navigate]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -158,9 +175,9 @@ export default function Login() {
                 <h3 className="text-3xl font-extrabold tracking-tight text-white drop-shadow-md">
                   CampCoordAI
                 </h3>
-                <p className="text-sm font-medium italic text-white/95 drop-shadow">
+                <p className="text-sm font-medium text-white/90 drop-shadow">
                   {t('auth.sloganMain', 'Adventist Camp & Conference')}{' '}
-                  <span className="font-semibold text-amber-300">
+                  <span>
                     {t('auth.sloganHighlight', 'Management System')}
                   </span>
                 </p>
@@ -168,7 +185,7 @@ export default function Login() {
 
               {/* Badges / Information */}
               <div className="mt-6 inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-slate-950/60 backdrop-blur-md px-3.5 py-1 rounded-full border border-white/20 shadow-md">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <Building2 className="w-3.5 h-3.5 text-white" />
                 <span>{t('header.unionName', 'Rwanda Union Mission')}</span>
               </div>
             </div>
@@ -302,11 +319,6 @@ export default function Login() {
                       />
                       <div className="flex items-center gap-2 font-semibold text-sm text-slate-800 dark:text-slate-200 select-none">
                         <span>{t('auth.staffLeaderToggle', 'I am a Staff/Leader')}</span>
-                        {isStaff && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300">
-                            <Shield className="w-3 h-3 mr-1" /> {t('auth.staffMode', 'Staff Mode')}
-                          </span>
-                        )}
                       </div>
                     </label>
                   </div>

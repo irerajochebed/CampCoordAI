@@ -87,6 +87,8 @@ api.interceptors.response.use(
         if (token) {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
+          localStorage.removeItem('camp_session_locked');
+          localStorage.removeItem('camp_last_active_time');
           window.location.href = '/login';
         }
       }
@@ -269,6 +271,10 @@ export const accommodationApi = {
   getAssignmentByRegistration: (regId) => api.get(`/accommodations/assignments/registration/${regId}`),
   getAssignmentsByRoom: (roomId) => api.get(`/accommodations/rooms/${roomId}/assignments`),
   releaseAssignment: (id) => api.patch(`/accommodations/assignments/${id}/release`),
+  
+  // Participant specific
+  getMyAccommodation: (eventId) => api.get('/accommodations/my-accommodation', { params: eventId ? { eventId } : {} }),
+  reportIssue: (data) => api.post('/accommodations/report-issue', data),
 };
 
 // ============================================
@@ -389,7 +395,7 @@ export const readinessApi = {
 };
 
 export const upcomingEventAiApi = {
-  getUpcoming: (days = 30) => api.get(`/ai/upcoming-events?days=${days}`),
+  getUpcoming: (days = 365) => api.get(`/ai/upcoming-events?days=${days}`),
   getEventInsights: (eventId) => api.get(`/ai/upcoming-events/${eventId}/insights`),
   refreshInsights: (eventId) => api.post(`/ai/upcoming-events/${eventId}/refresh`),
 };

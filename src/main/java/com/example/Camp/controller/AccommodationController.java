@@ -1,17 +1,21 @@
 package com.example.Camp.controller;
 
+import com.example.Camp.dto.accommodation.AccommodationIssueRequest;
 import com.example.Camp.dto.accommodation.AccommodationRequest;
+import com.example.Camp.dto.accommodation.ParticipantAccommodationResponse;
 import com.example.Camp.dto.accommodation.RoomAssignmentRequest;
 import com.example.Camp.dto.accommodation.RoomRequest;
 import com.example.Camp.dto.common.ApiResponse;
 import com.example.Camp.entity.Accommodation;
 import com.example.Camp.entity.Room;
 import com.example.Camp.entity.RoomAssignment;
+import com.example.Camp.security.UserDetailsImpl;
 import com.example.Camp.service.AccommodationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -163,5 +167,31 @@ public class AccommodationController {
                 "Successfully assigned " + assignments.size() + " participants to rooms by gender without mixing.",
                 Map.of("assignedCount", assignments.size())
         ));
+    }
+
+    @GetMapping("/my-accommodation")
+    public ResponseEntity<ApiResponse<ParticipantAccommodationResponse>> getMyAccommodation(
+            @RequestParam(required = false) Long eventId,
+            Authentication authentication) {
+        Long currentUserId = getUserId(authentication);
+        ParticipantAccommodationResponse response = accommodationService.getMyAccommodation(currentUserId, eventId);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/report-issue")
+    public ResponseEntity<ApiResponse<String>> reportAccommodationIssue(
+            @Valid @RequestBody AccommodationIssueRequest request,
+            Authentication authentication) {
+        Long currentUserId = getUserId(authentication);
+        accommodationService.reportAccommodationIssue(currentUserId, request);
+        return ResponseEntity.ok(ApiResponse.success(
+                "Your accommodation request has been communicated to the coordinator in charge.", null));
+    }
+
+    private Long getUserId(Authentication authentication) {
+        if (authentication != null && authentication.getPrincipal() instanceof UserDetailsImpl) {
+            return ((UserDetailsImpl) authentication.getPrincipal()).getId();
+        }
+        return null;
     }
 }
