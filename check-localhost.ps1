@@ -41,7 +41,7 @@ Write-Host ""
 # Check 3: Database Exists
 Write-Host "[3/6] Checking if 'camp' database exists..." -ForegroundColor Yellow
 try {
-    $dbCheck = psql -U postgres -lqt | Select-String -Pattern "camp"
+    $dbCheck = psql -U postgres -lqt 2>$null | Select-String -Pattern "camp"
     if ($dbCheck) {
         Write-Host "  ✓ Database 'camp' exists" -ForegroundColor Green
     } else {
@@ -100,7 +100,7 @@ Write-Host ""
 
 # Summary
 Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "Summary & Next Steps" -ForegroundColor Cyan
+Write-Host "Summary and Next Steps" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -116,8 +116,8 @@ Write-Host "psql -U postgres -d camp -f check-databases.sql" -ForegroundColor Cy
 Write-Host ""
 Write-Host "  4. Start backend: Run your Spring Boot application" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  5. Start frontend: " -NoNewline
-Write-Host "cd Campfront && npm run dev" -ForegroundColor Cyan
+Write-Host "  5. Start frontend (in Campfront folder): " -NoNewline
+Write-Host "npm run dev" -ForegroundColor Cyan
 Write-Host ""
 
 Write-Host "For more help, see: DATABASE_SYNC_GUIDE.md" -ForegroundColor Green
