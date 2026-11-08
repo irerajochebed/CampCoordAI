@@ -181,9 +181,10 @@ export default function Header({ toggleSidebar }) {
           <div className="relative" ref={profileRef}>
             <button
               onClick={() => setShowProfileMenu(!showProfileMenu)}
-              className="flex items-center space-x-2 sm:space-x-2.5 p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer"
+              className="flex items-center space-x-1.5 sm:space-x-2.5 p-1 sm:p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer"
             >
-              <div className="w-7 h-7 sm:w-8 sm:h-8 bg-slate-800 dark:bg-primary-700 text-white rounded-lg flex items-center justify-center text-xs font-bold shadow-xs overflow-hidden shrink-0">
+              {/* Profile Picture - Always Visible */}
+              <div className="w-8 h-8 sm:w-9 sm:h-9 bg-slate-800 dark:bg-primary-700 text-white rounded-lg flex items-center justify-center text-xs sm:text-sm font-bold shadow-xs overflow-hidden shrink-0">
                 {avatarUrl ? (
                   <img
                     key={avatarUrl.slice(-20)}
@@ -192,9 +193,10 @@ export default function Header({ toggleSidebar }) {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  userName.charAt(0).toUpperCase() || 'U'
+                  <span className="text-white">{userName.charAt(0).toUpperCase() || 'U'}</span>
                 )}
               </div>
+              {/* Name and Role - Hidden on mobile, visible on larger screens */}
               <div className="text-left hidden md:block pr-1">
                 <p className="text-xs font-bold text-slate-900 dark:text-white leading-tight">{userName}</p>
                 <p className="text-[11px] font-semibold text-primary-600 dark:text-primary-400 truncate max-w-[140px]" title={displayRole}>
