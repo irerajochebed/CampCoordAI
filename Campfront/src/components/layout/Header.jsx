@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { notificationApi } from '../../api';
-import { Bell, User, LogOut } from 'lucide-react';
+import { Bell, User, LogOut, Menu } from 'lucide-react';
 import Badge from '../ui/Badge';
 import sdaLogo from '../../assets/sda-logo.jpg';
 import LanguageSwitcher from '../ui/LanguageSwitcher';
@@ -11,7 +11,7 @@ import ThemeSwitcher from '../ui/ThemeSwitcher';
 import { useTranslation } from '../../contexts/LanguageContext';
 import { getUserDisplayRole, getImageUrl } from '../../utils/userRoleHelper';
 
-export default function Header() {
+export default function Header({ toggleSidebar }) {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { t } = useTranslation();
@@ -81,18 +81,30 @@ export default function Header() {
 
   return (
     <header className="bg-white dark:bg-[#0B1426] border-b border-slate-200 dark:border-slate-800 fixed top-0 left-0 right-0 z-40 h-16 transition-colors duration-200">
-      <div className="flex items-center justify-between h-full px-6">
-        {/* Logo & Title */}
-        <div className="flex items-center space-x-3.5">
-          <img src={sdaLogo} alt="SDA Logo" className="w-10 h-10 object-contain rounded-md" />
-          <div>
-            <h1 className="text-base font-bold text-slate-900 dark:text-white leading-tight">CampCoordAI</h1>
-            <p className="text-[11px] text-slate-500 dark:text-slate-300 font-medium">{t('header.subtitle', 'Rwanda Union Mission')}</p>
+      <div className="flex items-center justify-between h-full px-3 sm:px-6">
+        {/* Left side: Menu button + Logo */}
+        <div className="flex items-center space-x-2 sm:space-x-3.5">
+          {/* Mobile Menu Button */}
+          <button
+            onClick={toggleSidebar}
+            className="lg:hidden p-2 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+            aria-label="Toggle menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+
+          {/* Logo & Title */}
+          <div className="flex items-center space-x-2 sm:space-x-3.5">
+            <img src={sdaLogo} alt="SDA Logo" className="w-8 h-8 sm:w-10 sm:h-10 object-contain rounded-md" />
+            <div>
+              <h1 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-tight">CampCoordAI</h1>
+              <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-300 font-medium hidden sm:block">{t('header.subtitle', 'Rwanda Union Mission')}</p>
+            </div>
           </div>
         </div>
 
         {/* Right Controls */}
-        <div className="flex items-center space-x-2.5 sm:space-x-3">
+        <div className="flex items-center space-x-1.5 sm:space-x-2.5 md:space-x-3">
           {/* Theme Switcher Toggle */}
           <ThemeSwitcher />
 
@@ -117,7 +129,7 @@ export default function Header() {
 
             {/* Notifications Dropdown */}
             {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-[#111D38] rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 py-2 z-50">
+              <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white dark:bg-[#111D38] rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 py-2 z-50 max-h-[80vh] overflow-hidden">
                 <div className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-bold text-slate-900 dark:text-white">{t('header.notifications', 'Notifications')}</h3>
@@ -169,9 +181,9 @@ export default function Header() {
           <div className="relative" ref={profileRef}>
             <button
               onClick={() => setShowProfileMenu(!showProfileMenu)}
-              className="flex items-center space-x-2.5 p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer"
+              className="flex items-center space-x-2 sm:space-x-2.5 p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer"
             >
-              <div className="w-8 h-8 bg-slate-800 dark:bg-primary-700 text-white rounded-lg flex items-center justify-center text-xs font-bold shadow-xs overflow-hidden shrink-0">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 bg-slate-800 dark:bg-primary-700 text-white rounded-lg flex items-center justify-center text-xs font-bold shadow-xs overflow-hidden shrink-0">
                 {avatarUrl ? (
                   <img
                     key={avatarUrl.slice(-20)}
@@ -193,7 +205,7 @@ export default function Header() {
 
             {/* Profile Dropdown */}
             {showProfileMenu && (
-              <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-[#111D38] rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 py-2 z-50">
+              <div className="absolute right-0 mt-2 w-56 sm:w-64 bg-white dark:bg-[#111D38] rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 py-2 z-50">
                 <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3">
                   <div className="w-10 h-10 bg-slate-800 dark:bg-primary-700 text-white rounded-xl flex items-center justify-center text-sm font-bold shadow-xs overflow-hidden shrink-0">
                     {avatarUrl ? (
