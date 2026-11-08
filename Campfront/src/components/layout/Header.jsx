@@ -182,9 +182,10 @@ export default function Header({ toggleSidebar }) {
             <button
               onClick={() => setShowProfileMenu(!showProfileMenu)}
               className="flex items-center space-x-1.5 sm:space-x-2.5 p-1 sm:p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer"
+              title={userName} // Add tooltip for mobile
             >
-              {/* Profile Picture - Always Visible */}
-              <div className="w-8 h-8 sm:w-9 sm:h-9 bg-slate-800 dark:bg-primary-700 text-white rounded-lg flex items-center justify-center text-xs sm:text-sm font-bold shadow-xs overflow-hidden shrink-0">
+              {/* Profile Picture - Always Visible - Larger on Mobile for Better Touch Target */}
+              <div className="w-9 h-9 sm:w-9 sm:h-9 bg-slate-800 dark:bg-primary-700 text-white rounded-lg flex items-center justify-center text-sm font-bold shadow-xs overflow-hidden shrink-0 ring-2 ring-transparent hover:ring-primary-500 transition-all">
                 {avatarUrl ? (
                   <img
                     key={avatarUrl.slice(-20)}
@@ -196,8 +197,8 @@ export default function Header({ toggleSidebar }) {
                   <span className="text-white">{userName.charAt(0).toUpperCase() || 'U'}</span>
                 )}
               </div>
-              {/* Name and Role - Hidden on mobile, visible on larger screens */}
-              <div className="text-left hidden md:block pr-1">
+              {/* Name and Role - Hidden on small mobile, visible on larger screens */}
+              <div className="text-left hidden sm:block pr-1">
                 <p className="text-xs font-bold text-slate-900 dark:text-white leading-tight">{userName}</p>
                 <p className="text-[11px] font-semibold text-primary-600 dark:text-primary-400 truncate max-w-[140px]" title={displayRole}>
                   {displayRole}
@@ -205,29 +206,31 @@ export default function Header({ toggleSidebar }) {
               </div>
             </button>
 
-            {/* Profile Dropdown */}
+            {/* Profile Dropdown - Optimized for Mobile */}
             {showProfileMenu && (
-              <div className="absolute right-0 mt-2 w-56 sm:w-64 bg-white dark:bg-[#111D38] rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 py-2 z-50">
-                <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3">
-                  <div className="w-10 h-10 bg-slate-800 dark:bg-primary-700 text-white rounded-xl flex items-center justify-center text-sm font-bold shadow-xs overflow-hidden shrink-0">
-                    {avatarUrl ? (
-                      <img
-                        key={avatarUrl.slice(-20)}
-                        src={avatarUrl}
-                        alt={userName}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      userName.charAt(0).toUpperCase() || 'U'
-                    )}
+              <div className="absolute right-0 mt-2 w-64 sm:w-64 bg-white dark:bg-[#111D38] rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 py-2 z-50 animate-fadeIn">
+                {/* User Info Header - Always Show Full Details in Dropdown */}
+                <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-slate-800 dark:bg-primary-700 text-white rounded-xl flex items-center justify-center text-base font-bold shadow-md overflow-hidden shrink-0">
+                      {avatarUrl ? (
+                        <img
+                          key={avatarUrl.slice(-20)}
+                          src={avatarUrl}
+                          alt={userName}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        userName.charAt(0).toUpperCase() || 'U'
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{userName}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-300 truncate mt-0.5">{user?.email}</p>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{userName}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-300 truncate mt-0.5">{user?.email}</p>
-                  </div>
-                </div>
-                <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800">
-                  <div className="flex flex-wrap gap-1">
+                  {/* Role and Organization Badges */}
+                  <div className="flex flex-wrap gap-1 mt-2">
                     <Badge variant="info" size="sm">{displayRole}</Badge>
                     {(user?.organizationUnitName || user?.organization) && (
                       <Badge variant="default" size="sm">
@@ -237,26 +240,28 @@ export default function Header({ toggleSidebar }) {
                   </div>
                 </div>
 
+                {/* Profile Link */}
                 <div className="py-1">
                   <Link
                     to="/app/profile"
-                    className="flex items-center px-4 py-2 text-xs font-medium text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors"
+                    className="flex items-center px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors"
                     onClick={() => setShowProfileMenu(false)}
                   >
-                    <User className="w-4 h-4 mr-3 text-slate-500 dark:text-slate-400" />
+                    <User className="w-5 h-5 mr-3 text-slate-500 dark:text-slate-400" />
                     {t('nav.profile', 'My Profile')}
                   </Link>
                 </div>
 
-                <div className="border-t border-slate-200 dark:border-slate-800 py-1">
+                {/* Logout Button - Make it Prominent */}
+                <div className="border-t border-slate-200 dark:border-slate-800 pt-1">
                   <button
                     onClick={() => {
                       logout();
                       setShowProfileMenu(false);
                     }}
-                    className="flex items-center w-full px-4 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                    className="flex items-center w-full px-4 py-3 text-sm font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
                   >
-                    <LogOut className="w-4 h-4 mr-3" />
+                    <LogOut className="w-5 h-5 mr-3" />
                     {t('nav.logout', 'Sign out')}
                   </button>
                 </div>
