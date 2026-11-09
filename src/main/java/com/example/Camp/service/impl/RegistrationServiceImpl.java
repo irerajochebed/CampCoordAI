@@ -401,6 +401,131 @@ public class RegistrationServiceImpl implements RegistrationService {
     }
     
     @Override
+    public RegistrationResponse cancelOwnRegistration(Long id, Long currentUserId) {
+        Registration registration = getRegistrationEntity(id);
+        
+        // Verify that the participant is cancelling their own registration
+        if (!registration.getParticipant().getId().equals(currentUserId)) {
+            throw new BadRequestException("You can only cancel your own registrations");
+        }
+        
+        // Check if registration can be cancelled
+        if (registration.getStatus() == RegistrationStatus.CANCELLED) {
+            throw new BadRequestException("Registration is already cancelled");
+        }
+        
+        if (registration.getStatus() == RegistrationStatus.CHECKED_IN) {
+            throw new BadRequestException("Cannot cancel registration after check-in");
+        }
+        
+        if (registration.getStatus() == RegistrationStatus.CHECKED_OUT) {
+            throw new BadRequestException("Cannot cancel completed registration");
+        }
+        
+        // Check if event has already started or passed
+        Event event = registration.getEvent();
+        LocalDate today = LocalDate.now();
+        if (event != null && event.getStartDate() != null && event.getStartDate().isBefore(today)) {
+            throw new BadRequestException("Cannot cancel registration after event has started");
+        }
+        
+        // Cancel the registration
+        registration.setStatus(RegistrationStatus.CANCELLED);
+        Registration savedRegistration = registrationRepository.save(registration);
+        log.info("Registration {} cancelled by participant {}", id, currentUserId);
+        
+        // Handle payment refund if payment exists and was verified
+        handlePaymentRefundForCancellation(savedRegistration);
+        
+        return dtoMapper.toRegistrationResponse(savedRegistration);
+    }
+    
+    /**
+     * Handle payment refund when registration is cancelled
+     * - If payment was VERIFIED, mark it as REFUNDED and notify coordinator
+     * - If payment was PENDING or REJECTED, just mark registration as cancelled
+     */
+    private void handlePaymentRefundForCancellation(Registration registration) {
+        try {
+            List<Payment> payments = paymentRepository.findActiveByRegistration(registration.getId());
+            
+            for (Payment payment : payments) {
+                if (payment.getStatus() == PaymentStatus.VERIFIED) {
+                    // Mark payment as REFUNDED
+                    payment.setStatus(PaymentStatus.REFUNDED);
+                    payment.setNotes("Registration cancelled by participant. Refund required for " + 
+                                   payment.getAmount() + " " + 
+                                   (payment.getPaymentMethod() != null ? payment.getPaymentMethod() : ""));
+                    paymentRepository.save(payment);
+                    
+                    log.warn("Payment {} marked as REFUNDED for cancelled registration {}. Amount: {}", 
+                            payment.getId(), registration.getId(), payment.getAmount());
+                    
+                    // Notify coordinator and finance officer about refund needed
+                    notifyRefundRequired(registration, payment);
+                } else if (payment.getStatus() == PaymentStatus.PENDING) {
+                    // Just reject pending payment since it wasn't verified yet
+                    payment.setStatus(PaymentStatus.REJECTED);
+                    payment.setNotes("Registration cancelled before payment verification");
+                    paymentRepository.save(payment);
+                    log.info("Pending payment {} rejected for cancelled registration {}", 
+                            payment.getId(), registration.getId());
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error handling payment refund for registration {}: {}", 
+                     registration.getId(), e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Notify coordinator and finance officer that refund is required
+     */
+    private void notifyRefundRequired(Registration registration, Payment payment) {
+        try {
+            Event event = registration.getEvent();
+            User participant = registration.getParticipant();
+            
+            String message = String.format(
+                "REFUND REQUIRED: %s %s cancelled registration for '%s'. " +
+                "Payment of %s (Ref: %s) needs to be refunded. " +
+                "Contact participant at %s or %s",
+                participant.getFirstName(),
+                participant.getLastName(),
+                event != null ? event.getTitle() : "event",
+                payment.getAmount(),
+                payment.getTransactionReference(),
+                participant.getEmail(),
+                participant.getPhoneNumber() != null ? participant.getPhoneNumber() : "N/A"
+            );
+            
+            // Notify event coordinator
+            if (event != null && event.getCoordinator() != null) {
+                notificationService.createNotification(
+                    event.getCoordinator().getId(),
+                    "Refund Required",
+                    message,
+                    "/app/payments?registration=" + registration.getId()
+                );
+            }
+            
+            // Notify finance officers (Union Finance Officer and Field Finance Officers)
+            notificationService.notifyByPosition(
+                com.example.Camp.enums.Position.FINANCE_OFFICER,
+                "Refund Required",
+                message,
+                "/app/payments?registration=" + registration.getId()
+            );
+            
+            log.info("Refund notifications sent for registration {} and payment {}", 
+                    registration.getId(), payment.getId());
+        } catch (Exception e) {
+            log.error("Error sending refund notifications for registration {}: {}", 
+                     registration.getId(), e.getMessage(), e);
+        }
+    }
+    
+    @Override
     public RegistrationResponse checkIn(Long id) {
         return checkIn(id, null);
     }

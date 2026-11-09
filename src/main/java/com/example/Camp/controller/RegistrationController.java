@@ -125,6 +125,15 @@ public class RegistrationController {
         return ResponseEntity.ok(ApiResponse.success("Registration cancelled", response));
     }
     
+    @PostMapping("/{id}/cancel-own")
+    public ResponseEntity<ApiResponse<RegistrationResponse>> cancelOwnRegistration(
+            @PathVariable Long id,
+            Authentication authentication) {
+        Long currentUserId = getUserId(authentication);
+        RegistrationResponse response = registrationService.cancelOwnRegistration(id, currentUserId);
+        return ResponseEntity.ok(ApiResponse.success("Registration cancelled successfully", response));
+    }
+    
     @PostMapping("/{id}/check-in")
     @PreAuthorize("hasRole('COORDINATOR') or hasRole('ADMINISTRATOR')")
     public ResponseEntity<ApiResponse<RegistrationResponse>> checkIn(

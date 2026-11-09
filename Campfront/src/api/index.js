@@ -217,6 +217,7 @@ export const registrationApi = {
   update: (id, data) => api.put(`/registrations/${id}`, data),
   confirm: (id) => api.patch(`/registrations/${id}/confirm`),
   cancel: (id) => api.patch(`/registrations/${id}/cancel`),
+  cancelOwn: (id) => api.post(`/registrations/${id}/cancel-own`),
   checkIn: (id) => api.post(`/registrations/${id}/check-in`),
   checkInByQR: (qrCode) => api.post(`/registrations/check-in/qr/${qrCode}`),
   checkOut: (id) => api.post(`/registrations/${id}/check-out`),

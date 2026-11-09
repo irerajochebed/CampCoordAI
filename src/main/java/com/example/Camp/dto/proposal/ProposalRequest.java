@@ -22,6 +22,8 @@ public class ProposalRequest {
     @NotNull(message = "Event type is required")
     private EventType eventType;
     
+    private String customEventType;
+    
     @NotNull(message = "Department ID is required")
     private Long departmentId;
 

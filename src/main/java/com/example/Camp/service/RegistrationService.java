@@ -41,6 +41,8 @@ public interface RegistrationService {
 
     RegistrationResponse cancelRegistration(Long id, Long currentUserId);
     
+    RegistrationResponse cancelOwnRegistration(Long id, Long currentUserId);
+    
     RegistrationResponse checkIn(Long id);
 
     RegistrationResponse checkIn(Long id, Long currentUserId);

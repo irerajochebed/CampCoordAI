@@ -22,6 +22,7 @@ public class ProposalResponse {
     private Long id;
     private String eventName;
     private EventType eventType;
+    private String customEventType;
     private Long departmentId;
     private String departmentName;
     private Long proposedById;

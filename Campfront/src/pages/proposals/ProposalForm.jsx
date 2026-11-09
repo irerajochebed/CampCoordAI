@@ -29,6 +29,7 @@ export default function ProposalForm() {
   const [formData, setFormData] = useState({
     eventName: '',
     eventType: 'CAMP',
+    customEventType: '',
     departmentId: '',
     scope: 'FIELD',
     targetOrganizationUnitId: '',
@@ -156,6 +157,7 @@ export default function ProposalForm() {
         setFormData({
           eventName: proposal.eventName || '',
           eventType: proposal.eventType || 'CAMP',
+          customEventType: proposal.customEventType || '',
           departmentId: proposal.department?.id || '',
           scope: proposal.scope || 'FIELD',
           targetOrganizationUnitId: proposal.targetOrganizationUnit?.id || '',
@@ -189,6 +191,10 @@ export default function ProposalForm() {
 
     if (!formData.eventType) {
       newErrors.eventType = t('common.error', 'Event type is required');
+    }
+
+    if (formData.eventType === 'OTHER' && !formData.customEventType.trim()) {
+      newErrors.customEventType = t('common.error', 'Please specify the custom event type');
     }
 
     if (!formData.departmentId) {
@@ -316,6 +322,7 @@ export default function ProposalForm() {
     { value: 'TRAINING', label: 'Training' },
     { value: 'WORKSHOP', label: 'Workshop' },
     { value: 'SEMINAR', label: 'Seminar' },
+    { value: 'OTHER', label: 'Other (Specify below)' },
   ];
 
   if (loading) {
@@ -378,6 +385,18 @@ export default function ProposalForm() {
                   required
                 />
               </div>
+
+              {formData.eventType === 'OTHER' && (
+                <Input
+                  label={t('proposals.customEventType', 'Custom Event Type (Specify)')}
+                  name="customEventType"
+                  value={formData.customEventType}
+                  onChange={handleChange}
+                  error={errors.customEventType}
+                  required
+                  placeholder="E.g., Youth Festival, Leadership Summit, etc."
+                />
+              )}
 
               <Select
                 label={t('proposals.hostingMinistry', 'Hosting Ministry / Department *')}

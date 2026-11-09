@@ -9,7 +9,8 @@ import {
   Home,
   Bell,
   DollarSign,
-  ArrowRight
+  ArrowRight,
+  XCircle
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
@@ -66,6 +67,22 @@ export default function ParticipantDashboard() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCancelRegistration = async (registrationId, eventName) => {
+    if (!confirm(`Are you sure you want to cancel your registration for "${eventName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await registrationApi.cancelOwn(registrationId);
+      alert('Registration cancelled successfully');
+      // Refresh the dashboard
+      fetchDashboardData();
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to cancel registration';
+      alert(`Error: ${errorMessage}`);
     }
   };
 
@@ -166,6 +183,13 @@ export default function ParticipantDashboard() {
                     null;
                   const isEventConcluded = eventObj.status === 'COMPLETED' || 
                     (eventObj.endDate && new Date(eventObj.endDate + (eventObj.endDate.includes('T') ? '' : 'T23:59:59')) < now);
+                  
+                  const eventHasStarted = eventObj.startDate && new Date(eventObj.startDate) < now;
+                  const canCancel = reg.status !== 'CANCELLED' && 
+                                   reg.status !== 'CHECKED_IN' && 
+                                   reg.status !== 'CHECKED_OUT' && 
+                                   !eventHasStarted && 
+                                   !isEventConcluded;
 
                   return (
                     <div key={reg.id} className="p-4 border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 rounded-xl hover:shadow-md transition-all">
@@ -209,17 +233,45 @@ export default function ParticipantDashboard() {
                           </Button>
                         </Link>
                         {reg.status === 'PENDING' ? (
-                          <Link to={`/app/payments/new?registrationId=${reg.id}`} className="flex-1 min-w-[140px]">
-                            <Button variant="primary" size="sm" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold" icon={<DollarSign className="w-3.5 h-3.5" />}>
-                              {t('events.fee', 'Pay Fee Now')}
-                            </Button>
-                          </Link>
+                          <>
+                            <Link to={`/app/payments/new?registrationId=${reg.id}`} className="flex-1 min-w-[140px]">
+                              <Button variant="primary" size="sm" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold" icon={<DollarSign className="w-3.5 h-3.5" />}>
+                                {t('events.fee', 'Pay Fee Now')}
+                              </Button>
+                            </Link>
+                            {canCancel && (
+                              <Button 
+                                variant="danger" 
+                                size="sm" 
+                                className="min-w-[140px]"
+                                onClick={() => handleCancelRegistration(reg.id, eventTitle)}
+                              >
+                                {t('registrations.cancel', 'Cancel Registration')}
+                              </Button>
+                            )}
+                          </>
+                        ) : reg.status === 'CANCELLED' ? (
+                          <div className="flex-1 min-w-[140px] px-4 py-2 text-center text-sm font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                            {t('status.CANCELLED', 'Registration Cancelled')}
+                          </div>
                         ) : (
-                          <Link to={`/app/registrations/${reg.id}`} state={{ registration: reg }} className="flex-1 min-w-[140px]">
-                            <Button variant="primary" size="sm" className="w-full" icon={<QrCode className="w-3.5 h-3.5" />}>
-                              {t('registrations.qrCode', 'Ticket & QR Badge')}
-                            </Button>
-                          </Link>
+                          <>
+                            <Link to={`/app/registrations/${reg.id}`} state={{ registration: reg }} className="flex-1 min-w-[140px]">
+                              <Button variant="primary" size="sm" className="w-full" icon={<QrCode className="w-3.5 h-3.5" />}>
+                                {t('registrations.qrCode', 'Ticket & QR Badge')}
+                              </Button>
+                            </Link>
+                            {canCancel && (
+                              <Button 
+                                variant="danger" 
+                                size="sm" 
+                                className="min-w-[120px]"
+                                onClick={() => handleCancelRegistration(reg.id, eventTitle)}
+                              >
+                                {t('registrations.cancel', 'Cancel')}
+                              </Button>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>

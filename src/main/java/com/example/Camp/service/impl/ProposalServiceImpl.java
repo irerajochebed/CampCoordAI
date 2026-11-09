@@ -322,6 +322,7 @@ public class ProposalServiceImpl implements ProposalService {
         Proposal proposal = Proposal.builder()
                 .eventName(request.getEventName())
                 .eventType(request.getEventType() != null ? request.getEventType() : EventType.CAMP)
+                .customEventType(request.getCustomEventType())
                 .department(department)
                 .proposedBy(proposedBy)
                 .objectives(request.getObjectives())
@@ -391,6 +392,7 @@ public class ProposalServiceImpl implements ProposalService {
         Proposal proposal = Proposal.builder()
                 .eventName(request.getEventName())
                 .eventType(request.getEventType() != null ? request.getEventType() : EventType.CAMP)
+                .customEventType(request.getCustomEventType())
                 .department(department)
                 .proposedBy(proposedBy)
                 .objectives(request.getObjectives())
@@ -429,6 +431,7 @@ public class ProposalServiceImpl implements ProposalService {
 
         proposal.setEventName(request.getEventName());
         proposal.setEventType(request.getEventType());
+        proposal.setCustomEventType(request.getCustomEventType());
         proposal.setObjectives(request.getObjectives());
         proposal.setStartDate(request.getStartDate());
         proposal.setEndDate(request.getEndDate());

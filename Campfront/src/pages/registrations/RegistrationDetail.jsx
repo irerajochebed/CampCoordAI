@@ -143,7 +143,12 @@ export default function RegistrationDetail() {
     if (!confirm('Are you sure you want to cancel this registration?')) return;
 
     try {
-      await registrationApi.cancel(id);
+      // Use cancelOwn for participants, cancel for admins/coordinators
+      if (isParticipant && !isAdmin && !isCoordinator) {
+        await registrationApi.cancelOwn(id);
+      } else {
+        await registrationApi.cancel(id);
+      }
       setAlert({ type: 'success', message: 'Registration cancelled successfully' });
       fetchRegistration();
     } catch (error) {
