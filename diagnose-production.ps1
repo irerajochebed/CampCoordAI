@@ -23,8 +23,8 @@ try {
     Write-Host "  Status Code: $($response.StatusCode)" -ForegroundColor Green
     
     if ($duration -gt 10) {
-        Write-Host "  ⚠ SLOW RESPONSE (>10s) - Backend was probably sleeping!" -ForegroundColor Yellow
-        Write-Host "  → Solution: Set up UptimeRobot to keep it awake" -ForegroundColor Yellow
+        Write-Host "  -> SLOW RESPONSE (>10s) - Backend was probably sleeping!" -ForegroundColor Yellow
+        Write-Host "  -> Solution: Set up UptimeRobot to keep it awake" -ForegroundColor Yellow
     }
 } catch {
     $endTime = Get-Date
@@ -37,7 +37,7 @@ try {
         Write-Host "  ✗ Backend is NOT ACCESSIBLE" -ForegroundColor Red
         Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Red
         Write-Host "  Response Time: $([math]::Round($duration, 2))s" -ForegroundColor Red
-        Write-Host "  → Check Render dashboard for deployment status" -ForegroundColor Red
+        Write-Host "  -> Check Render dashboard for deployment status" -ForegroundColor Red
     }
 }
 Write-Host ""
@@ -60,7 +60,7 @@ try {
     Write-Host "  ✗ Frontend is NOT ACCESSIBLE" -ForegroundColor Red
     Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Red
     Write-Host "  Response Time: $([math]::Round($duration, 2))s" -ForegroundColor Red
-    Write-Host "  → Check Vercel dashboard for deployment status" -ForegroundColor Red
+    Write-Host "  -> Check Vercel dashboard for deployment status" -ForegroundColor Red
 }
 Write-Host ""
 
@@ -98,7 +98,7 @@ try {
         Write-Host "  Allowed Origin: $($response.Headers['Access-Control-Allow-Origin'])" -ForegroundColor Green
     } else {
         Write-Host "  ⚠ CORS headers not found in response" -ForegroundColor Yellow
-        Write-Host "  → May need to update CORS_ALLOWED_ORIGINS in Render" -ForegroundColor Yellow
+        Write-Host "  -> May need to update CORS_ALLOWED_ORIGINS in Render" -ForegroundColor Yellow
     }
 } catch {
     Write-Host "  ℹ Could not test CORS (this is often normal)" -ForegroundColor Cyan
@@ -128,28 +128,28 @@ Write-Host ""
 Write-Host "Common Issues & Solutions:" -ForegroundColor White
 Write-Host ""
 Write-Host "1. Backend Slow (>10s response):" -ForegroundColor Yellow
-Write-Host "   → Render free tier cold start (backend was sleeping)" -ForegroundColor White
-Write-Host "   → Solution: Set up UptimeRobot at https://uptimerobot.com" -ForegroundColor Green
-Write-Host "   → Add monitor: $loginEndpoint" -ForegroundColor Cyan
-Write-Host "   → Interval: 5 minutes" -ForegroundColor Cyan
+Write-Host "   -> Render free tier cold start (backend was sleeping)" -ForegroundColor White
+Write-Host "   -> Solution: Set up UptimeRobot at https://uptimerobot.com" -ForegroundColor Green
+Write-Host "   -> Add monitor: $loginEndpoint" -ForegroundColor Cyan
+Write-Host "   -> Interval: 5 minutes" -ForegroundColor Cyan
 Write-Host ""
 
 Write-Host "2. Backend Not Accessible:" -ForegroundColor Yellow
-Write-Host "   → Check Render dashboard: https://dashboard.render.com" -ForegroundColor White
-Write-Host "   → Verify deployment status and logs" -ForegroundColor White
-Write-Host "   → Check environment variables (DATABASE_URL, etc.)" -ForegroundColor White
+Write-Host "   -> Check Render dashboard: https://dashboard.render.com" -ForegroundColor White
+Write-Host "   -> Verify deployment status and logs" -ForegroundColor White
+Write-Host "   -> Check environment variables (DATABASE_URL, etc.)" -ForegroundColor White
 Write-Host ""
 
 Write-Host "3. Frontend Not Accessible:" -ForegroundColor Yellow
-Write-Host "   → Check Vercel dashboard: https://vercel.com/dashboard" -ForegroundColor White
-Write-Host "   → Verify latest deployment succeeded" -ForegroundColor White
-Write-Host "   → Check environment variable: VITE_API_BASE_URL" -ForegroundColor White
+Write-Host "   -> Check Vercel dashboard: https://vercel.com/dashboard" -ForegroundColor White
+Write-Host "   -> Verify latest deployment succeeded" -ForegroundColor White
+Write-Host "   -> Check environment variable: VITE_API_BASE_URL" -ForegroundColor White
 Write-Host ""
 
 Write-Host "4. CORS Errors:" -ForegroundColor Yellow
-Write-Host "   → Update Render environment variable:" -ForegroundColor White
+Write-Host "   -> Update Render environment variable:" -ForegroundColor White
 Write-Host "     CORS_ALLOWED_ORIGINS = $frontendUrl" -ForegroundColor Cyan
-Write-Host "   → Redeploy backend after changing" -ForegroundColor White
+Write-Host "   -> Redeploy backend after changing" -ForegroundColor White
 Write-Host ""
 
 Write-Host "Quick Actions:" -ForegroundColor White
